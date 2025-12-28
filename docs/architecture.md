@@ -4,7 +4,7 @@ This document describes the internal architecture of the ext-tui PHP C extension
 
 ## Overview
 
-ext-tui is a PHP C extension that provides terminal UI capabilities. It follows a component-based architecture similar to React, with a virtual DOM, flexbox layout engine, and efficient terminal rendering.
+ext-tui is a PHP C extension that provides terminal UI capabilities. It follows a component-based architecture with a virtual DOM, flexbox layout engine, and efficient terminal rendering.
 
 ```
 ┌──────────────────────────────────────────────────────────┐

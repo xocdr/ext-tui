@@ -16,11 +16,6 @@ This document describes known limitations and areas for future improvement in ex
 - **Limited modifier detection**: Some terminal emulators may not send full modifier information (Shift, Alt, Ctrl) for all key combinations.
 - **Escape key delay**: Single Escape key press requires a timeout to distinguish from escape sequences, which may cause a brief delay.
 
-### Layout Engine
-
-- **Yoga not fully integrated**: The Yoga layout engine sources need to be downloaded separately. See README for setup instructions.
-- **Layout calculation is synchronous**: Large node trees may cause noticeable delays during layout computation.
-
 ### Text Rendering
 
 - **Wide character handling**: CJK characters and emojis are assumed to be 2 cells wide. Some terminal emulators may display them differently.
@@ -32,16 +27,27 @@ This document describes known limitations and areas for future improvement in ex
 - **No lazy rendering**: The entire visible area is re-rendered on each update. This may be slow for very complex UIs.
 - **Node tree depth limit**: Extremely deep node trees (100+ levels) may cause stack issues during rendering.
 
+## Implemented Features
+
+The following features have been fully implemented:
+
+- ✅ **Yoga layout engine**: Fully integrated and vendored (no external dependency required)
+- ✅ **Animation and transitions**: Using `tui_ease()`, `tui_lerp()`, and `tui_lerp_color()`
+- ✅ **Easing functions**: 15+ built-in easing functions (linear, quad, cubic, bounce, elastic, etc.)
+- ✅ **Canvas graphics**: Braille, block, and ASCII character modes
+- ✅ **Sprites**: Animated sprite support with frame-based animation
+- ✅ **Tables**: Table rendering with alignment and borders
+- ✅ **Progress indicators**: Progress bars, busy bars, and spinners
+- ✅ **Drawing primitives**: Lines, rectangles, circles, ellipses, triangles
+
 ## Planned Improvements
 
 ### Near Term
 - [ ] Mouse event support (click, scroll, drag)
 - [ ] Built-in input components (TextInput, Select, Checkbox)
-- [ ] Yoga layout integration completion
 - [ ] Performance optimizations for large node trees
 
 ### Future
-- [ ] Animation and transition support
 - [ ] Better wide character / emoji handling
 - [ ] Bidirectional text support
 - [ ] Windows support via Windows Console API or WSL
