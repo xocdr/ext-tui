@@ -1,15 +1,26 @@
+<p align="center">
+  <img src="docs/tui-logo.svg" alt="ext-tui logo" width="200">
+</p>
+
 # ext-tui
 
-A PHP extension for building terminal user interfaces with a React-like API and Yoga flexbox layout engine.
+A PHP C extension for building terminal user interfaces with component-based architecture and Yoga flexbox layout.
 
 ## Features
 
-- **Flexbox Layout**: Uses Facebook's Yoga layout engine for CSS-like flexbox positioning
-- **React-like Components**: Build UIs with `TuiBox` and `TuiText` components
+- **Flexbox Layout**: Facebook's Yoga layout engine for CSS-like flexbox positioning
+- **Component-Based**: Build UIs with `TuiBox` and `TuiText` components
 - **Full UTF-8 Support**: Proper handling of Unicode text including CJK wide characters
 - **Rich Text Styling**: Bold, italic, underline, colors (RGB), and more
-- **Keyboard Input**: Full keyboard event handling with modifiers (Ctrl, Meta, Shift)
+- **Keyboard Input**: Full keyboard event handling with modifiers (Ctrl, Alt, Shift)
 - **Terminal Resize**: Automatic layout recalculation on terminal resize
+- **Drawing Primitives**: Lines, rectangles, circles, ellipses, triangles
+- **Canvas Graphics**: High-resolution drawing with Braille, block, or ASCII modes
+- **Animation**: Easing functions, interpolation, color gradients
+- **Sprites**: Frame-based animated sprites with collision detection
+- **Tables**: Formatted table rendering with alignment and borders
+- **Progress Indicators**: Progress bars, busy bars, and spinners
+- **Timers**: Interval-based callbacks for animations and updates
 - **High Performance**: All rendering done in C with minimal PHP overhead
 
 ## Requirements
@@ -17,6 +28,7 @@ A PHP extension for building terminal user interfaces with a React-like API and 
 - PHP 8.0+
 - C compiler with C++20 support (for Yoga)
 - Unix-like operating system (macOS, Linux)
+- Terminal with UTF-8 support
 
 ## Installation
 
@@ -24,7 +36,7 @@ A PHP extension for building terminal user interfaces with a React-like API and 
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/ext-tui.git
+git clone https://github.com/xocoder/ext-tui.git
 cd ext-tui
 
 # Build the extension
@@ -58,10 +70,9 @@ php -r "var_dump(tui_get_terminal_size());"
 
 ```php
 <?php
-
 $instance = tui_render(function() {
-    $box = new TuiBox(['padding' => 1]);
-    $box->addChild(new TuiText("Hello, World!", ['bold' => true, 'color' => '#00ff00']));
+    $box = new TuiBox(['padding' => 1, 'borderStyle' => 'round']);
+    $box->addChild(new TuiText(['content' => 'Hello, World!', 'bold' => true, 'color' => [100, 255, 100]]));
     return $box;
 });
 
@@ -72,7 +83,6 @@ $instance->waitUntilExit();
 
 ```php
 <?php
-
 $count = 0;
 
 $instance = tui_render(function() use (&$count) {
@@ -82,8 +92,8 @@ $instance = tui_render(function() use (&$count) {
         'gap' => 1
     ]);
 
-    $box->addChild(new TuiText("Counter: $count", ['bold' => true]));
-    $box->addChild(new TuiText("Press UP/DOWN to change, Ctrl+C to exit", ['dim' => true]));
+    $box->addChild(new TuiText(['content' => "Counter: $count", 'bold' => true]));
+    $box->addChild(new TuiText(['content' => "Press UP/DOWN to change, Ctrl+C to exit", 'dim' => true]));
 
     return $box;
 }, [
@@ -91,176 +101,310 @@ $instance = tui_render(function() use (&$count) {
     'exitOnCtrlC' => true
 ]);
 
-// Handle input (in your event loop)
-// $instance->waitUntilExit();
+tui_set_input_handler($instance, function($key) use (&$count, $instance) {
+    if ($key->upArrow) $count++;
+    if ($key->downArrow) $count--;
+    $instance->rerender();
+});
+
+$instance->waitUntilExit();
 ```
 
-## API Reference
+### Drawing with Canvas
 
-### Functions
-
-#### `tui_render(callable $component, array $options = []): TuiInstance`
-
-Renders a TUI component to the terminal.
-
-**Options:**
-- `fullscreen` (bool): Use alternate screen buffer (default: true)
-- `exitOnCtrlC` (bool): Exit on Ctrl+C (default: true)
-
-#### `tui_rerender(TuiInstance $instance): void`
-
-Forces a re-render of the component tree.
-
-#### `tui_unmount(TuiInstance $instance): void`
-
-Stops the TUI and restores terminal state.
-
-#### `tui_wait_until_exit(TuiInstance $instance): void`
-
-Blocks until the TUI exits (via Ctrl+C or `$instance->exit()`).
-
-#### `tui_get_terminal_size(): array`
-
-Returns `[width, height]` of the terminal.
-
-#### `tui_is_interactive(): bool`
-
-Returns true if running in an interactive terminal.
-
-#### `tui_is_ci(): bool`
-
-Returns true if running in a CI environment.
-
-#### `tui_string_width(string $text): int`
-
-Returns the display width of text (handles Unicode correctly).
-
-#### `tui_wrap_text(string $text, int $width): array`
-
-Wraps text to fit within width, returns array of lines.
-
-#### `tui_truncate(string $text, int $width, string $ellipsis = '...'): string`
-
-Truncates text to width with ellipsis.
-
-### Classes
-
-#### TuiBox
-
-Container component with flexbox layout.
-
-**Constructor:**
 ```php
-new TuiBox(array $props = [])
+<?php
+// Create a high-resolution canvas using Braille characters
+$canvas = tui_canvas_create(80, 40, TUI_CANVAS_BRAILLE);
+
+// Draw shapes
+tui_canvas_circle($canvas, 40, 20, 15);
+tui_canvas_line($canvas, 0, 0, 80, 40);
+
+// Render to strings
+$lines = tui_canvas_render($canvas);
+foreach ($lines as $line) {
+    echo $line . "\n";
+}
 ```
 
-**Properties:**
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `flexDirection` | string | `'column'` | `'row'`, `'column'`, `'row-reverse'`, `'column-reverse'` |
-| `alignItems` | string | null | `'flex-start'`, `'center'`, `'flex-end'`, `'stretch'` |
-| `justifyContent` | string | null | `'flex-start'`, `'center'`, `'flex-end'`, `'space-between'`, `'space-around'`, `'space-evenly'` |
-| `flexGrow` | int | 0 | Flex grow factor |
-| `flexShrink` | int | 1 | Flex shrink factor |
-| `width` | int\|string | null | Width in cells or percentage (e.g., `'100%'`) |
-| `height` | int\|string | null | Height in cells or percentage |
-| `padding` | int | 0 | Padding on all sides |
-| `paddingTop` | int | 0 | Top padding |
-| `paddingBottom` | int | 0 | Bottom padding |
-| `paddingLeft` | int | 0 | Left padding |
-| `paddingRight` | int | 0 | Right padding |
-| `paddingX` | int | 0 | Left and right padding |
-| `paddingY` | int | 0 | Top and bottom padding |
-| `margin` | int | 0 | Margin on all sides |
-| `marginTop` | int | 0 | Top margin |
-| `marginBottom` | int | 0 | Bottom margin |
-| `marginLeft` | int | 0 | Left margin |
-| `marginRight` | int | 0 | Right margin |
-| `marginX` | int | 0 | Left and right margin |
-| `marginY` | int | 0 | Top and bottom margin |
-| `gap` | int | 0 | Gap between children |
-| `borderStyle` | string | null | Border style (future) |
-| `borderColor` | string | null | Border color (future) |
-| `children` | array | [] | Child components |
+### Progress Bar
 
-**Methods:**
 ```php
-addChild(TuiBox|TuiText $child): self
+<?php
+for ($i = 0; $i <= 100; $i += 5) {
+    $bar = tui_render_progress_bar($i / 100, 40, ['filled_char' => '█', 'empty_char' => '░']);
+    echo "\r$bar $i%";
+    usleep(100000);
+}
+echo "\n";
 ```
-
-#### TuiText
-
-Text component with styling.
-
-**Constructor:**
-```php
-new TuiText(string $content = '', array $props = [])
-```
-
-**Properties:**
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `content` | string | `''` | Text content |
-| `color` | string | null | Foreground color (`'#RRGGBB'` or `[r, g, b]`) |
-| `backgroundColor` | string | null | Background color |
-| `bold` | bool | false | Bold text |
-| `dim` | bool | false | Dim text |
-| `italic` | bool | false | Italic text |
-| `underline` | bool | false | Underlined text |
-| `inverse` | bool | false | Inverted colors |
-| `strikethrough` | bool | false | Strikethrough text |
-| `wrap` | string | null | Text wrap mode (future) |
-
-#### TuiInstance
-
-Represents a running TUI application.
-
-**Methods:**
-```php
-rerender(): void        // Force re-render
-unmount(): void         // Stop and cleanup
-waitUntilExit(): void   // Block until exit
-exit(int $code = 0): void  // Request exit
-```
-
-#### TuiKey
-
-Keyboard event object passed to input handlers.
-
-**Properties:**
-| Property | Type | Description |
-|----------|------|-------------|
-| `key` | string | The pressed key character |
-| `upArrow` | bool | Up arrow pressed |
-| `downArrow` | bool | Down arrow pressed |
-| `leftArrow` | bool | Left arrow pressed |
-| `rightArrow` | bool | Right arrow pressed |
-| `return` | bool | Enter/Return pressed |
-| `escape` | bool | Escape pressed |
-| `backspace` | bool | Backspace pressed |
-| `delete` | bool | Delete pressed |
-| `tab` | bool | Tab pressed |
-| `ctrl` | bool | Ctrl modifier held |
-| `meta` | bool | Meta/Alt modifier held |
-| `shift` | bool | Shift modifier held |
-
-## Examples
-
-See the `examples/` directory for more examples:
-
-- `hello.php` - Basic hello world
-- `counter.php` - Interactive counter with keyboard input
-- `layout.php` - Flexbox layout demonstration
-- `colors.php` - Color and style showcase
 
 ## Documentation
 
-Full documentation is available in the `docs/` folder:
+Full documentation is available in the [`docs/`](docs/) folder:
 
-- [API Reference](docs/api.md)
-- [Layout Guide](docs/layout.md)
-- [Styling Guide](docs/styling.md)
-- [Input Handling](docs/input.md)
+### Manual (Tutorials & Guides)
+
+- [Getting Started](docs/manual/getting-started.md) - Installation and first app
+- [Components & Layout](docs/manual/components.md) - TuiBox, TuiText, flexbox layouts
+- [Styling](docs/manual/styling.md) - Colors, text attributes, borders
+- [Input Handling](docs/manual/input.md) - Keyboard events, focus, resize
+- [Drawing](docs/manual/drawing.md) - Buffers, canvas, primitives, sprites, tables
+- [Animation](docs/manual/animation.md) - Easing, interpolation, effects
+
+### Reference
+
+- [Functions](docs/reference/functions.md) - Complete function reference
+- [Classes](docs/reference/classes.md) - TuiBox, TuiText, TuiKey, TuiInstance
+- [Constants](docs/reference/constants.md) - TUI_EASE_*, TUI_CANVAS_*, etc.
+
+### Specifications
+
+- [ext-tui Specification](docs/specs/ext-tui-specs.md) - Complete C extension specification
+- [xocdr/tui Specification](docs/specs/xocdr-tui-specs.md) - PHP library specification
+
+## API Overview
+
+### Application Lifecycle
+
+```php
+tui_render(callable $component, array $options = []): TuiInstance
+tui_rerender(TuiInstance $instance): void
+tui_unmount(TuiInstance $instance): void
+tui_wait_until_exit(TuiInstance $instance): void
+```
+
+### Event Handlers
+
+```php
+tui_set_input_handler(TuiInstance $instance, callable $handler): void
+tui_set_focus_handler(TuiInstance $instance, callable $handler): void
+tui_set_resize_handler(TuiInstance $instance, callable $handler): void
+tui_set_tick_handler(TuiInstance $instance, callable $handler): void
+```
+
+### Focus Management
+
+```php
+tui_focus_next(TuiInstance $instance): void
+tui_focus_prev(TuiInstance $instance): void
+tui_get_focused_node(TuiInstance $instance): ?array
+```
+
+### Timers
+
+```php
+tui_add_timer(TuiInstance $instance, callable $callback, int $intervalMs): int
+tui_remove_timer(TuiInstance $instance, int $timerId): void
+```
+
+### Terminal Info
+
+```php
+tui_get_terminal_size(): array           // [width, height]
+tui_get_size(TuiInstance $instance): ?array
+tui_is_interactive(): bool
+tui_is_ci(): bool
+```
+
+### Text Utilities
+
+```php
+tui_string_width(string $text): int
+tui_wrap_text(string $text, int $width): array
+tui_truncate(string $text, int $width, string $ellipsis = '...'): string
+tui_pad(string $text, int $width, string $align = 'left', string $char = ' '): string
+```
+
+### Drawing Buffers
+
+```php
+tui_buffer_create(int $width, int $height): resource
+tui_buffer_clear(resource $buffer): void
+tui_buffer_render(resource $buffer): void
+```
+
+### Drawing Primitives
+
+```php
+tui_draw_line(resource $buffer, int $x1, int $y1, int $x2, int $y2, array $style): void
+tui_draw_rect(resource $buffer, int $x, int $y, int $w, int $h, array $style): void
+tui_fill_rect(resource $buffer, int $x, int $y, int $w, int $h, array $style): void
+tui_draw_circle(resource $buffer, int $cx, int $cy, int $r, array $style): void
+tui_fill_circle(resource $buffer, int $cx, int $cy, int $r, array $style): void
+tui_draw_ellipse(resource $buffer, int $cx, int $cy, int $rx, int $ry, array $style): void
+tui_fill_ellipse(resource $buffer, int $cx, int $cy, int $rx, int $ry, array $style): void
+tui_draw_triangle(resource $buffer, int $x1, int $y1, int $x2, int $y2, int $x3, int $y3, array $style): void
+tui_fill_triangle(resource $buffer, int $x1, int $y1, int $x2, int $y2, int $x3, int $y3, array $style): void
+```
+
+### Canvas (High-Resolution Drawing)
+
+```php
+tui_canvas_create(int $width, int $height, int $mode = TUI_CANVAS_BRAILLE): resource
+tui_canvas_set(resource $canvas, int $x, int $y): void
+tui_canvas_unset(resource $canvas, int $x, int $y): void
+tui_canvas_toggle(resource $canvas, int $x, int $y): void
+tui_canvas_get(resource $canvas, int $x, int $y): bool
+tui_canvas_clear(resource $canvas): void
+tui_canvas_line(resource $canvas, int $x1, int $y1, int $x2, int $y2): void
+tui_canvas_rect(resource $canvas, int $x, int $y, int $w, int $h): void
+tui_canvas_fill_rect(resource $canvas, int $x, int $y, int $w, int $h): void
+tui_canvas_circle(resource $canvas, int $cx, int $cy, int $r): void
+tui_canvas_fill_circle(resource $canvas, int $cx, int $cy, int $r): void
+tui_canvas_set_color(resource $canvas, array $rgb): void
+tui_canvas_get_resolution(resource $canvas): array
+tui_canvas_render(resource $canvas, array $style = []): array
+```
+
+### Animation
+
+```php
+tui_ease(float $t, int $easing = TUI_EASE_LINEAR): float
+tui_lerp(float $start, float $end, float $t): float
+tui_lerp_color(array $from, array $to, float $t): array
+tui_gradient(array $from, array $to, int $steps): array
+tui_color_from_hex(string $hex): array
+```
+
+### Tables
+
+```php
+tui_table_create(array $headers): resource
+tui_table_add_row(resource $table, array $cells): void
+tui_table_set_align(resource $table, int $column, int $align): void
+tui_table_render_to_buffer(resource $table, resource $buffer, int $x, int $y, array $options = []): void
+```
+
+### Progress Indicators
+
+```php
+tui_render_progress_bar(float $progress, int $width, array $style = []): string
+tui_render_busy_bar(int $frame, int $width, array $options = []): string
+tui_spinner_frame(int $frame, int $type = TUI_SPINNER_DOTS): string
+tui_spinner_frame_count(int $type): int
+tui_render_spinner(int $frame, string $label, int $type, array $style = []): string
+```
+
+### Sprites
+
+```php
+tui_sprite_create(array $config): resource
+tui_sprite_update(resource $sprite): void
+tui_sprite_set_animation(resource $sprite, string $name): void
+tui_sprite_set_position(resource $sprite, int $x, int $y): void
+tui_sprite_flip(resource $sprite, bool $horizontal, bool $vertical): void
+tui_sprite_set_visible(resource $sprite, bool $visible): void
+tui_sprite_render(resource $sprite, resource $buffer): void
+tui_sprite_get_bounds(resource $sprite): array
+tui_sprite_collides(resource $sprite1, resource $sprite2): bool
+```
+
+## Classes
+
+### TuiBox
+
+Flexbox container component.
+
+```php
+$box = new TuiBox([
+    'flexDirection' => 'column',     // 'row', 'column', 'row-reverse', 'column-reverse'
+    'alignItems' => 'center',        // 'flex-start', 'center', 'flex-end', 'stretch'
+    'justifyContent' => 'center',    // 'flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly'
+    'width' => '100%',
+    'height' => 10,
+    'padding' => 1,
+    'gap' => 1,
+    'borderStyle' => 'round',        // 'single', 'double', 'round', 'bold'
+    'borderColor' => [100, 150, 255],
+    'focusable' => true,
+]);
+$box->addChild($child);
+```
+
+### TuiText
+
+Text display component.
+
+```php
+$text = new TuiText([
+    'content' => 'Hello!',
+    'color' => '#00ff00',            // or [0, 255, 0]
+    'backgroundColor' => [50, 50, 50],
+    'bold' => true,
+    'italic' => true,
+    'underline' => true,
+    'dim' => false,
+    'inverse' => false,
+    'strikethrough' => false,
+]);
+```
+
+### TuiInstance
+
+Running TUI application handle.
+
+```php
+$instance->rerender();        // Force re-render
+$instance->unmount();         // Stop and cleanup
+$instance->waitUntilExit();   // Block until exit
+$instance->exit(0);           // Request exit with code
+```
+
+### TuiKey
+
+Keyboard event object (passed to input handlers).
+
+```php
+$key->key           // string: character pressed
+$key->upArrow       // bool
+$key->downArrow     // bool
+$key->leftArrow     // bool
+$key->rightArrow    // bool
+$key->return        // bool (enter key)
+$key->escape        // bool
+$key->backspace     // bool
+$key->delete        // bool
+$key->tab           // bool
+$key->ctrl          // bool
+$key->alt           // bool
+$key->meta          // bool
+$key->shift         // bool
+```
+
+## Constants
+
+### Easing Functions
+
+`TUI_EASE_LINEAR`, `TUI_EASE_IN_QUAD`, `TUI_EASE_OUT_QUAD`, `TUI_EASE_IN_OUT_QUAD`, `TUI_EASE_IN_CUBIC`, `TUI_EASE_OUT_CUBIC`, `TUI_EASE_IN_OUT_CUBIC`, `TUI_EASE_IN_QUART`, `TUI_EASE_OUT_QUART`, `TUI_EASE_IN_OUT_QUART`, `TUI_EASE_IN_SINE`, `TUI_EASE_OUT_SINE`, `TUI_EASE_IN_OUT_SINE`, `TUI_EASE_OUT_BOUNCE`, `TUI_EASE_OUT_ELASTIC`, `TUI_EASE_OUT_BACK`
+
+### Canvas Modes
+
+- `TUI_CANVAS_BRAILLE` - 2x4 pixels per cell (highest resolution)
+- `TUI_CANVAS_BLOCK` - 2x2 pixels per cell
+- `TUI_CANVAS_ASCII` - 1x1 pixel per cell
+
+### Spinner Types
+
+`TUI_SPINNER_DOTS`, `TUI_SPINNER_LINE`, `TUI_SPINNER_BOUNCE`, `TUI_SPINNER_CIRCLE`
+
+### Table Alignment
+
+`TUI_ALIGN_LEFT`, `TUI_ALIGN_CENTER`, `TUI_ALIGN_RIGHT`
+
+## Known Limitations
+
+- **macOS/Linux only**: Uses POSIX APIs (termios, poll, signals)
+- **No mouse support**: Keyboard input only (planned for future)
+- **No Windows support**: Consider WSL for Windows users
+
+See [docs/limitations.md](docs/limitations.md) for full details.
+
+## Related Projects
+
+- **xocdr/tui** - PHP library with hooks wrapping ext-tui
+- **xocdr/tui-widgets** - Pre-built widget components
 
 ## License
 

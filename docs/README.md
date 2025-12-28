@@ -1,4 +1,4 @@
-# xocdr/ext-tui Documentation
+# ext-tui Documentation
 
 A PHP C extension for building terminal user interfaces with component-based architecture and Yoga flexbox layout.
 
