@@ -21,6 +21,6 @@
                 "description": "Enable TUI extension"
             }
         ],
-        "os-families": ["linux", "darwin", "freebsd"]
+        "os-families": ["linux", "darwin", "bsd"]
     }
 }
