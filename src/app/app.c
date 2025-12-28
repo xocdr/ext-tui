@@ -1,0 +1,938 @@
+/*
+  +----------------------------------------------------------------------+
+  | ext-tui: Application state management                               |
+  +----------------------------------------------------------------------+
+*/
+
+#include "app.h"
+#include "../terminal/terminal.h"
+#include "../terminal/ansi.h"
+#include "../event/input.h"
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdint.h>
+
+/* External class entries for event objects (defined in tui.c) */
+extern zend_class_entry *tui_key_ce;
+extern zend_class_entry *tui_focus_event_ce;
+
+/* Forward declaration for rendering a node tree to buffer */
+static void render_node_to_buffer(tui_app *app, tui_node *node, int offset_x, int offset_y);
+
+tui_app* tui_app_create(void)
+{
+    tui_app *app = calloc(1, sizeof(tui_app));
+    if (!app) return NULL;
+
+    app->fullscreen = 1;
+    app->exit_on_ctrl_c = 1;
+    app->min_render_interval_ms = 16;  /* 60fps */
+
+    /* Get terminal size */
+    tui_terminal_get_size(&app->width, &app->height);
+
+    /* Create output system */
+    app->output = tui_output_create(app->width, app->height);
+    app->buffer = tui_buffer_create(app->width, app->height);
+
+    /* Create event loop */
+    app->loop = tui_loop_create();
+
+    return app;
+}
+
+void tui_app_destroy(tui_app *app)
+{
+    if (!app) return;
+
+    /* Prevent double-free */
+    if (app->destroyed) return;
+    app->destroyed = 1;
+
+    /* Stop if running */
+    if (app->running) {
+        tui_app_stop(app);
+    }
+
+    /* Free callback references (both function_name and object)
+     * Only free if we're still in a valid PHP execution context.
+     * Check that the zval is valid before attempting to free. */
+    if (app->component_fci.size && !Z_ISUNDEF(app->component_fci.function_name)) {
+        zval_ptr_dtor(&app->component_fci.function_name);
+        ZVAL_UNDEF(&app->component_fci.function_name);
+        if (app->component_fcc.object) {
+            OBJ_RELEASE(app->component_fcc.object);
+            app->component_fcc.object = NULL;
+        }
+    }
+    if (app->has_input_handler && app->input_fci.size && !Z_ISUNDEF(app->input_fci.function_name)) {
+        zval_ptr_dtor(&app->input_fci.function_name);
+        ZVAL_UNDEF(&app->input_fci.function_name);
+        if (app->input_fcc.object) {
+            OBJ_RELEASE(app->input_fcc.object);
+            app->input_fcc.object = NULL;
+        }
+    }
+    if (app->has_focus_handler && app->focus_fci.size && !Z_ISUNDEF(app->focus_fci.function_name)) {
+        zval_ptr_dtor(&app->focus_fci.function_name);
+        ZVAL_UNDEF(&app->focus_fci.function_name);
+        if (app->focus_fcc.object) {
+            OBJ_RELEASE(app->focus_fcc.object);
+            app->focus_fcc.object = NULL;
+        }
+    }
+    if (app->has_resize_handler && app->resize_fci.size && !Z_ISUNDEF(app->resize_fci.function_name)) {
+        zval_ptr_dtor(&app->resize_fci.function_name);
+        ZVAL_UNDEF(&app->resize_fci.function_name);
+        if (app->resize_fcc.object) {
+            OBJ_RELEASE(app->resize_fcc.object);
+            app->resize_fcc.object = NULL;
+        }
+    }
+    if (app->has_tick_handler && app->tick_fci.size && !Z_ISUNDEF(app->tick_fci.function_name)) {
+        zval_ptr_dtor(&app->tick_fci.function_name);
+        ZVAL_UNDEF(&app->tick_fci.function_name);
+        if (app->tick_fcc.object) {
+            OBJ_RELEASE(app->tick_fcc.object);
+            app->tick_fcc.object = NULL;
+        }
+    }
+
+    /* Clean up timer callbacks */
+    for (int i = 0; i < app->timer_callback_count; i++) {
+        if (app->timer_callbacks[i].active) {
+            app->timer_callbacks[i].active = 0;
+            if (!Z_ISUNDEF(app->timer_callbacks[i].fci.function_name)) {
+                zval_ptr_dtor(&app->timer_callbacks[i].fci.function_name);
+                ZVAL_UNDEF(&app->timer_callbacks[i].fci.function_name);
+            }
+            if (app->timer_callbacks[i].fcc.object) {
+                OBJ_RELEASE(app->timer_callbacks[i].fcc.object);
+                app->timer_callbacks[i].fcc.object = NULL;
+            }
+        }
+    }
+
+    /* Free resources */
+    if (app->root_node) {
+        tui_node_destroy(app->root_node);
+        app->root_node = NULL;
+    }
+    if (app->buffer) {
+        tui_buffer_destroy(app->buffer);
+        app->buffer = NULL;
+    }
+    if (app->output) {
+        tui_output_destroy(app->output);
+        app->output = NULL;
+    }
+    if (app->loop) {
+        tui_loop_destroy(app->loop);
+        app->loop = NULL;
+    }
+
+    free(app);
+}
+
+void tui_app_set_fullscreen(tui_app *app, int fullscreen)
+{
+    if (app) {
+        app->fullscreen = fullscreen;
+    }
+}
+
+void tui_app_set_exit_on_ctrl_c(tui_app *app, int enabled)
+{
+    if (app) {
+        app->exit_on_ctrl_c = enabled;
+    }
+}
+
+void tui_app_set_component(tui_app *app, zend_fcall_info *fci, zend_fcall_info_cache *fcc)
+{
+    if (app && fci && fcc) {
+        /* Release previous callback references if set */
+        if (app->component_fci.size) {
+            zval_ptr_dtor(&app->component_fci.function_name);
+            if (app->component_fcc.object) {
+                OBJ_RELEASE(app->component_fcc.object);
+            }
+        }
+        app->component_fci = *fci;
+        app->component_fcc = *fcc;
+        /* Add references to prevent garbage collection */
+        Z_TRY_ADDREF(app->component_fci.function_name);
+        if (app->component_fcc.object) {
+            GC_ADDREF(app->component_fcc.object);
+        }
+    }
+}
+
+void tui_app_set_input_handler(tui_app *app, zend_fcall_info *fci, zend_fcall_info_cache *fcc)
+{
+    if (app && fci && fcc) {
+        /* Release previous callback references if set */
+        if (app->has_input_handler && app->input_fci.size) {
+            zval_ptr_dtor(&app->input_fci.function_name);
+            if (app->input_fcc.object) {
+                OBJ_RELEASE(app->input_fcc.object);
+            }
+        }
+        app->input_fci = *fci;
+        app->input_fcc = *fcc;
+        app->has_input_handler = 1;
+        /* Add references to prevent garbage collection */
+        Z_TRY_ADDREF(app->input_fci.function_name);
+        if (app->input_fcc.object) {
+            GC_ADDREF(app->input_fcc.object);
+        }
+    }
+}
+
+void tui_app_set_focus_handler(tui_app *app, zend_fcall_info *fci, zend_fcall_info_cache *fcc)
+{
+    if (app && fci && fcc) {
+        /* Release previous callback references if set */
+        if (app->has_focus_handler && app->focus_fci.size) {
+            zval_ptr_dtor(&app->focus_fci.function_name);
+            if (app->focus_fcc.object) {
+                OBJ_RELEASE(app->focus_fcc.object);
+            }
+        }
+        app->focus_fci = *fci;
+        app->focus_fcc = *fcc;
+        app->has_focus_handler = 1;
+        /* Add references to prevent garbage collection */
+        Z_TRY_ADDREF(app->focus_fci.function_name);
+        if (app->focus_fcc.object) {
+            GC_ADDREF(app->focus_fcc.object);
+        }
+    }
+}
+
+void tui_app_set_resize_handler(tui_app *app, zend_fcall_info *fci, zend_fcall_info_cache *fcc)
+{
+    if (app && fci && fcc) {
+        /* Release previous callback references if set */
+        if (app->has_resize_handler && app->resize_fci.size) {
+            zval_ptr_dtor(&app->resize_fci.function_name);
+            if (app->resize_fcc.object) {
+                OBJ_RELEASE(app->resize_fcc.object);
+            }
+        }
+        app->resize_fci = *fci;
+        app->resize_fcc = *fcc;
+        app->has_resize_handler = 1;
+        /* Add references to prevent garbage collection */
+        Z_TRY_ADDREF(app->resize_fci.function_name);
+        if (app->resize_fcc.object) {
+            GC_ADDREF(app->resize_fcc.object);
+        }
+    }
+}
+
+/* Tick callback wrapper - called from event loop on each iteration */
+static void tick_callback_wrapper(void *userdata)
+{
+    tui_app *app = (tui_app *)userdata;
+    if (!app || !app->has_tick_handler) return;
+
+    zval retval;
+    app->tick_fci.retval = &retval;
+    app->tick_fci.param_count = 0;
+    app->tick_fci.params = NULL;
+
+    if (zend_call_function(&app->tick_fci, &app->tick_fcc) == SUCCESS) {
+        zval_ptr_dtor(&retval);
+    }
+}
+
+void tui_app_set_tick_handler(tui_app *app, zend_fcall_info *fci, zend_fcall_info_cache *fcc)
+{
+    if (app && fci && fcc) {
+        /* Release previous callback references if set */
+        if (app->has_tick_handler && app->tick_fci.size) {
+            zval_ptr_dtor(&app->tick_fci.function_name);
+            if (app->tick_fcc.object) {
+                OBJ_RELEASE(app->tick_fcc.object);
+            }
+        }
+        app->tick_fci = *fci;
+        app->tick_fcc = *fcc;
+        app->has_tick_handler = 1;
+        /* Add references to prevent garbage collection */
+        Z_TRY_ADDREF(app->tick_fci.function_name);
+        if (app->tick_fcc.object) {
+            GC_ADDREF(app->tick_fcc.object);
+        }
+
+        /* Register the tick callback with the event loop */
+        if (app->loop) {
+            tui_loop_on_tick(app->loop, tick_callback_wrapper, app);
+        }
+    }
+}
+
+/* Helper: collect all focusable nodes */
+static int collect_focusable_nodes(tui_node *node, tui_node ***nodes, int *count, int *capacity)
+{
+    if (!node) return 0;
+
+    if (node->focusable) {
+        if (*count >= *capacity) {
+            int new_capacity = *capacity * 2;
+            tui_node **new_nodes = realloc(*nodes, new_capacity * sizeof(tui_node*));
+            if (!new_nodes) {
+                /* Realloc failed - return error but don't lose original pointer */
+                return -1;
+            }
+            *nodes = new_nodes;
+            *capacity = new_capacity;
+        }
+        (*nodes)[(*count)++] = node;
+    }
+
+    for (int i = 0; i < node->child_count; i++) {
+        if (collect_focusable_nodes(node->children[i], nodes, count, capacity) < 0) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+/* Helper: create array with node info */
+static void create_node_info_array(zval *arr, tui_node *node)
+{
+    array_init(arr);
+    add_assoc_bool(arr, "focusable", node->focusable);
+    add_assoc_bool(arr, "focused", node->focused);
+    add_assoc_long(arr, "x", (zend_long)node->x);
+    add_assoc_long(arr, "y", (zend_long)node->y);
+    add_assoc_long(arr, "width", (zend_long)node->width);
+    add_assoc_long(arr, "height", (zend_long)node->height);
+    if (node->type == TUI_NODE_TEXT && node->text) {
+        add_assoc_string(arr, "type", "text");
+        add_assoc_string(arr, "content", node->text);
+    } else {
+        add_assoc_string(arr, "type", "box");
+    }
+}
+
+/* Call focus change handler with TuiFocusEvent object */
+static void call_focus_handler(tui_app *app, tui_node *old_node, tui_node *new_node, const char *direction)
+{
+    if (!app || !app->has_focus_handler || !tui_focus_event_ce) return;
+
+    zval retval;
+    zval event;
+    zval previous, current;
+
+    /* Create TuiFocusEvent object */
+    object_init_ex(&event, tui_focus_event_ce);
+
+    /* Set previous node info (or null) */
+    if (old_node) {
+        create_node_info_array(&previous, old_node);
+        zend_update_property(tui_focus_event_ce, Z_OBJ(event), "previous", sizeof("previous")-1, &previous);
+        zval_ptr_dtor(&previous);
+    }
+
+    /* Set current node info (or null) */
+    if (new_node) {
+        create_node_info_array(&current, new_node);
+        zend_update_property(tui_focus_event_ce, Z_OBJ(event), "current", sizeof("current")-1, &current);
+        zval_ptr_dtor(&current);
+    }
+
+    /* Set direction */
+    zend_update_property_string(tui_focus_event_ce, Z_OBJ(event), "direction", sizeof("direction")-1, direction ? direction : "");
+
+    /* Call the PHP handler with TuiFocusEvent */
+    zval params[1];
+    ZVAL_COPY_VALUE(&params[0], &event);
+
+    app->focus_fci.param_count = 1;
+    app->focus_fci.params = params;
+    app->focus_fci.retval = &retval;
+
+    if (zend_call_function(&app->focus_fci, &app->focus_fcc) == SUCCESS) {
+        zval_ptr_dtor(&retval);
+    }
+
+    zval_ptr_dtor(&event);
+}
+
+void tui_app_focus_next(tui_app *app)
+{
+    if (!app || !app->root_node) return;
+
+    int capacity = 16;
+    int count = 0;
+    tui_node **nodes = malloc(capacity * sizeof(tui_node*));
+    if (!nodes) return;
+
+    if (collect_focusable_nodes(app->root_node, &nodes, &count, &capacity) < 0) {
+        free(nodes);
+        return;
+    }
+
+    if (count == 0) {
+        free(nodes);
+        return;
+    }
+
+    /* Find current focused index */
+    int current = -1;
+    for (int i = 0; i < count; i++) {
+        if (nodes[i] == app->focused_node) {
+            current = i;
+            break;
+        }
+    }
+
+    /* Move to next (or first if none focused) */
+    int next = (current + 1) % count;
+    tui_node *old_node = app->focused_node;
+
+    if (old_node) {
+        old_node->focused = 0;
+    }
+
+    app->focused_node = nodes[next];
+    app->focused_node->focused = 1;
+
+    /* Call focus change handler */
+    call_focus_handler(app, old_node, app->focused_node, "next");
+
+    free(nodes);
+
+    /* Request re-render */
+    app->render_pending = 1;
+}
+
+void tui_app_focus_prev(tui_app *app)
+{
+    if (!app || !app->root_node) return;
+
+    int capacity = 16;
+    int count = 0;
+    tui_node **nodes = malloc(capacity * sizeof(tui_node*));
+    if (!nodes) return;
+
+    if (collect_focusable_nodes(app->root_node, &nodes, &count, &capacity) < 0) {
+        free(nodes);
+        return;
+    }
+
+    if (count == 0) {
+        free(nodes);
+        return;
+    }
+
+    /* Find current focused index */
+    int current = -1;
+    for (int i = 0; i < count; i++) {
+        if (nodes[i] == app->focused_node) {
+            current = i;
+            break;
+        }
+    }
+
+    /* Move to previous (or last if none focused) */
+    int prev = current <= 0 ? count - 1 : current - 1;
+    tui_node *old_node = app->focused_node;
+
+    if (old_node) {
+        old_node->focused = 0;
+    }
+
+    app->focused_node = nodes[prev];
+    app->focused_node->focused = 1;
+
+    /* Call focus change handler */
+    call_focus_handler(app, old_node, app->focused_node, "prev");
+
+    free(nodes);
+
+    /* Request re-render */
+    app->render_pending = 1;
+}
+
+void tui_app_set_focus(tui_app *app, tui_node *node)
+{
+    if (!app) return;
+
+    tui_node *old_node = app->focused_node;
+
+    if (old_node) {
+        old_node->focused = 0;
+    }
+
+    if (node && node->focusable) {
+        app->focused_node = node;
+        node->focused = 1;
+    } else {
+        app->focused_node = NULL;
+    }
+
+    /* Call focus change handler */
+    call_focus_handler(app, old_node, app->focused_node, "programmatic");
+
+    /* Request re-render */
+    app->render_pending = 1;
+}
+
+int tui_app_start(tui_app *app)
+{
+    if (!app) return -1;
+
+    /* Enable raw mode */
+    if (tui_terminal_enable_raw_mode() != 0) {
+        return -1;
+    }
+
+    /* Enter alternate screen if fullscreen */
+    if (app->fullscreen) {
+        tui_output_enter_alternate(app->output);
+    }
+
+    /* Hide cursor */
+    tui_output_hide_cursor(app->output);
+
+    /* Set up event callbacks */
+    tui_loop_on_input(app->loop, tui_app_on_input, app);
+    tui_loop_on_resize(app->loop, tui_app_on_resize, app);
+
+    app->running = 1;
+
+    /* Initial render */
+    tui_app_render(app);
+
+    return 0;
+}
+
+/**
+ * Render the current node tree to the terminal buffer and output.
+ * Does NOT call the component callback - use tui_app_render() for full render.
+ */
+void tui_app_render_tree(tui_app *app)
+{
+    if (!app || !app->running) return;
+
+    /* Clear the buffer */
+    tui_buffer_clear(app->buffer);
+
+    /* If we have a root node, render it */
+    if (app->root_node) {
+        /* Calculate layout */
+        tui_node_calculate_layout(app->root_node, app->width, app->height);
+
+        /* Render to buffer */
+        render_node_to_buffer(app, app->root_node, 0, 0);
+    }
+
+    /* Output to terminal */
+    tui_output_render(app->output, app->buffer);
+
+    app->render_pending = 0;
+}
+
+void tui_app_render(tui_app *app)
+{
+    if (!app || !app->running) return;
+
+    zval retval;
+
+    /* Call the PHP component function */
+    app->component_fci.retval = &retval;
+    if (zend_call_function(&app->component_fci, &app->component_fcc) == SUCCESS) {
+        /* The component should return a TuiBox or TuiText */
+        /* For now, we'll handle this in the PHP layer */
+        /* The retval contains the rendered element tree */
+
+        /* Note: The node tree is built by render_component_callback() in tui.c */
+        /* This call is for initial render; rerenders use tui_app_render_tree() */
+
+        zval_ptr_dtor(&retval);
+    }
+
+    /* Render the tree to screen */
+    tui_app_render_tree(app);
+}
+
+void tui_app_stop(tui_app *app)
+{
+    if (!app || !app->running) return;
+
+    app->running = 0;
+
+    /* Stop event loop */
+    tui_loop_stop(app->loop);
+
+    /* Show cursor */
+    tui_output_show_cursor(app->output);
+
+    /* Exit alternate screen if fullscreen */
+    if (app->fullscreen) {
+        tui_output_exit_alternate(app->output);
+    }
+
+    /* Disable raw mode */
+    tui_terminal_disable_raw_mode();
+}
+
+void tui_app_wait_until_exit(tui_app *app)
+{
+    if (!app || !app->running) return;
+
+    /* Run event loop until stopped */
+    while (app->running && !app->should_exit) {
+        tui_loop_run(app->loop);
+
+        /* Re-render if pending (focus/resize changes - tree already exists) */
+        if (app->render_pending) {
+            tui_app_render_tree(app);
+        }
+    }
+
+    /* Clean up terminal state when exiting */
+    if (app->running) {
+        tui_app_stop(app);
+    }
+}
+
+void tui_app_exit(tui_app *app, int code)
+{
+    if (app) {
+        app->exit_code = code;
+        app->should_exit = 1;
+    }
+}
+
+/* Timer callback wrapper - called from event loop, invokes PHP callback */
+static void timer_callback_wrapper(void *userdata)
+{
+    /* userdata is pointer to timer index packed with app pointer */
+    tui_app *app = (tui_app *)((uintptr_t)userdata & ~0xFFUL);
+    int index = (int)((uintptr_t)userdata & 0xFF);
+
+    if (!app || index < 0 || index >= app->timer_callback_count) return;
+    if (!app->timer_callbacks[index].active) return;
+
+    zval retval;
+    app->timer_callbacks[index].fci.retval = &retval;
+
+    if (zend_call_function(&app->timer_callbacks[index].fci,
+                           &app->timer_callbacks[index].fcc) == SUCCESS) {
+        zval_ptr_dtor(&retval);
+    }
+}
+
+int tui_app_add_timer(tui_app *app, int interval_ms, zend_fcall_info *fci, zend_fcall_info_cache *fcc)
+{
+    if (!app || !fci || !fcc) return -1;
+    if (app->timer_callback_count >= TUI_MAX_TIMERS) return -1;
+
+    int index = app->timer_callback_count++;
+
+    /* Store PHP callback */
+    app->timer_callbacks[index].fci = *fci;
+    app->timer_callbacks[index].fcc = *fcc;
+    app->timer_callbacks[index].active = 1;
+
+    /* Add reference to prevent garbage collection */
+    Z_TRY_ADDREF(app->timer_callbacks[index].fci.function_name);
+    if (app->timer_callbacks[index].fcc.object) {
+        GC_ADDREF(app->timer_callbacks[index].fcc.object);
+    }
+
+    /* Create userdata that encodes both app pointer and index */
+    void *userdata = (void *)((uintptr_t)app | (index & 0xFF));
+
+    /* Add to event loop */
+    int timer_id = tui_loop_add_timer(app->loop, interval_ms, timer_callback_wrapper, userdata);
+    app->timer_callbacks[index].id = timer_id;
+
+    return timer_id;
+}
+
+void tui_app_remove_timer(tui_app *app, int timer_id)
+{
+    if (!app) return;
+
+    /* Find and deactivate the timer callback */
+    for (int i = 0; i < app->timer_callback_count; i++) {
+        if (app->timer_callbacks[i].id == timer_id && app->timer_callbacks[i].active) {
+            app->timer_callbacks[i].active = 0;
+
+            /* Release PHP callback references */
+            if (!Z_ISUNDEF(app->timer_callbacks[i].fci.function_name)) {
+                zval_ptr_dtor(&app->timer_callbacks[i].fci.function_name);
+                ZVAL_UNDEF(&app->timer_callbacks[i].fci.function_name);
+            }
+            if (app->timer_callbacks[i].fcc.object) {
+                OBJ_RELEASE(app->timer_callbacks[i].fcc.object);
+                app->timer_callbacks[i].fcc.object = NULL;
+            }
+
+            /* Remove from event loop */
+            tui_loop_remove_timer(app->loop, timer_id);
+            break;
+        }
+    }
+}
+
+void tui_app_on_input(const char *input, int len, void *userdata)
+{
+    tui_app *app = (tui_app *)userdata;
+    if (!app) return;
+
+    /* Parse input */
+    tui_key_event key;
+    tui_input_parse(input, len, &key);
+
+    /* Handle Ctrl+C */
+    if (app->exit_on_ctrl_c && key.ctrl && key.key[0] == 'c') {
+        tui_app_exit(app, 0);
+        return;
+    }
+
+    /* Handle Tab for focus navigation */
+    if (key.tab && !key.ctrl && !key.meta) {
+        if (key.shift) {
+            tui_app_focus_prev(app);
+        } else {
+            tui_app_focus_next(app);
+        }
+        /* Still call input handler so app can intercept */
+    }
+
+    /* Call PHP input handler if set */
+    if (app->has_input_handler && tui_key_ce) {
+        zval key_obj;
+        zval retval;
+
+        /* Create TuiKey object */
+        object_init_ex(&key_obj, tui_key_ce);
+
+        /* Set properties */
+        zend_update_property_string(tui_key_ce, Z_OBJ(key_obj), "key", sizeof("key")-1, key.key);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "upArrow", sizeof("upArrow")-1, key.upArrow);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "downArrow", sizeof("downArrow")-1, key.downArrow);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "leftArrow", sizeof("leftArrow")-1, key.leftArrow);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "rightArrow", sizeof("rightArrow")-1, key.rightArrow);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "return", sizeof("return")-1, key.enter);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "escape", sizeof("escape")-1, key.escape);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "backspace", sizeof("backspace")-1, key.backspace);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "delete", sizeof("delete")-1, key.delete);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "tab", sizeof("tab")-1, key.tab);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "home", sizeof("home")-1, key.home);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "end", sizeof("end")-1, key.end);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "pageUp", sizeof("pageUp")-1, key.pageUp);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "pageDown", sizeof("pageDown")-1, key.pageDown);
+        zend_update_property_long(tui_key_ce, Z_OBJ(key_obj), "functionKey", sizeof("functionKey")-1, key.functionKey);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "ctrl", sizeof("ctrl")-1, key.ctrl);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "meta", sizeof("meta")-1, key.meta);
+        zend_update_property_bool(tui_key_ce, Z_OBJ(key_obj), "shift", sizeof("shift")-1, key.shift);
+
+        /* Set name property for special keys */
+        const char *name = "";
+        char fname[5]; /* Buffer for "F1" through "F12" (max 4 chars + null) */
+        if (key.upArrow) name = "upArrow";
+        else if (key.downArrow) name = "downArrow";
+        else if (key.leftArrow) name = "leftArrow";
+        else if (key.rightArrow) name = "rightArrow";
+        else if (key.enter) name = "return";
+        else if (key.escape) name = "escape";
+        else if (key.backspace) name = "backspace";
+        else if (key.delete) name = "delete";
+        else if (key.tab) name = "tab";
+        else if (key.home) name = "home";
+        else if (key.end) name = "end";
+        else if (key.pageUp) name = "pageUp";
+        else if (key.pageDown) name = "pageDown";
+        else if (key.functionKey >= 1 && key.functionKey <= 12) {
+            snprintf(fname, sizeof(fname), "F%d", key.functionKey);
+            name = fname;
+        }
+        zend_update_property_string(tui_key_ce, Z_OBJ(key_obj), "name", sizeof("name")-1, name);
+
+        /* Call the PHP handler */
+        zval params[1];
+        ZVAL_COPY_VALUE(&params[0], &key_obj);
+
+        app->input_fci.param_count = 1;
+        app->input_fci.params = params;
+        app->input_fci.retval = &retval;
+
+        if (zend_call_function(&app->input_fci, &app->input_fcc) == SUCCESS) {
+            zval_ptr_dtor(&retval);
+        }
+
+        zval_ptr_dtor(&key_obj);
+    }
+
+    /* Note: We don't set render_pending here because:
+     * 1. If the PHP handler needs a re-render, it calls tui_rerender() directly
+     * 2. If focus changed (Tab key), tui_app_focus_next/prev already set render_pending
+     * Setting it unconditionally here causes double renders when PHP calls tui_rerender()
+     */
+}
+
+void tui_app_on_resize(int width, int height, void *userdata)
+{
+    tui_app *app = (tui_app *)userdata;
+    if (!app) return;
+
+    app->width = width;
+    app->height = height;
+
+    /* Resize buffers */
+    tui_buffer_resize(app->buffer, width, height);
+
+    /* Call PHP resize handler if set */
+    if (app->has_resize_handler) {
+        zval retval;
+        zval params[2];
+
+        ZVAL_LONG(&params[0], width);
+        ZVAL_LONG(&params[1], height);
+
+        app->resize_fci.param_count = 2;
+        app->resize_fci.params = params;
+        app->resize_fci.retval = &retval;
+
+        if (zend_call_function(&app->resize_fci, &app->resize_fcc) == SUCCESS) {
+            zval_ptr_dtor(&retval);
+        }
+    }
+
+    /* Request re-render */
+    app->render_pending = 1;
+}
+
+/* Border characters for different styles */
+static const char* border_chars[6][6] = {
+    /* NONE: no borders */
+    {"", "", "", "", "", ""},
+    /* SINGLE: ┌ ┐ └ ┘ ─ │ */
+    {"┌", "┐", "└", "┘", "─", "│"},
+    /* DOUBLE: ╔ ╗ ╚ ╝ ═ ║ */
+    {"╔", "╗", "╚", "╝", "═", "║"},
+    /* ROUND: ╭ ╮ ╰ ╯ ─ │ */
+    {"╭", "╮", "╰", "╯", "─", "│"},
+    /* BOLD: ┏ ┓ ┗ ┛ ━ ┃ */
+    {"┏", "┓", "┗", "┛", "━", "┃"},
+    /* DASHED: ┌ ┐ └ ┘ ┄ ┆ */
+    {"┌", "┐", "└", "┘", "┄", "┆"}
+};
+
+/* Render border around a box */
+static void render_border(tui_app *app, tui_node *node, int x, int y, int w, int h)
+{
+    if (!app || !node || node->border_style == TUI_BORDER_NONE || w < 2 || h < 2) return;
+
+    const char **chars = border_chars[node->border_style];
+    tui_style border_style = {0};
+    if (node->border_color.is_set) {
+        border_style.fg = node->border_color;
+    }
+
+    /* Top-left corner */
+    tui_buffer_write_text(app->buffer, x, y, chars[0], &border_style);
+    /* Top-right corner */
+    tui_buffer_write_text(app->buffer, x + w - 1, y, chars[1], &border_style);
+    /* Bottom-left corner */
+    tui_buffer_write_text(app->buffer, x, y + h - 1, chars[2], &border_style);
+    /* Bottom-right corner */
+    tui_buffer_write_text(app->buffer, x + w - 1, y + h - 1, chars[3], &border_style);
+
+    /* Top and bottom edges */
+    for (int i = 1; i < w - 1; i++) {
+        tui_buffer_write_text(app->buffer, x + i, y, chars[4], &border_style);
+        tui_buffer_write_text(app->buffer, x + i, y + h - 1, chars[4], &border_style);
+    }
+
+    /* Left and right edges */
+    for (int i = 1; i < h - 1; i++) {
+        tui_buffer_write_text(app->buffer, x, y + i, chars[5], &border_style);
+        tui_buffer_write_text(app->buffer, x + w - 1, y + i, chars[5], &border_style);
+    }
+}
+
+/* Forward declaration */
+#include "../text/wrap.h"
+
+/* Render wrapped text */
+static void render_wrapped_text(tui_app *app, tui_node *node, int x, int y, int max_width, int max_height)
+{
+    if (!node || !node->text || !node->text[0]) return;
+
+    if (max_width <= 0 || max_height <= 0) {
+        return;
+    }
+
+    switch (node->wrap_mode) {
+        case TUI_WRAP_NONE:
+            /* Truncate to fit width */
+            {
+                char *truncated = tui_truncate_text(node->text, max_width, "…");
+                if (truncated) {
+                    tui_buffer_write_text(app->buffer, x, y, truncated, &node->style);
+                    free(truncated);
+                }
+            }
+            break;
+
+        case TUI_WRAP_CHAR:
+        case TUI_WRAP_WORD:
+        case TUI_WRAP_WORD_CHAR:
+            /* Word or character wrap */
+            {
+                tui_wrapped_text *wrapped = tui_wrap_text(node->text, max_width, node->wrap_mode);
+                if (wrapped) {
+                    int lines_to_render = wrapped->count < max_height ? wrapped->count : max_height;
+                    for (int i = 0; i < lines_to_render; i++) {
+                        tui_buffer_write_text(app->buffer, x, y + i, wrapped->lines[i], &node->style);
+                    }
+                    tui_wrapped_text_free(wrapped);
+                }
+            }
+            break;
+    }
+}
+
+/* Render a node tree to the buffer */
+static void render_node_to_buffer(tui_app *app, tui_node *node, int offset_x, int offset_y)
+{
+    if (!app || !node) return;
+
+    /* Calculate absolute position */
+    int x = offset_x + (int)node->x;
+    int y = offset_y + (int)node->y;
+    int w = (int)node->width;
+    int h = (int)node->height;
+
+    /* Render based on node type */
+    if (node->type == TUI_NODE_TEXT && node->text) {
+        /* Render text content with wrapping support */
+        render_wrapped_text(app, node, x, y, w, h);
+    } else if (node->type == TUI_NODE_BOX) {
+        /* Fill background if set */
+        if (node->style.bg.is_set) {
+            tui_buffer_fill_rect(app->buffer, x, y, w, h, ' ', &node->style);
+        }
+
+        /* Render border if set */
+        if (node->border_style != TUI_BORDER_NONE) {
+            render_border(app, node, x, y, w, h);
+        }
+    }
+
+    /* Render children */
+    for (int i = 0; i < node->child_count; i++) {
+        render_node_to_buffer(app, node->children[i], x, y);
+    }
+}

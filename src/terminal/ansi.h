@@ -1,0 +1,41 @@
+/*
+  +----------------------------------------------------------------------+
+  | ext-tui: ANSI escape code generation                                |
+  +----------------------------------------------------------------------+
+*/
+
+#ifndef TUI_ANSI_H
+#define TUI_ANSI_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+/* Cursor control */
+void tui_ansi_cursor_hide(char *buf, size_t *len);
+void tui_ansi_cursor_show(char *buf, size_t *len);
+void tui_ansi_cursor_move(char *buf, size_t *len, int x, int y);
+void tui_ansi_cursor_save(char *buf, size_t *len);
+void tui_ansi_cursor_restore(char *buf, size_t *len);
+
+/* Screen control */
+void tui_ansi_clear_screen(char *buf, size_t *len);
+void tui_ansi_clear_line(char *buf, size_t *len);
+void tui_ansi_alternate_screen_enter(char *buf, size_t *len);
+void tui_ansi_alternate_screen_exit(char *buf, size_t *len);
+
+/* Colors (256-color and RGB) */
+void tui_ansi_fg_256(char *buf, size_t *len, uint8_t color);
+void tui_ansi_bg_256(char *buf, size_t *len, uint8_t color);
+void tui_ansi_fg_rgb(char *buf, size_t *len, uint8_t r, uint8_t g, uint8_t b);
+void tui_ansi_bg_rgb(char *buf, size_t *len, uint8_t r, uint8_t g, uint8_t b);
+void tui_ansi_reset(char *buf, size_t *len);
+
+/* Text styles */
+void tui_ansi_bold(char *buf, size_t *len);
+void tui_ansi_dim(char *buf, size_t *len);
+void tui_ansi_italic(char *buf, size_t *len);
+void tui_ansi_underline(char *buf, size_t *len);
+void tui_ansi_inverse(char *buf, size_t *len);
+void tui_ansi_strikethrough(char *buf, size_t *len);
+
+#endif /* TUI_ANSI_H */

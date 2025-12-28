@@ -1,0 +1,26 @@
+{
+    "name": "xocdr/ext-tui",
+    "type": "php-ext",
+    "description": "Terminal UI extension with Yoga layout engine for PHP (inspired by React INK)",
+    "license": "MIT",
+    "keywords": ["php", "extension", "terminal", "tui", "cli", "yoga", "flexbox", "layout"],
+    "authors": [
+        {
+            "name": "Jeroen Keppens",
+            "email": "jeroen.keppens@exocoder.com"
+        }
+    ],
+    "require": {
+        "php": ">=8.1"
+    },
+    "php-ext": {
+        "extension-name": "tui",
+        "configure-options": [
+            {
+                "name": "enable-tui",
+                "description": "Enable TUI extension"
+            }
+        ],
+        "os-families": ["linux", "darwin", "freebsd"]
+    }
+}

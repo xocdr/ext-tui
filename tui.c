@@ -1,0 +1,3695 @@
+/*
+  +----------------------------------------------------------------------+
+  | ext-tui: Terminal UI extension for PHP                              |
+  +----------------------------------------------------------------------+
+  | Copyright (c) The Exocoder Authors                                   |
+  +----------------------------------------------------------------------+
+  | This source file is subject to the MIT license that is bundled with |
+  | this package in the file LICENSE.                                    |
+  +----------------------------------------------------------------------+
+*/
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "php.h"
+#include "php_ini.h"
+#include "ext/standard/info.h"
+#include "zend_exceptions.h"
+#include "php_tui.h"
+
+#include "src/text/measure.h"
+#include "src/text/wrap.h"
+#include "src/app/app.h"
+#include "src/node/node.h"
+#include "src/terminal/terminal.h"
+#include "src/drawing/primitives.h"
+#include "src/drawing/canvas.h"
+#include "src/drawing/animation.h"
+#include "src/drawing/table.h"
+#include "src/drawing/progress.h"
+#include "src/drawing/sprite.h"
+
+#include <termios.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <math.h>
+
+ZEND_DECLARE_MODULE_GLOBALS(tui)
+
+/* Resource type IDs */
+static int le_tui_canvas;
+static int le_tui_table;
+static int le_tui_sprite;
+static int le_tui_buffer;
+
+#define TUI_CANVAS_RES_NAME "TuiCanvas"
+#define TUI_TABLE_RES_NAME "TuiTable"
+#define TUI_SPRITE_RES_NAME "TuiSprite"
+#define TUI_BUFFER_RES_NAME "TuiBuffer"
+
+/* Resource destructors */
+static void tui_canvas_dtor(zend_resource *res)
+{
+    tui_canvas *canvas = (tui_canvas *)res->ptr;
+    if (canvas) {
+        tui_canvas_free(canvas);
+    }
+}
+
+static void tui_table_dtor(zend_resource *res)
+{
+    tui_table *table = (tui_table *)res->ptr;
+    if (table) {
+        tui_table_free(table);
+    }
+}
+
+static void tui_sprite_dtor(zend_resource *res)
+{
+    tui_sprite *sprite = (tui_sprite *)res->ptr;
+    if (sprite) {
+        tui_sprite_free(sprite);
+    }
+}
+
+static void tui_buffer_dtor(zend_resource *res)
+{
+    tui_buffer *buffer = (tui_buffer *)res->ptr;
+    if (buffer) {
+        tui_buffer_destroy(buffer);
+    }
+}
+
+/* Class entries */
+zend_class_entry *tui_box_ce;
+zend_class_entry *tui_text_ce;
+zend_class_entry *tui_instance_ce;
+zend_class_entry *tui_key_ce;
+zend_class_entry *tui_focus_event_ce;
+
+/* Object handlers */
+static zend_object_handlers tui_box_handlers;
+static zend_object_handlers tui_text_handlers;
+static zend_object_handlers tui_instance_handlers;
+
+/* ------------------------------------------------------------------
+ * TuiInstance custom object structure
+ * ------------------------------------------------------------------ */
+typedef struct {
+    tui_app *app;
+    zend_object std;
+} tui_instance_object;
+
+static inline tui_instance_object *tui_instance_from_obj(zend_object *obj) {
+    return (tui_instance_object *)((char *)(obj) - XtOffsetOf(tui_instance_object, std));
+}
+
+#define Z_TUI_INSTANCE_P(zv) tui_instance_from_obj(Z_OBJ_P(zv))
+
+static zend_object *tui_instance_create_object(zend_class_entry *ce)
+{
+    tui_instance_object *intern = zend_object_alloc(sizeof(tui_instance_object), ce);
+
+    intern->app = NULL;
+
+    zend_object_std_init(&intern->std, ce);
+    object_properties_init(&intern->std, ce);
+
+    intern->std.handlers = &tui_instance_handlers;
+
+    return &intern->std;
+}
+
+static void tui_instance_free_object(zend_object *obj)
+{
+    tui_instance_object *intern = tui_instance_from_obj(obj);
+
+    /* Clean up the app if it still exists */
+    if (intern->app) {
+        tui_app_stop(intern->app);
+        tui_app_destroy(intern->app);
+        intern->app = NULL;
+    }
+
+    zend_object_std_dtor(&intern->std);
+}
+
+/* ------------------------------------------------------------------
+ * Helper: Parse RGB color from string (#RRGGBB) or array [r, g, b]
+ * ------------------------------------------------------------------ */
+static int parse_color(zval *value, tui_color *color)
+{
+    if (Z_TYPE_P(value) == IS_STRING) {
+        const char *str = Z_STRVAL_P(value);
+        if (str[0] == '#' && Z_STRLEN_P(value) == 7) {
+            unsigned int r, g, b;
+            if (sscanf(str, "#%02x%02x%02x", &r, &g, &b) == 3) {
+                color->r = r;
+                color->g = g;
+                color->b = b;
+                color->is_set = 1;
+                return 1;
+            }
+        }
+    } else if (Z_TYPE_P(value) == IS_ARRAY) {
+        HashTable *ht = Z_ARRVAL_P(value);
+        zval *r = zend_hash_index_find(ht, 0);
+        zval *g = zend_hash_index_find(ht, 1);
+        zval *b = zend_hash_index_find(ht, 2);
+        if (r && g && b) {
+            color->r = (uint8_t)zval_get_long(r);
+            color->g = (uint8_t)zval_get_long(g);
+            color->b = (uint8_t)zval_get_long(b);
+            color->is_set = 1;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* ------------------------------------------------------------------
+ * PHP-to-C Node Tree Conversion
+ * ------------------------------------------------------------------ */
+static tui_node* php_to_tui_node(zval *obj)
+{
+    if (!obj || Z_TYPE_P(obj) != IS_OBJECT) {
+        return NULL;
+    }
+
+    zend_class_entry *ce = Z_OBJCE_P(obj);
+    tui_node *node = NULL;
+    zval rv;
+
+    if (ce == tui_box_ce) {
+        /* Create box node */
+        node = tui_node_create_box();
+        if (!node) return NULL;
+
+        /* Read properties and apply to Yoga node */
+        zval *prop;
+
+        /* flexDirection */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "flexDirection", sizeof("flexDirection")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *dir = Z_STRVAL_P(prop);
+            if (strcmp(dir, "row") == 0) {
+                YGNodeStyleSetFlexDirection(node->yoga_node, YGFlexDirectionRow);
+            } else if (strcmp(dir, "row-reverse") == 0) {
+                YGNodeStyleSetFlexDirection(node->yoga_node, YGFlexDirectionRowReverse);
+            } else if (strcmp(dir, "column-reverse") == 0) {
+                YGNodeStyleSetFlexDirection(node->yoga_node, YGFlexDirectionColumnReverse);
+            } else {
+                YGNodeStyleSetFlexDirection(node->yoga_node, YGFlexDirectionColumn);
+            }
+        }
+
+        /* alignItems */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "alignItems", sizeof("alignItems")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *align = Z_STRVAL_P(prop);
+            if (strcmp(align, "flex-start") == 0 || strcmp(align, "start") == 0) {
+                YGNodeStyleSetAlignItems(node->yoga_node, YGAlignFlexStart);
+            } else if (strcmp(align, "center") == 0) {
+                YGNodeStyleSetAlignItems(node->yoga_node, YGAlignCenter);
+            } else if (strcmp(align, "flex-end") == 0 || strcmp(align, "end") == 0) {
+                YGNodeStyleSetAlignItems(node->yoga_node, YGAlignFlexEnd);
+            } else if (strcmp(align, "stretch") == 0) {
+                YGNodeStyleSetAlignItems(node->yoga_node, YGAlignStretch);
+            }
+        }
+
+        /* justifyContent */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "justifyContent", sizeof("justifyContent")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *justify = Z_STRVAL_P(prop);
+            if (strcmp(justify, "flex-start") == 0 || strcmp(justify, "start") == 0) {
+                YGNodeStyleSetJustifyContent(node->yoga_node, YGJustifyFlexStart);
+            } else if (strcmp(justify, "center") == 0) {
+                YGNodeStyleSetJustifyContent(node->yoga_node, YGJustifyCenter);
+            } else if (strcmp(justify, "flex-end") == 0 || strcmp(justify, "end") == 0) {
+                YGNodeStyleSetJustifyContent(node->yoga_node, YGJustifyFlexEnd);
+            } else if (strcmp(justify, "space-between") == 0) {
+                YGNodeStyleSetJustifyContent(node->yoga_node, YGJustifySpaceBetween);
+            } else if (strcmp(justify, "space-around") == 0) {
+                YGNodeStyleSetJustifyContent(node->yoga_node, YGJustifySpaceAround);
+            } else if (strcmp(justify, "space-evenly") == 0) {
+                YGNodeStyleSetJustifyContent(node->yoga_node, YGJustifySpaceEvenly);
+            }
+        }
+
+        /* alignSelf - allows individual child to override parent's alignItems */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "alignSelf", sizeof("alignSelf")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *alignSelf = Z_STRVAL_P(prop);
+            if (strcmp(alignSelf, "auto") == 0) {
+                YGNodeStyleSetAlignSelf(node->yoga_node, YGAlignAuto);
+            } else if (strcmp(alignSelf, "flex-start") == 0 || strcmp(alignSelf, "start") == 0) {
+                YGNodeStyleSetAlignSelf(node->yoga_node, YGAlignFlexStart);
+            } else if (strcmp(alignSelf, "center") == 0) {
+                YGNodeStyleSetAlignSelf(node->yoga_node, YGAlignCenter);
+            } else if (strcmp(alignSelf, "flex-end") == 0 || strcmp(alignSelf, "end") == 0) {
+                YGNodeStyleSetAlignSelf(node->yoga_node, YGAlignFlexEnd);
+            } else if (strcmp(alignSelf, "stretch") == 0) {
+                YGNodeStyleSetAlignSelf(node->yoga_node, YGAlignStretch);
+            }
+        }
+
+        /* flexGrow */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "flexGrow", sizeof("flexGrow")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            YGNodeStyleSetFlexGrow(node->yoga_node, (float)zval_get_double(prop));
+        }
+
+        /* flexShrink */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "flexShrink", sizeof("flexShrink")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            YGNodeStyleSetFlexShrink(node->yoga_node, (float)zval_get_double(prop));
+        }
+
+        /* flexBasis - initial size before flex distribution */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "flexBasis", sizeof("flexBasis")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            YGNodeStyleSetFlexBasis(node->yoga_node, (float)zval_get_double(prop));
+        } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *basis = Z_STRVAL_P(prop);
+            if (strcmp(basis, "auto") == 0) {
+                YGNodeStyleSetFlexBasisAuto(node->yoga_node);
+            } else {
+                int pct;
+                if (sscanf(basis, "%d%%", &pct) == 1) {
+                    YGNodeStyleSetFlexBasisPercent(node->yoga_node, pct);
+                }
+            }
+        }
+
+        /* width */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "width", sizeof("width")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            YGNodeStyleSetWidth(node->yoga_node, (float)zval_get_double(prop));
+        } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *w = Z_STRVAL_P(prop);
+            if (strcmp(w, "100%") == 0) {
+                YGNodeStyleSetWidthPercent(node->yoga_node, 100);
+            } else {
+                int pct;
+                if (sscanf(w, "%d%%", &pct) == 1) {
+                    YGNodeStyleSetWidthPercent(node->yoga_node, pct);
+                }
+            }
+        }
+
+        /* height */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "height", sizeof("height")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            YGNodeStyleSetHeight(node->yoga_node, (float)zval_get_double(prop));
+        } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *h = Z_STRVAL_P(prop);
+            if (strcmp(h, "100%") == 0) {
+                YGNodeStyleSetHeightPercent(node->yoga_node, 100);
+            } else {
+                int pct;
+                if (sscanf(h, "%d%%", &pct) == 1) {
+                    YGNodeStyleSetHeightPercent(node->yoga_node, pct);
+                }
+            }
+        }
+
+        /* padding - only apply non-zero values to avoid overriding YGEdgeAll */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "padding", sizeof("padding")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float p = (float)zval_get_double(prop);
+            if (p > 0) {
+                YGNodeStyleSetPadding(node->yoga_node, YGEdgeAll, p);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "paddingTop", sizeof("paddingTop")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float pt = (float)zval_get_double(prop);
+            if (pt > 0) {
+                YGNodeStyleSetPadding(node->yoga_node, YGEdgeTop, pt);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "paddingBottom", sizeof("paddingBottom")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float pb = (float)zval_get_double(prop);
+            if (pb > 0) {
+                YGNodeStyleSetPadding(node->yoga_node, YGEdgeBottom, pb);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "paddingLeft", sizeof("paddingLeft")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float pl = (float)zval_get_double(prop);
+            if (pl > 0) {
+                YGNodeStyleSetPadding(node->yoga_node, YGEdgeLeft, pl);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "paddingRight", sizeof("paddingRight")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float pr = (float)zval_get_double(prop);
+            if (pr > 0) {
+                YGNodeStyleSetPadding(node->yoga_node, YGEdgeRight, pr);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "paddingX", sizeof("paddingX")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float px = (float)zval_get_double(prop);
+            if (px > 0) {
+                YGNodeStyleSetPadding(node->yoga_node, YGEdgeLeft, px);
+                YGNodeStyleSetPadding(node->yoga_node, YGEdgeRight, px);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "paddingY", sizeof("paddingY")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float py = (float)zval_get_double(prop);
+            if (py > 0) {
+                YGNodeStyleSetPadding(node->yoga_node, YGEdgeTop, py);
+                YGNodeStyleSetPadding(node->yoga_node, YGEdgeBottom, py);
+            }
+        }
+
+        /* margin - only apply non-zero values to avoid overriding YGEdgeAll */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "margin", sizeof("margin")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float m = (float)zval_get_double(prop);
+            if (m > 0) {
+                YGNodeStyleSetMargin(node->yoga_node, YGEdgeAll, m);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "marginTop", sizeof("marginTop")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float mt = (float)zval_get_double(prop);
+            if (mt > 0) {
+                YGNodeStyleSetMargin(node->yoga_node, YGEdgeTop, mt);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "marginBottom", sizeof("marginBottom")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float mb = (float)zval_get_double(prop);
+            if (mb > 0) {
+                YGNodeStyleSetMargin(node->yoga_node, YGEdgeBottom, mb);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "marginLeft", sizeof("marginLeft")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float ml = (float)zval_get_double(prop);
+            if (ml > 0) {
+                YGNodeStyleSetMargin(node->yoga_node, YGEdgeLeft, ml);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "marginRight", sizeof("marginRight")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float mr = (float)zval_get_double(prop);
+            if (mr > 0) {
+                YGNodeStyleSetMargin(node->yoga_node, YGEdgeRight, mr);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "marginX", sizeof("marginX")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float mx = (float)zval_get_double(prop);
+            if (mx > 0) {
+                YGNodeStyleSetMargin(node->yoga_node, YGEdgeLeft, mx);
+                YGNodeStyleSetMargin(node->yoga_node, YGEdgeRight, mx);
+            }
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "marginY", sizeof("marginY")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float my = (float)zval_get_double(prop);
+            if (my > 0) {
+                YGNodeStyleSetMargin(node->yoga_node, YGEdgeTop, my);
+                YGNodeStyleSetMargin(node->yoga_node, YGEdgeBottom, my);
+            }
+        }
+
+        /* gap - only apply non-zero values to avoid overriding YGGutterAll */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "gap", sizeof("gap")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float g = (float)zval_get_double(prop);
+            if (g > 0) {
+                YGNodeStyleSetGap(node->yoga_node, YGGutterAll, g);
+            }
+        }
+
+        /* columnGap */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "columnGap", sizeof("columnGap")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float cg = (float)zval_get_double(prop);
+            if (cg > 0) {
+                YGNodeStyleSetGap(node->yoga_node, YGGutterColumn, cg);
+            }
+        }
+
+        /* rowGap */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "rowGap", sizeof("rowGap")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            float rg = (float)zval_get_double(prop);
+            if (rg > 0) {
+                YGNodeStyleSetGap(node->yoga_node, YGGutterRow, rg);
+            }
+        }
+
+        /* flexWrap */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "flexWrap", sizeof("flexWrap")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *wrap = Z_STRVAL_P(prop);
+            if (strcmp(wrap, "wrap") == 0) {
+                YGNodeStyleSetFlexWrap(node->yoga_node, YGWrapWrap);
+            } else if (strcmp(wrap, "wrap-reverse") == 0) {
+                YGNodeStyleSetFlexWrap(node->yoga_node, YGWrapWrapReverse);
+            } else {
+                YGNodeStyleSetFlexWrap(node->yoga_node, YGWrapNoWrap);
+            }
+        }
+
+        /* minWidth */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "minWidth", sizeof("minWidth")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            YGNodeStyleSetMinWidth(node->yoga_node, (float)zval_get_double(prop));
+        } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            int pct;
+            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1) {
+                YGNodeStyleSetMinWidthPercent(node->yoga_node, pct);
+            }
+        }
+
+        /* minHeight */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "minHeight", sizeof("minHeight")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            YGNodeStyleSetMinHeight(node->yoga_node, (float)zval_get_double(prop));
+        } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            int pct;
+            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1) {
+                YGNodeStyleSetMinHeightPercent(node->yoga_node, pct);
+            }
+        }
+
+        /* maxWidth */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "maxWidth", sizeof("maxWidth")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            YGNodeStyleSetMaxWidth(node->yoga_node, (float)zval_get_double(prop));
+        } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            int pct;
+            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1) {
+                YGNodeStyleSetMaxWidthPercent(node->yoga_node, pct);
+            }
+        }
+
+        /* maxHeight */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "maxHeight", sizeof("maxHeight")-1, 1, &rv);
+        if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
+            YGNodeStyleSetMaxHeight(node->yoga_node, (float)zval_get_double(prop));
+        } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            int pct;
+            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1) {
+                YGNodeStyleSetMaxHeightPercent(node->yoga_node, pct);
+            }
+        }
+
+        /* overflow */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "overflow", sizeof("overflow")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *overflow = Z_STRVAL_P(prop);
+            if (strcmp(overflow, "hidden") == 0) {
+                YGNodeStyleSetOverflow(node->yoga_node, YGOverflowHidden);
+            } else if (strcmp(overflow, "scroll") == 0) {
+                YGNodeStyleSetOverflow(node->yoga_node, YGOverflowScroll);
+            } else {
+                YGNodeStyleSetOverflow(node->yoga_node, YGOverflowVisible);
+            }
+        }
+
+        /* display */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "display", sizeof("display")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *display = Z_STRVAL_P(prop);
+            if (strcmp(display, "none") == 0) {
+                YGNodeStyleSetDisplay(node->yoga_node, YGDisplayNone);
+            } else {
+                YGNodeStyleSetDisplay(node->yoga_node, YGDisplayFlex);
+            }
+        }
+
+        /* position */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "position", sizeof("position")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *position = Z_STRVAL_P(prop);
+            if (strcmp(position, "absolute") == 0) {
+                YGNodeStyleSetPositionType(node->yoga_node, YGPositionTypeAbsolute);
+            } else {
+                YGNodeStyleSetPositionType(node->yoga_node, YGPositionTypeRelative);
+            }
+        }
+
+        /* borderStyle */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "borderStyle", sizeof("borderStyle")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *border = Z_STRVAL_P(prop);
+            if (strcmp(border, "single") == 0) {
+                node->border_style = TUI_BORDER_SINGLE;
+                YGNodeStyleSetBorder(node->yoga_node, YGEdgeAll, 1);
+            } else if (strcmp(border, "double") == 0) {
+                node->border_style = TUI_BORDER_DOUBLE;
+                YGNodeStyleSetBorder(node->yoga_node, YGEdgeAll, 1);
+            } else if (strcmp(border, "round") == 0) {
+                node->border_style = TUI_BORDER_ROUND;
+                YGNodeStyleSetBorder(node->yoga_node, YGEdgeAll, 1);
+            } else if (strcmp(border, "bold") == 0) {
+                node->border_style = TUI_BORDER_BOLD;
+                YGNodeStyleSetBorder(node->yoga_node, YGEdgeAll, 1);
+            } else if (strcmp(border, "dashed") == 0) {
+                node->border_style = TUI_BORDER_DASHED;
+                YGNodeStyleSetBorder(node->yoga_node, YGEdgeAll, 1);
+            } else {
+                node->border_style = TUI_BORDER_NONE;
+            }
+        }
+
+        /* borderColor */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "borderColor", sizeof("borderColor")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) != IS_NULL) {
+            parse_color(prop, &node->border_color);
+        }
+
+        /* focusable */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "focusable", sizeof("focusable")-1, 1, &rv);
+        if (prop && zend_is_true(prop)) {
+            node->focusable = 1;
+        }
+
+        /* focused */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "focused", sizeof("focused")-1, 1, &rv);
+        if (prop && zend_is_true(prop)) {
+            node->focused = 1;
+        }
+
+        /* Process children */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "children", sizeof("children")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_ARRAY) {
+            HashTable *ht = Z_ARRVAL_P(prop);
+            zval *child;
+            ZEND_HASH_FOREACH_VAL(ht, child) {
+                tui_node *child_node = php_to_tui_node(child);
+                if (child_node) {
+                    tui_node_append_child(node, child_node);
+                }
+            } ZEND_HASH_FOREACH_END();
+        }
+
+    } else if (ce == tui_text_ce) {
+        /* Get text content */
+        zval *prop = zend_read_property(ce, Z_OBJ_P(obj), "content", sizeof("content")-1, 1, &rv);
+        const char *text = "";
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            text = Z_STRVAL_P(prop);
+        }
+
+        /* Create text node */
+        node = tui_node_create_text(text);
+        if (!node) return NULL;
+
+        /* Apply style properties */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "color", sizeof("color")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) != IS_NULL) {
+            parse_color(prop, &node->style.fg);
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "backgroundColor", sizeof("backgroundColor")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) != IS_NULL) {
+            parse_color(prop, &node->style.bg);
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "bold", sizeof("bold")-1, 1, &rv);
+        if (prop && zend_is_true(prop)) {
+            node->style.bold = 1;
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "dim", sizeof("dim")-1, 1, &rv);
+        if (prop && zend_is_true(prop)) {
+            node->style.dim = 1;
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "italic", sizeof("italic")-1, 1, &rv);
+        if (prop && zend_is_true(prop)) {
+            node->style.italic = 1;
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "underline", sizeof("underline")-1, 1, &rv);
+        if (prop && zend_is_true(prop)) {
+            node->style.underline = 1;
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "inverse", sizeof("inverse")-1, 1, &rv);
+        if (prop && zend_is_true(prop)) {
+            node->style.inverse = 1;
+        }
+
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "strikethrough", sizeof("strikethrough")-1, 1, &rv);
+        if (prop && zend_is_true(prop)) {
+            node->style.strikethrough = 1;
+        }
+
+        /* wrap mode */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "wrap", sizeof("wrap")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *wrap = Z_STRVAL_P(prop);
+            if (strcmp(wrap, "word") == 0) {
+                node->wrap_mode = TUI_WRAP_WORD;
+            } else if (strcmp(wrap, "char") == 0) {
+                node->wrap_mode = TUI_WRAP_CHAR;
+            } else if (strcmp(wrap, "word-char") == 0) {
+                node->wrap_mode = TUI_WRAP_WORD_CHAR;
+            } else {
+                node->wrap_mode = TUI_WRAP_NONE;
+            }
+        }
+    }
+
+    return node;
+}
+
+/* ------------------------------------------------------------------
+ * TuiBox class
+ * ------------------------------------------------------------------ */
+
+/* {{{ TuiBox::__construct(array $props = []) */
+PHP_METHOD(TuiBox, __construct)
+{
+    zval *props = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(0, 1)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY(props)
+    ZEND_PARSE_PARAMETERS_END();
+
+    /* Initialize defaults */
+    zend_update_property_string(tui_box_ce, Z_OBJ_P(ZEND_THIS), "flexDirection", sizeof("flexDirection")-1, "column");
+    zend_update_property_null(tui_box_ce, Z_OBJ_P(ZEND_THIS), "alignItems", sizeof("alignItems")-1);
+    zend_update_property_null(tui_box_ce, Z_OBJ_P(ZEND_THIS), "justifyContent", sizeof("justifyContent")-1);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "flexGrow", sizeof("flexGrow")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "flexShrink", sizeof("flexShrink")-1, 1);
+    zend_update_property_null(tui_box_ce, Z_OBJ_P(ZEND_THIS), "width", sizeof("width")-1);
+    zend_update_property_null(tui_box_ce, Z_OBJ_P(ZEND_THIS), "height", sizeof("height")-1);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "padding", sizeof("padding")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "paddingTop", sizeof("paddingTop")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "paddingBottom", sizeof("paddingBottom")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "paddingLeft", sizeof("paddingLeft")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "paddingRight", sizeof("paddingRight")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "paddingX", sizeof("paddingX")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "paddingY", sizeof("paddingY")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "margin", sizeof("margin")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "marginTop", sizeof("marginTop")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "marginBottom", sizeof("marginBottom")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "marginLeft", sizeof("marginLeft")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "marginRight", sizeof("marginRight")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "marginX", sizeof("marginX")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "marginY", sizeof("marginY")-1, 0);
+    zend_update_property_long(tui_box_ce, Z_OBJ_P(ZEND_THIS), "gap", sizeof("gap")-1, 0);
+    zend_update_property_null(tui_box_ce, Z_OBJ_P(ZEND_THIS), "borderStyle", sizeof("borderStyle")-1);
+    zend_update_property_null(tui_box_ce, Z_OBJ_P(ZEND_THIS), "borderColor", sizeof("borderColor")-1);
+    zend_update_property_bool(tui_box_ce, Z_OBJ_P(ZEND_THIS), "focusable", sizeof("focusable")-1, 0);
+    zend_update_property_bool(tui_box_ce, Z_OBJ_P(ZEND_THIS), "focused", sizeof("focused")-1, 0);
+
+    /* Initialize empty children array */
+    zval children;
+    array_init(&children);
+    zend_update_property(tui_box_ce, Z_OBJ_P(ZEND_THIS), "children", sizeof("children")-1, &children);
+    zval_ptr_dtor(&children);
+
+    /* Apply passed properties */
+    if (props) {
+        HashTable *ht = Z_ARRVAL_P(props);
+        zend_string *key;
+        zval *val;
+        ZEND_HASH_FOREACH_STR_KEY_VAL(ht, key, val) {
+            if (key) {
+                zend_update_property(tui_box_ce, Z_OBJ_P(ZEND_THIS), ZSTR_VAL(key), ZSTR_LEN(key), val);
+            }
+        } ZEND_HASH_FOREACH_END();
+    }
+}
+/* }}} */
+
+/* {{{ TuiBox::addChild(TuiBox|TuiText $child): self */
+PHP_METHOD(TuiBox, addChild)
+{
+    zval *child;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_OBJECT(child)
+    ZEND_PARSE_PARAMETERS_END();
+
+    /* Verify child is TuiBox or TuiText */
+    if (!instanceof_function(Z_OBJCE_P(child), tui_box_ce) &&
+        !instanceof_function(Z_OBJCE_P(child), tui_text_ce)) {
+        zend_throw_exception(zend_ce_exception, "Child must be TuiBox or TuiText", 0);
+        RETURN_THROWS();
+    }
+
+    /* Get children array */
+    zval rv;
+    zval *children = zend_read_property(tui_box_ce, Z_OBJ_P(ZEND_THIS), "children", sizeof("children")-1, 1, &rv);
+
+    if (Z_TYPE_P(children) != IS_ARRAY) {
+        zval arr;
+        array_init(&arr);
+        zend_update_property(tui_box_ce, Z_OBJ_P(ZEND_THIS), "children", sizeof("children")-1, &arr);
+        children = zend_read_property(tui_box_ce, Z_OBJ_P(ZEND_THIS), "children", sizeof("children")-1, 1, &rv);
+        zval_ptr_dtor(&arr);
+    }
+
+    /* Add child to array */
+    Z_TRY_ADDREF_P(child);
+    add_next_index_zval(children, child);
+
+    RETURN_ZVAL(ZEND_THIS, 1, 0);
+}
+/* }}} */
+
+/* TuiBox arginfo */
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tuibox_construct, 0, 0, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, props, IS_ARRAY, 1, "[]")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tuibox_addchild, 0, 0, 1)
+    ZEND_ARG_OBJ_INFO(0, child, TuiBox, 0)
+ZEND_END_ARG_INFO()
+
+static const zend_function_entry tui_box_methods[] = {
+    PHP_ME(TuiBox, __construct, arginfo_tuibox_construct, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiBox, addChild, arginfo_tuibox_addchild, ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
+
+/* ------------------------------------------------------------------
+ * TuiText class
+ * ------------------------------------------------------------------ */
+
+/* {{{ TuiText::__construct(string $content = '', array $props = []) */
+PHP_METHOD(TuiText, __construct)
+{
+    zend_string *content = NULL;
+    zval *props = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(0, 2)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR(content)
+        Z_PARAM_ARRAY(props)
+    ZEND_PARSE_PARAMETERS_END();
+
+    /* Initialize defaults */
+    zend_update_property_string(tui_text_ce, Z_OBJ_P(ZEND_THIS), "content", sizeof("content")-1, content ? ZSTR_VAL(content) : "");
+    zend_update_property_null(tui_text_ce, Z_OBJ_P(ZEND_THIS), "color", sizeof("color")-1);
+    zend_update_property_null(tui_text_ce, Z_OBJ_P(ZEND_THIS), "backgroundColor", sizeof("backgroundColor")-1);
+    zend_update_property_bool(tui_text_ce, Z_OBJ_P(ZEND_THIS), "bold", sizeof("bold")-1, 0);
+    zend_update_property_bool(tui_text_ce, Z_OBJ_P(ZEND_THIS), "dim", sizeof("dim")-1, 0);
+    zend_update_property_bool(tui_text_ce, Z_OBJ_P(ZEND_THIS), "italic", sizeof("italic")-1, 0);
+    zend_update_property_bool(tui_text_ce, Z_OBJ_P(ZEND_THIS), "underline", sizeof("underline")-1, 0);
+    zend_update_property_bool(tui_text_ce, Z_OBJ_P(ZEND_THIS), "inverse", sizeof("inverse")-1, 0);
+    zend_update_property_bool(tui_text_ce, Z_OBJ_P(ZEND_THIS), "strikethrough", sizeof("strikethrough")-1, 0);
+    zend_update_property_null(tui_text_ce, Z_OBJ_P(ZEND_THIS), "wrap", sizeof("wrap")-1);
+
+    /* Apply passed properties */
+    if (props) {
+        HashTable *ht = Z_ARRVAL_P(props);
+        zend_string *key;
+        zval *val;
+        ZEND_HASH_FOREACH_STR_KEY_VAL(ht, key, val) {
+            if (key) {
+                zend_update_property(tui_text_ce, Z_OBJ_P(ZEND_THIS), ZSTR_VAL(key), ZSTR_LEN(key), val);
+            }
+        } ZEND_HASH_FOREACH_END();
+    }
+}
+/* }}} */
+
+/* TuiText arginfo */
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tuitext_construct, 0, 0, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, content, IS_STRING, 0, "\"\"")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, props, IS_ARRAY, 1, "[]")
+ZEND_END_ARG_INFO()
+
+static const zend_function_entry tui_text_methods[] = {
+    PHP_ME(TuiText, __construct, arginfo_tuitext_construct, ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
+
+/* ------------------------------------------------------------------
+ * TuiInstance class
+ * ------------------------------------------------------------------ */
+
+/* {{{ TuiInstance::rerender(): void */
+PHP_METHOD(TuiInstance, rerender)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app) {
+        tui_app_render(obj->app);
+    }
+}
+/* }}} */
+
+/* {{{ TuiInstance::unmount(): void */
+PHP_METHOD(TuiInstance, unmount)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app) {
+        tui_app_stop(obj->app);
+        tui_app_destroy(obj->app);
+        obj->app = NULL;
+    }
+}
+/* }}} */
+
+/* {{{ TuiInstance::waitUntilExit(): void */
+PHP_METHOD(TuiInstance, waitUntilExit)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app) {
+        tui_app_wait_until_exit(obj->app);
+    }
+}
+/* }}} */
+
+/* {{{ TuiInstance::exit(int $code = 0): void */
+PHP_METHOD(TuiInstance, exit)
+{
+    zend_long code = 0;
+
+    ZEND_PARSE_PARAMETERS_START(0, 1)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_LONG(code)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app) {
+        tui_app_exit(obj->app, (int)code);
+    }
+}
+/* }}} */
+
+/* TuiInstance arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_rerender, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_unmount, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_waituntilexit, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_exit, 0, 0, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, code, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+static const zend_function_entry tui_instance_methods[] = {
+    PHP_ME(TuiInstance, rerender, arginfo_tuiinstance_rerender, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, unmount, arginfo_tuiinstance_unmount, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, waitUntilExit, arginfo_tuiinstance_waituntilexit, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, exit, arginfo_tuiinstance_exit, ZEND_ACC_PUBLIC)
+    PHP_FE_END
+};
+
+/* ------------------------------------------------------------------
+ * PHP Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_get_terminal_size(): array */
+PHP_FUNCTION(tui_get_terminal_size)
+{
+    struct winsize ws;
+
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
+        /* Fallback to defaults */
+        ws.ws_col = 80;
+        ws.ws_row = 24;
+    }
+
+    TUI_G(terminal_width) = ws.ws_col;
+    TUI_G(terminal_height) = ws.ws_row;
+
+    array_init(return_value);
+    add_next_index_long(return_value, ws.ws_col);
+    add_next_index_long(return_value, ws.ws_row);
+}
+/* }}} */
+
+/* {{{ tui_is_interactive(): bool */
+PHP_FUNCTION(tui_is_interactive)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    RETURN_BOOL(isatty(STDIN_FILENO) && isatty(STDOUT_FILENO));
+}
+/* }}} */
+
+/* {{{ tui_is_ci(): bool */
+PHP_FUNCTION(tui_is_ci)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    /* Check common CI environment variables */
+    if (getenv("CI") != NULL ||
+        getenv("GITHUB_ACTIONS") != NULL ||
+        getenv("GITLAB_CI") != NULL ||
+        getenv("CIRCLECI") != NULL ||
+        getenv("TRAVIS") != NULL ||
+        getenv("JENKINS_URL") != NULL) {
+        RETURN_TRUE;
+    }
+
+    RETURN_FALSE;
+}
+/* }}} */
+
+/* {{{ tui_string_width(string $text): int */
+PHP_FUNCTION(tui_string_width)
+{
+    zend_string *text;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(text)
+    ZEND_PARSE_PARAMETERS_END();
+
+    /* Use the C implementation from text/measure.c */
+    int width = tui_string_width_n(ZSTR_VAL(text), ZSTR_LEN(text));
+
+    RETURN_LONG(width);
+}
+/* }}} */
+
+/* {{{ tui_wrap_text(string $text, int $width): array */
+PHP_FUNCTION(tui_wrap_text)
+{
+    zend_string *text;
+    zend_long width;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STR(text)
+        Z_PARAM_LONG(width)
+    ZEND_PARSE_PARAMETERS_END();
+
+    array_init(return_value);
+
+    /* Use the C implementation from text/wrap.c
+     * TUI_WRAP_WORD_CHAR: prefer word breaks but break long words at character boundary */
+    tui_wrapped_text *wrapped = tui_wrap_text(ZSTR_VAL(text), (int)width, TUI_WRAP_WORD_CHAR);
+
+    if (wrapped) {
+        for (int i = 0; i < wrapped->count; i++) {
+            add_next_index_string(return_value, wrapped->lines[i]);
+        }
+        tui_wrapped_text_free(wrapped);
+    }
+}
+/* }}} */
+
+/* {{{ tui_truncate(string $text, int $width, string $ellipsis = '...'): string */
+PHP_FUNCTION(tui_truncate)
+{
+    zend_string *text;
+    zend_long width;
+    zend_string *ellipsis = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(2, 3)
+        Z_PARAM_STR(text)
+        Z_PARAM_LONG(width)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR(ellipsis)
+    ZEND_PARSE_PARAMETERS_END();
+
+    const char *ellipsis_str = ellipsis ? ZSTR_VAL(ellipsis) : "...";
+
+    /* Use the C implementation from text/wrap.c */
+    char *result = tui_truncate_text(ZSTR_VAL(text), (int)width, ellipsis_str);
+
+    if (result) {
+        RETVAL_STRING(result);
+        free(result);
+    } else {
+        RETURN_EMPTY_STRING();
+    }
+}
+/* }}} */
+
+/* Render callback wrapper - calls PHP component and converts result to C nodes */
+static void render_component_callback(tui_app *app)
+{
+    if (!app) return;
+
+    zval retval;
+
+    /* Call the PHP component function */
+    app->component_fci.retval = &retval;
+    if (zend_call_function(&app->component_fci, &app->component_fcc) == SUCCESS) {
+        /* Convert PHP object tree to C node tree */
+        if (Z_TYPE(retval) == IS_OBJECT) {
+            /* Free old tree */
+            if (app->root_node) {
+                tui_node_destroy(app->root_node);
+            }
+
+            /* Build new tree */
+            app->root_node = php_to_tui_node(&retval);
+        }
+
+        zval_ptr_dtor(&retval);
+    }
+}
+
+/* {{{ tui_render(callable $component, array $options = []): TuiInstance */
+PHP_FUNCTION(tui_render)
+{
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+    zval *options = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(1, 2)
+        Z_PARAM_FUNC(fci, fcc)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY(options)
+    ZEND_PARSE_PARAMETERS_END();
+
+    /* Create app instance */
+    tui_app *app = tui_app_create();
+    if (!app) {
+        php_error_docref(NULL, E_ERROR, "Failed to create TUI application");
+        RETURN_NULL();
+    }
+
+    /* Parse options */
+    if (options) {
+        zval *opt;
+        if ((opt = zend_hash_str_find(Z_ARRVAL_P(options), "fullscreen", sizeof("fullscreen")-1)) != NULL) {
+            tui_app_set_fullscreen(app, zend_is_true(opt));
+        }
+        if ((opt = zend_hash_str_find(Z_ARRVAL_P(options), "exitOnCtrlC", sizeof("exitOnCtrlC")-1)) != NULL) {
+            tui_app_set_exit_on_ctrl_c(app, zend_is_true(opt));
+        }
+    }
+
+    /* Set component callback */
+    tui_app_set_component(app, &fci, &fcc);
+
+    /* Initial render - call component to get tree */
+    zval retval;
+    fci.retval = &retval;
+    if (zend_call_function(&fci, &fcc) == SUCCESS) {
+        if (Z_TYPE(retval) == IS_OBJECT) {
+            if (!instanceof_function(Z_OBJCE(retval), tui_box_ce) &&
+                !instanceof_function(Z_OBJCE(retval), tui_text_ce)) {
+                zval_ptr_dtor(&retval);
+                tui_app_destroy(app);
+                zend_throw_exception(zend_ce_exception,
+                    "Component must return TuiBox or TuiText, got other object", 0);
+                RETURN_THROWS();
+            }
+            app->root_node = php_to_tui_node(&retval);
+        } else if (Z_TYPE(retval) != IS_NULL) {
+            zval_ptr_dtor(&retval);
+            tui_app_destroy(app);
+            zend_throw_exception(zend_ce_exception,
+                "Component must return TuiBox, TuiText, or null", 0);
+            RETURN_THROWS();
+        }
+        zval_ptr_dtor(&retval);
+    } else {
+        tui_app_destroy(app);
+        zend_throw_exception(zend_ce_exception,
+            "Component callback failed to execute", 0);
+        RETURN_THROWS();
+    }
+
+    /* Start the app */
+    if (tui_app_start(app) != 0) {
+        tui_app_destroy(app);
+        php_error_docref(NULL, E_ERROR, "Failed to start TUI application");
+        RETURN_NULL();
+    }
+
+    /* Create TuiInstance object to return */
+    object_init_ex(return_value, tui_instance_ce);
+
+    /* Store app pointer in custom object structure */
+    tui_instance_object *instance_obj = Z_TUI_INSTANCE_P(return_value);
+    instance_obj->app = app;
+}
+/* }}} */
+
+/* Helper to get app from TuiInstance */
+static tui_app* get_app_from_instance(zval *instance)
+{
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(instance);
+    return obj->app;
+}
+
+/* {{{ tui_rerender(TuiInstance $instance): void */
+PHP_FUNCTION(tui_rerender)
+{
+    zval *instance;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app) {
+        render_component_callback(app);  /* Call PHP component, build node tree */
+        tui_app_render_tree(app);        /* Render tree to screen (no double component call) */
+    }
+}
+/* }}} */
+
+/* {{{ tui_unmount(TuiInstance $instance): void */
+PHP_FUNCTION(tui_unmount)
+{
+    zval *instance;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(instance);
+    if (obj->app) {
+        tui_app_stop(obj->app);
+        tui_app_destroy(obj->app);
+        /* Clear the app pointer in the C struct */
+        obj->app = NULL;
+    }
+}
+/* }}} */
+
+/* {{{ tui_wait_until_exit(TuiInstance $instance): void */
+PHP_FUNCTION(tui_wait_until_exit)
+{
+    zval *instance;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app) {
+        tui_app_wait_until_exit(app);
+    }
+}
+/* }}} */
+
+/* {{{ tui_set_input_handler(TuiInstance $instance, callable $handler): void */
+PHP_FUNCTION(tui_set_input_handler)
+{
+    zval *instance;
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+        Z_PARAM_FUNC(fci, fcc)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app) {
+        tui_app_set_input_handler(app, &fci, &fcc);
+    }
+}
+/* }}} */
+
+/* {{{ tui_set_focus_handler(TuiInstance $instance, callable $handler): void */
+PHP_FUNCTION(tui_set_focus_handler)
+{
+    zval *instance;
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+        Z_PARAM_FUNC(fci, fcc)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app) {
+        tui_app_set_focus_handler(app, &fci, &fcc);
+    }
+}
+/* }}} */
+
+/* {{{ tui_focus_next(TuiInstance $instance): void */
+PHP_FUNCTION(tui_focus_next)
+{
+    zval *instance;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app) {
+        tui_app_focus_next(app);
+    }
+}
+/* }}} */
+
+/* {{{ tui_focus_prev(TuiInstance $instance): void */
+PHP_FUNCTION(tui_focus_prev)
+{
+    zval *instance;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app) {
+        tui_app_focus_prev(app);
+    }
+}
+/* }}} */
+
+/* {{{ tui_set_resize_handler(TuiInstance $instance, callable $handler): void */
+PHP_FUNCTION(tui_set_resize_handler)
+{
+    zval *instance;
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+        Z_PARAM_FUNC(fci, fcc)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app) {
+        tui_app_set_resize_handler(app, &fci, &fcc);
+    }
+}
+/* }}} */
+
+/* {{{ tui_get_size(TuiInstance $instance): array */
+PHP_FUNCTION(tui_get_size)
+{
+    zval *instance;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app) {
+        array_init(return_value);
+        add_assoc_long(return_value, "width", app->width);
+        add_assoc_long(return_value, "height", app->height);
+        add_assoc_long(return_value, "columns", app->width);
+        add_assoc_long(return_value, "rows", app->height);
+    } else {
+        RETURN_NULL();
+    }
+}
+/* }}} */
+
+/* {{{ tui_get_focused_node(TuiInstance $instance): ?array */
+PHP_FUNCTION(tui_get_focused_node)
+{
+    zval *instance;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app && app->focused_node) {
+        array_init(return_value);
+        add_assoc_bool(return_value, "focusable", app->focused_node->focusable);
+        add_assoc_bool(return_value, "focused", app->focused_node->focused);
+        add_assoc_long(return_value, "x", (zend_long)app->focused_node->x);
+        add_assoc_long(return_value, "y", (zend_long)app->focused_node->y);
+        add_assoc_long(return_value, "width", (zend_long)app->focused_node->width);
+        add_assoc_long(return_value, "height", (zend_long)app->focused_node->height);
+        if (app->focused_node->type == TUI_NODE_TEXT && app->focused_node->text) {
+            add_assoc_string(return_value, "type", "text");
+            add_assoc_string(return_value, "content", app->focused_node->text);
+        } else {
+            add_assoc_string(return_value, "type", "box");
+        }
+    } else {
+        RETURN_NULL();
+    }
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Timer Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_add_timer(TuiInstance $instance, int $interval_ms, callable $callback): int */
+PHP_FUNCTION(tui_add_timer)
+{
+    zval *instance;
+    zend_long interval_ms;
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+        Z_PARAM_LONG(interval_ms)
+        Z_PARAM_FUNC(fci, fcc)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app) {
+        int timer_id = tui_app_add_timer(app, (int)interval_ms, &fci, &fcc);
+        RETURN_LONG(timer_id);
+    }
+
+    RETURN_LONG(-1);
+}
+/* }}} */
+
+/* {{{ tui_remove_timer(TuiInstance $instance, int $timer_id): void */
+PHP_FUNCTION(tui_remove_timer)
+{
+    zval *instance;
+    zend_long timer_id;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+        Z_PARAM_LONG(timer_id)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app) {
+        tui_app_remove_timer(app, (int)timer_id);
+    }
+}
+/* }}} */
+
+/* {{{ tui_set_tick_handler(TuiInstance $instance, callable $handler): void */
+PHP_FUNCTION(tui_set_tick_handler)
+{
+    zval *instance;
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_OBJECT_OF_CLASS(instance, tui_instance_ce)
+        Z_PARAM_FUNC(fci, fcc)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_app *app = get_app_from_instance(instance);
+    if (app) {
+        tui_app_set_tick_handler(app, &fci, &fcc);
+    }
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Text Utility Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_pad(string $text, int $width, string $align = 'l', string $pad_char = ' '): string */
+PHP_FUNCTION(tui_pad)
+{
+    zend_string *text;
+    zend_long width;
+    zend_string *align = NULL;
+    zend_string *pad_char = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(2, 4)
+        Z_PARAM_STR(text)
+        Z_PARAM_LONG(width)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR(align)
+        Z_PARAM_STR(pad_char)
+    ZEND_PARSE_PARAMETERS_END();
+
+    char align_ch = align && ZSTR_LEN(align) > 0 ? ZSTR_VAL(align)[0] : 'l';
+    char pad_ch = pad_char && ZSTR_LEN(pad_char) > 0 ? ZSTR_VAL(pad_char)[0] : ' ';
+
+    /* Allocate output buffer (width + original text length + null) */
+    size_t buf_size = (size_t)width + ZSTR_LEN(text) + 1;
+    char *output = emalloc(buf_size);
+
+    int result_len = tui_pad(ZSTR_VAL(text), (int)width, align_ch, pad_ch, output);
+
+    RETVAL_STRINGL(output, result_len);
+    efree(output);
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Buffer Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_buffer_create(int $width, int $height): resource */
+PHP_FUNCTION(tui_buffer_create)
+{
+    zend_long width, height;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(width)
+        Z_PARAM_LONG(height)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = tui_buffer_create((int)width, (int)height);
+    if (!buffer) {
+        RETURN_FALSE;
+    }
+
+    RETURN_RES(zend_register_resource(buffer, le_tui_buffer));
+}
+/* }}} */
+
+/* {{{ tui_buffer_clear(resource $buffer): void */
+PHP_FUNCTION(tui_buffer_clear)
+{
+    zval *zbuffer;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_RESOURCE(zbuffer)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    tui_buffer_clear(buffer);
+}
+/* }}} */
+
+/* {{{ tui_buffer_render(resource $buffer): string */
+PHP_FUNCTION(tui_buffer_render)
+{
+    zval *zbuffer;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_RESOURCE(zbuffer)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    char *output = tui_buffer_to_string(buffer);
+    if (output) {
+        RETVAL_STRING(output);
+        free(output);
+    } else {
+        RETURN_EMPTY_STRING();
+    }
+}
+/* }}} */
+
+/* Helper to parse style from array */
+static void parse_style_array(zval *arr, tui_style *style)
+{
+    if (!arr || Z_TYPE_P(arr) != IS_ARRAY) return;
+
+    HashTable *ht = Z_ARRVAL_P(arr);
+    zval *val;
+
+    memset(style, 0, sizeof(tui_style));
+
+    if ((val = zend_hash_str_find(ht, "fg", 2)) != NULL ||
+        (val = zend_hash_str_find(ht, "color", 5)) != NULL) {
+        if (Z_TYPE_P(val) == IS_STRING) {
+            style->fg = tui_color_from_hex(Z_STRVAL_P(val));
+        } else if (Z_TYPE_P(val) == IS_ARRAY) {
+            HashTable *color_ht = Z_ARRVAL_P(val);
+            zval *r = zend_hash_index_find(color_ht, 0);
+            zval *g = zend_hash_index_find(color_ht, 1);
+            zval *b = zend_hash_index_find(color_ht, 2);
+            if (r && g && b) {
+                style->fg.r = (uint8_t)zval_get_long(r);
+                style->fg.g = (uint8_t)zval_get_long(g);
+                style->fg.b = (uint8_t)zval_get_long(b);
+                style->fg.is_set = 1;
+            }
+        }
+    }
+
+    if ((val = zend_hash_str_find(ht, "bg", 2)) != NULL ||
+        (val = zend_hash_str_find(ht, "backgroundColor", 15)) != NULL) {
+        if (Z_TYPE_P(val) == IS_STRING) {
+            style->bg = tui_color_from_hex(Z_STRVAL_P(val));
+        } else if (Z_TYPE_P(val) == IS_ARRAY) {
+            HashTable *color_ht = Z_ARRVAL_P(val);
+            zval *r = zend_hash_index_find(color_ht, 0);
+            zval *g = zend_hash_index_find(color_ht, 1);
+            zval *b = zend_hash_index_find(color_ht, 2);
+            if (r && g && b) {
+                style->bg.r = (uint8_t)zval_get_long(r);
+                style->bg.g = (uint8_t)zval_get_long(g);
+                style->bg.b = (uint8_t)zval_get_long(b);
+                style->bg.is_set = 1;
+            }
+        }
+    }
+
+    if ((val = zend_hash_str_find(ht, "bold", 4)) != NULL) {
+        style->bold = zend_is_true(val);
+    }
+    if ((val = zend_hash_str_find(ht, "dim", 3)) != NULL) {
+        style->dim = zend_is_true(val);
+    }
+    if ((val = zend_hash_str_find(ht, "italic", 6)) != NULL) {
+        style->italic = zend_is_true(val);
+    }
+    if ((val = zend_hash_str_find(ht, "underline", 9)) != NULL) {
+        style->underline = zend_is_true(val);
+    }
+    if ((val = zend_hash_str_find(ht, "inverse", 7)) != NULL) {
+        style->inverse = zend_is_true(val);
+    }
+    if ((val = zend_hash_str_find(ht, "strikethrough", 13)) != NULL) {
+        style->strikethrough = zend_is_true(val);
+    }
+}
+
+/* ------------------------------------------------------------------
+ * Drawing Primitive Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_draw_line(resource $buffer, int $x1, int $y1, int $x2, int $y2, string $char = '─', ?array $style = null): void */
+PHP_FUNCTION(tui_draw_line)
+{
+    zval *zbuffer;
+    zend_long x1, y1, x2, y2;
+    zend_string *ch = NULL;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(5, 7)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(x1)
+        Z_PARAM_LONG(y1)
+        Z_PARAM_LONG(x2)
+        Z_PARAM_LONG(y2)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(ch)
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    uint32_t codepoint = 0x2500; /* ─ */
+    if (ch && ZSTR_LEN(ch) > 0) {
+        tui_utf8_decode(ZSTR_VAL(ch), &codepoint);
+    }
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_draw_line(buffer, (int)x1, (int)y1, (int)x2, (int)y2, codepoint, &style);
+}
+/* }}} */
+
+/* {{{ tui_draw_rect(resource $buffer, int $x, int $y, int $width, int $height, string $border = 'single', ?array $style = null): void */
+PHP_FUNCTION(tui_draw_rect)
+{
+    zval *zbuffer;
+    zend_long x, y, width, height;
+    zend_string *border = NULL;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(5, 7)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(width)
+        Z_PARAM_LONG(height)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(border)
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    tui_border_style border_style = TUI_BORDER_SINGLE;
+    if (border) {
+        const char *bs = ZSTR_VAL(border);
+        if (strcmp(bs, "double") == 0) border_style = TUI_BORDER_DOUBLE;
+        else if (strcmp(bs, "round") == 0) border_style = TUI_BORDER_ROUND;
+        else if (strcmp(bs, "bold") == 0) border_style = TUI_BORDER_BOLD;
+        else if (strcmp(bs, "dashed") == 0) border_style = TUI_BORDER_DASHED;
+    }
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_draw_rect(buffer, (int)x, (int)y, (int)width, (int)height, border_style, &style);
+}
+/* }}} */
+
+/* {{{ tui_fill_rect(resource $buffer, int $x, int $y, int $width, int $height, string $char = ' ', ?array $style = null): void */
+PHP_FUNCTION(tui_fill_rect)
+{
+    zval *zbuffer;
+    zend_long x, y, width, height;
+    zend_string *ch = NULL;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(5, 7)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(width)
+        Z_PARAM_LONG(height)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(ch)
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    uint32_t codepoint = ' ';
+    if (ch && ZSTR_LEN(ch) > 0) {
+        tui_utf8_decode(ZSTR_VAL(ch), &codepoint);
+    }
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_fill_rect(buffer, (int)x, (int)y, (int)width, (int)height, codepoint, &style);
+}
+/* }}} */
+
+/* {{{ tui_draw_circle(resource $buffer, int $cx, int $cy, int $radius, string $char = '●', ?array $style = null): void */
+PHP_FUNCTION(tui_draw_circle)
+{
+    zval *zbuffer;
+    zend_long cx, cy, radius;
+    zend_string *ch = NULL;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(4, 6)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(cx)
+        Z_PARAM_LONG(cy)
+        Z_PARAM_LONG(radius)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(ch)
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    uint32_t codepoint = 0x25CF; /* ● */
+    if (ch && ZSTR_LEN(ch) > 0) {
+        tui_utf8_decode(ZSTR_VAL(ch), &codepoint);
+    }
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_draw_circle(buffer, (int)cx, (int)cy, (int)radius, codepoint, &style);
+}
+/* }}} */
+
+/* {{{ tui_fill_circle(resource $buffer, int $cx, int $cy, int $radius, string $char = '█', ?array $style = null): void */
+PHP_FUNCTION(tui_fill_circle)
+{
+    zval *zbuffer;
+    zend_long cx, cy, radius;
+    zend_string *ch = NULL;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(4, 6)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(cx)
+        Z_PARAM_LONG(cy)
+        Z_PARAM_LONG(radius)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(ch)
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    uint32_t codepoint = 0x2588; /* █ */
+    if (ch && ZSTR_LEN(ch) > 0) {
+        tui_utf8_decode(ZSTR_VAL(ch), &codepoint);
+    }
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_fill_circle(buffer, (int)cx, (int)cy, (int)radius, codepoint, &style);
+}
+/* }}} */
+
+/* {{{ tui_draw_ellipse(resource $buffer, int $cx, int $cy, int $rx, int $ry, string $char = '●', ?array $style = null): void */
+PHP_FUNCTION(tui_draw_ellipse)
+{
+    zval *zbuffer;
+    zend_long cx, cy, rx, ry;
+    zend_string *ch = NULL;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(5, 7)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(cx)
+        Z_PARAM_LONG(cy)
+        Z_PARAM_LONG(rx)
+        Z_PARAM_LONG(ry)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(ch)
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    uint32_t codepoint = 0x25CF;
+    if (ch && ZSTR_LEN(ch) > 0) {
+        tui_utf8_decode(ZSTR_VAL(ch), &codepoint);
+    }
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_draw_ellipse(buffer, (int)cx, (int)cy, (int)rx, (int)ry, codepoint, &style);
+}
+/* }}} */
+
+/* {{{ tui_fill_ellipse(resource $buffer, int $cx, int $cy, int $rx, int $ry, string $char = '█', ?array $style = null): void */
+PHP_FUNCTION(tui_fill_ellipse)
+{
+    zval *zbuffer;
+    zend_long cx, cy, rx, ry;
+    zend_string *ch = NULL;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(5, 7)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(cx)
+        Z_PARAM_LONG(cy)
+        Z_PARAM_LONG(rx)
+        Z_PARAM_LONG(ry)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(ch)
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    uint32_t codepoint = 0x2588;
+    if (ch && ZSTR_LEN(ch) > 0) {
+        tui_utf8_decode(ZSTR_VAL(ch), &codepoint);
+    }
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_fill_ellipse(buffer, (int)cx, (int)cy, (int)rx, (int)ry, codepoint, &style);
+}
+/* }}} */
+
+/* {{{ tui_draw_triangle(resource $buffer, int $x1, int $y1, int $x2, int $y2, int $x3, int $y3, string $char = '●', ?array $style = null): void */
+PHP_FUNCTION(tui_draw_triangle)
+{
+    zval *zbuffer;
+    zend_long x1, y1, x2, y2, x3, y3;
+    zend_string *ch = NULL;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(7, 9)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(x1)
+        Z_PARAM_LONG(y1)
+        Z_PARAM_LONG(x2)
+        Z_PARAM_LONG(y2)
+        Z_PARAM_LONG(x3)
+        Z_PARAM_LONG(y3)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(ch)
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    uint32_t codepoint = 0x25CF;
+    if (ch && ZSTR_LEN(ch) > 0) {
+        tui_utf8_decode(ZSTR_VAL(ch), &codepoint);
+    }
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_draw_triangle(buffer, (int)x1, (int)y1, (int)x2, (int)y2, (int)x3, (int)y3, codepoint, &style);
+}
+/* }}} */
+
+/* {{{ tui_fill_triangle(resource $buffer, int $x1, int $y1, int $x2, int $y2, int $x3, int $y3, string $char = '█', ?array $style = null): void */
+PHP_FUNCTION(tui_fill_triangle)
+{
+    zval *zbuffer;
+    zend_long x1, y1, x2, y2, x3, y3;
+    zend_string *ch = NULL;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(7, 9)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(x1)
+        Z_PARAM_LONG(y1)
+        Z_PARAM_LONG(x2)
+        Z_PARAM_LONG(y2)
+        Z_PARAM_LONG(x3)
+        Z_PARAM_LONG(y3)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(ch)
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    uint32_t codepoint = 0x2588;
+    if (ch && ZSTR_LEN(ch) > 0) {
+        tui_utf8_decode(ZSTR_VAL(ch), &codepoint);
+    }
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_fill_triangle(buffer, (int)x1, (int)y1, (int)x2, (int)y2, (int)x3, (int)y3, codepoint, &style);
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Canvas Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_canvas_create(int $width, int $height, string $mode = 'braille'): resource */
+PHP_FUNCTION(tui_canvas_create)
+{
+    zend_long width, height;
+    zend_string *mode = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(2, 3)
+        Z_PARAM_LONG(width)
+        Z_PARAM_LONG(height)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(mode)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas_mode canvas_mode = TUI_CANVAS_BRAILLE;
+    if (mode) {
+        const char *m = ZSTR_VAL(mode);
+        if (strcmp(m, "block") == 0) canvas_mode = TUI_CANVAS_BLOCK;
+        else if (strcmp(m, "ascii") == 0) canvas_mode = TUI_CANVAS_ASCII;
+    }
+
+    tui_canvas *canvas = tui_canvas_create((int)width, (int)height, canvas_mode);
+    if (!canvas) {
+        RETURN_FALSE;
+    }
+
+    RETURN_RES(zend_register_resource(canvas, le_tui_canvas));
+}
+/* }}} */
+
+/* {{{ tui_canvas_set(resource $canvas, int $x, int $y): void */
+PHP_FUNCTION(tui_canvas_set)
+{
+    zval *zcanvas;
+    zend_long x, y;
+
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_RESOURCE(zcanvas)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    tui_canvas_set(canvas, (int)x, (int)y);
+}
+/* }}} */
+
+/* {{{ tui_canvas_unset(resource $canvas, int $x, int $y): void */
+PHP_FUNCTION(tui_canvas_unset)
+{
+    zval *zcanvas;
+    zend_long x, y;
+
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_RESOURCE(zcanvas)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    tui_canvas_unset(canvas, (int)x, (int)y);
+}
+/* }}} */
+
+/* {{{ tui_canvas_toggle(resource $canvas, int $x, int $y): void */
+PHP_FUNCTION(tui_canvas_toggle)
+{
+    zval *zcanvas;
+    zend_long x, y;
+
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_RESOURCE(zcanvas)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    tui_canvas_toggle(canvas, (int)x, (int)y);
+}
+/* }}} */
+
+/* {{{ tui_canvas_get(resource $canvas, int $x, int $y): bool */
+PHP_FUNCTION(tui_canvas_get)
+{
+    zval *zcanvas;
+    zend_long x, y;
+
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_RESOURCE(zcanvas)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    RETURN_BOOL(tui_canvas_get(canvas, (int)x, (int)y));
+}
+/* }}} */
+
+/* {{{ tui_canvas_clear(resource $canvas): void */
+PHP_FUNCTION(tui_canvas_clear)
+{
+    zval *zcanvas;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_RESOURCE(zcanvas)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    tui_canvas_clear_all(canvas);
+}
+/* }}} */
+
+/* {{{ tui_canvas_line(resource $canvas, int $x1, int $y1, int $x2, int $y2): void */
+PHP_FUNCTION(tui_canvas_line)
+{
+    zval *zcanvas;
+    zend_long x1, y1, x2, y2;
+
+    ZEND_PARSE_PARAMETERS_START(5, 5)
+        Z_PARAM_RESOURCE(zcanvas)
+        Z_PARAM_LONG(x1)
+        Z_PARAM_LONG(y1)
+        Z_PARAM_LONG(x2)
+        Z_PARAM_LONG(y2)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    tui_canvas_line(canvas, (int)x1, (int)y1, (int)x2, (int)y2);
+}
+/* }}} */
+
+/* {{{ tui_canvas_rect(resource $canvas, int $x, int $y, int $width, int $height): void */
+PHP_FUNCTION(tui_canvas_rect)
+{
+    zval *zcanvas;
+    zend_long x, y, width, height;
+
+    ZEND_PARSE_PARAMETERS_START(5, 5)
+        Z_PARAM_RESOURCE(zcanvas)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(width)
+        Z_PARAM_LONG(height)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    tui_canvas_rect(canvas, (int)x, (int)y, (int)width, (int)height);
+}
+/* }}} */
+
+/* {{{ tui_canvas_fill_rect(resource $canvas, int $x, int $y, int $width, int $height): void */
+PHP_FUNCTION(tui_canvas_fill_rect)
+{
+    zval *zcanvas;
+    zend_long x, y, width, height;
+
+    ZEND_PARSE_PARAMETERS_START(5, 5)
+        Z_PARAM_RESOURCE(zcanvas)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(width)
+        Z_PARAM_LONG(height)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    tui_canvas_fill_rect(canvas, (int)x, (int)y, (int)width, (int)height);
+}
+/* }}} */
+
+/* {{{ tui_canvas_circle(resource $canvas, int $cx, int $cy, int $radius): void */
+PHP_FUNCTION(tui_canvas_circle)
+{
+    zval *zcanvas;
+    zend_long cx, cy, radius;
+
+    ZEND_PARSE_PARAMETERS_START(4, 4)
+        Z_PARAM_RESOURCE(zcanvas)
+        Z_PARAM_LONG(cx)
+        Z_PARAM_LONG(cy)
+        Z_PARAM_LONG(radius)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    tui_canvas_circle(canvas, (int)cx, (int)cy, (int)radius);
+}
+/* }}} */
+
+/* {{{ tui_canvas_fill_circle(resource $canvas, int $cx, int $cy, int $radius): void */
+PHP_FUNCTION(tui_canvas_fill_circle)
+{
+    zval *zcanvas;
+    zend_long cx, cy, radius;
+
+    ZEND_PARSE_PARAMETERS_START(4, 4)
+        Z_PARAM_RESOURCE(zcanvas)
+        Z_PARAM_LONG(cx)
+        Z_PARAM_LONG(cy)
+        Z_PARAM_LONG(radius)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    tui_canvas_fill_circle(canvas, (int)cx, (int)cy, (int)radius);
+}
+/* }}} */
+
+/* {{{ tui_canvas_set_color(resource $canvas, int $r, int $g, int $b): void */
+PHP_FUNCTION(tui_canvas_set_color)
+{
+    zval *zcanvas;
+    zend_long r, g, b;
+
+    ZEND_PARSE_PARAMETERS_START(4, 4)
+        Z_PARAM_RESOURCE(zcanvas)
+        Z_PARAM_LONG(r)
+        Z_PARAM_LONG(g)
+        Z_PARAM_LONG(b)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    tui_canvas_set_color(canvas, (uint8_t)r, (uint8_t)g, (uint8_t)b);
+}
+/* }}} */
+
+/* {{{ tui_canvas_get_resolution(resource $canvas): array */
+PHP_FUNCTION(tui_canvas_get_resolution)
+{
+    zval *zcanvas;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_RESOURCE(zcanvas)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    int width, height;
+    tui_canvas_get_resolution(canvas, &width, &height);
+
+    array_init(return_value);
+    add_assoc_long(return_value, "width", width);
+    add_assoc_long(return_value, "height", height);
+    add_assoc_long(return_value, "char_width", canvas->char_width);
+    add_assoc_long(return_value, "char_height", canvas->char_height);
+}
+/* }}} */
+
+/* {{{ tui_canvas_render(resource $canvas): array */
+PHP_FUNCTION(tui_canvas_render)
+{
+    zval *zcanvas;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_RESOURCE(zcanvas)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_canvas *canvas = (tui_canvas *)zend_fetch_resource(Z_RES_P(zcanvas), TUI_CANVAS_RES_NAME, le_tui_canvas);
+    if (!canvas) {
+        RETURN_THROWS();
+    }
+
+    int line_count;
+    char **lines = tui_canvas_render(canvas, &line_count);
+
+    array_init(return_value);
+    if (lines) {
+        for (int i = 0; i < line_count; i++) {
+            add_next_index_string(return_value, lines[i]);
+        }
+        tui_canvas_render_free(lines, line_count);
+    }
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Animation Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_ease(float $t, string $easing = 'linear'): float */
+PHP_FUNCTION(tui_ease)
+{
+    double t;
+    zend_string *easing = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(1, 2)
+        Z_PARAM_DOUBLE(t)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(easing)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_easing ease_type = TUI_EASE_LINEAR;
+    if (easing) {
+        ease_type = tui_ease_from_name(ZSTR_VAL(easing));
+    }
+
+    RETURN_DOUBLE(tui_ease(t, ease_type));
+}
+/* }}} */
+
+/* {{{ tui_lerp(float $a, float $b, float $t): float */
+PHP_FUNCTION(tui_lerp)
+{
+    double a, b, t;
+
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_DOUBLE(a)
+        Z_PARAM_DOUBLE(b)
+        Z_PARAM_DOUBLE(t)
+    ZEND_PARSE_PARAMETERS_END();
+
+    RETURN_DOUBLE(tui_lerp(a, b, t));
+}
+/* }}} */
+
+/* {{{ tui_lerp_color(string|array $a, string|array $b, float $t): string */
+PHP_FUNCTION(tui_lerp_color)
+{
+    zval *za, *zb;
+    double t;
+
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_ZVAL(za)
+        Z_PARAM_ZVAL(zb)
+        Z_PARAM_DOUBLE(t)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_color color_a = {0}, color_b = {0};
+
+    /* Parse color a */
+    if (Z_TYPE_P(za) == IS_STRING) {
+        color_a = tui_color_from_hex(Z_STRVAL_P(za));
+    } else if (Z_TYPE_P(za) == IS_ARRAY) {
+        HashTable *ht = Z_ARRVAL_P(za);
+        zval *r = zend_hash_index_find(ht, 0);
+        zval *g = zend_hash_index_find(ht, 1);
+        zval *b = zend_hash_index_find(ht, 2);
+        if (r && g && b) {
+            color_a.r = (uint8_t)zval_get_long(r);
+            color_a.g = (uint8_t)zval_get_long(g);
+            color_a.b = (uint8_t)zval_get_long(b);
+            color_a.is_set = 1;
+        }
+    }
+
+    /* Parse color b */
+    if (Z_TYPE_P(zb) == IS_STRING) {
+        color_b = tui_color_from_hex(Z_STRVAL_P(zb));
+    } else if (Z_TYPE_P(zb) == IS_ARRAY) {
+        HashTable *ht = Z_ARRVAL_P(zb);
+        zval *r = zend_hash_index_find(ht, 0);
+        zval *g = zend_hash_index_find(ht, 1);
+        zval *b = zend_hash_index_find(ht, 2);
+        if (r && g && b) {
+            color_b.r = (uint8_t)zval_get_long(r);
+            color_b.g = (uint8_t)zval_get_long(g);
+            color_b.b = (uint8_t)zval_get_long(b);
+            color_b.is_set = 1;
+        }
+    }
+
+    tui_color result = tui_lerp_color(color_a, color_b, t);
+
+    char hex[8];
+    tui_color_to_hex(result, hex, sizeof(hex));
+    RETURN_STRING(hex);
+}
+/* }}} */
+
+/* {{{ tui_color_from_hex(string $hex): array */
+PHP_FUNCTION(tui_color_from_hex)
+{
+    zend_string *hex;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(hex)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_color color = tui_color_from_hex(ZSTR_VAL(hex));
+
+    array_init(return_value);
+    add_next_index_long(return_value, color.r);
+    add_next_index_long(return_value, color.g);
+    add_next_index_long(return_value, color.b);
+}
+/* }}} */
+
+/* {{{ tui_gradient(array $colors, int $steps): array */
+PHP_FUNCTION(tui_gradient)
+{
+    zval *zcolors;
+    zend_long steps;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_ARRAY(zcolors)
+        Z_PARAM_LONG(steps)
+    ZEND_PARSE_PARAMETERS_END();
+
+    HashTable *ht = Z_ARRVAL_P(zcolors);
+    int color_count = zend_hash_num_elements(ht);
+
+    /* Handle edge cases */
+    if (color_count < 1 || steps < 1) {
+        array_init(return_value);
+        return;
+    }
+
+    tui_color *colors = emalloc(sizeof(tui_color) * color_count);
+    tui_color *output = emalloc(sizeof(tui_color) * steps);
+
+    int i = 0;
+    zval *zcolor;
+    ZEND_HASH_FOREACH_VAL(ht, zcolor) {
+        if (Z_TYPE_P(zcolor) == IS_STRING) {
+            colors[i] = tui_color_from_hex(Z_STRVAL_P(zcolor));
+        } else if (Z_TYPE_P(zcolor) == IS_ARRAY) {
+            HashTable *color_ht = Z_ARRVAL_P(zcolor);
+            zval *r = zend_hash_index_find(color_ht, 0);
+            zval *g = zend_hash_index_find(color_ht, 1);
+            zval *b = zend_hash_index_find(color_ht, 2);
+            if (r && g && b) {
+                colors[i].r = (uint8_t)zval_get_long(r);
+                colors[i].g = (uint8_t)zval_get_long(g);
+                colors[i].b = (uint8_t)zval_get_long(b);
+                colors[i].is_set = 1;
+            }
+        }
+        i++;
+    } ZEND_HASH_FOREACH_END();
+
+    /* C function handles single-color case (fills output with same color) */
+    tui_gradient(colors, color_count, output, (int)steps);
+
+    array_init(return_value);
+    for (i = 0; i < (int)steps; i++) {
+        char hex[8];
+        tui_color_to_hex(output[i], hex, sizeof(hex));
+        add_next_index_string(return_value, hex);
+    }
+
+    efree(colors);
+    efree(output);
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Table Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_table_create(array $headers): resource */
+PHP_FUNCTION(tui_table_create)
+{
+    zval *zheaders;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_ARRAY(zheaders)
+    ZEND_PARSE_PARAMETERS_END();
+
+    HashTable *ht = Z_ARRVAL_P(zheaders);
+    int header_count = zend_hash_num_elements(ht);
+
+    if (header_count == 0) {
+        RETURN_FALSE;
+    }
+
+    const char **headers = emalloc(sizeof(char*) * header_count);
+    int i = 0;
+    zval *val;
+    ZEND_HASH_FOREACH_VAL(ht, val) {
+        convert_to_string(val);
+        headers[i++] = Z_STRVAL_P(val);
+    } ZEND_HASH_FOREACH_END();
+
+    tui_table *table = tui_table_create(headers, header_count);
+    efree(headers);
+
+    if (!table) {
+        RETURN_FALSE;
+    }
+
+    RETURN_RES(zend_register_resource(table, le_tui_table));
+}
+/* }}} */
+
+/* {{{ tui_table_add_row(resource $table, array $cells): void */
+PHP_FUNCTION(tui_table_add_row)
+{
+    zval *ztable;
+    zval *zcells;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_RESOURCE(ztable)
+        Z_PARAM_ARRAY(zcells)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_table *table = (tui_table *)zend_fetch_resource(Z_RES_P(ztable), TUI_TABLE_RES_NAME, le_tui_table);
+    if (!table) {
+        RETURN_THROWS();
+    }
+
+    HashTable *ht = Z_ARRVAL_P(zcells);
+    int cell_count = zend_hash_num_elements(ht);
+
+    const char **cells = emalloc(sizeof(char*) * cell_count);
+    int i = 0;
+    zval *val;
+    ZEND_HASH_FOREACH_VAL(ht, val) {
+        convert_to_string(val);
+        cells[i++] = Z_STRVAL_P(val);
+    } ZEND_HASH_FOREACH_END();
+
+    tui_table_add_row(table, cells);
+    efree(cells);
+}
+/* }}} */
+
+/* {{{ tui_table_set_align(resource $table, int $column, bool $right_align): void */
+PHP_FUNCTION(tui_table_set_align)
+{
+    zval *ztable;
+    zend_long column;
+    zend_bool right_align;
+
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_RESOURCE(ztable)
+        Z_PARAM_LONG(column)
+        Z_PARAM_BOOL(right_align)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_table *table = (tui_table *)zend_fetch_resource(Z_RES_P(ztable), TUI_TABLE_RES_NAME, le_tui_table);
+    if (!table) {
+        RETURN_THROWS();
+    }
+
+    tui_table_set_align(table, (int)column, right_align ? 1 : 0);
+}
+/* }}} */
+
+/* {{{ tui_table_render_to_buffer(resource $buffer, resource $table, int $x, int $y, string $border = 'single', ?array $header_style = null, ?array $cell_style = null): int */
+PHP_FUNCTION(tui_table_render_to_buffer)
+{
+    zval *zbuffer, *ztable;
+    zend_long x, y;
+    zend_string *border = NULL;
+    zval *zheader_style = NULL, *zcell_style = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(4, 7)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_RESOURCE(ztable)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(border)
+        Z_PARAM_ARRAY_OR_NULL(zheader_style)
+        Z_PARAM_ARRAY_OR_NULL(zcell_style)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    tui_table *table = (tui_table *)zend_fetch_resource(Z_RES_P(ztable), TUI_TABLE_RES_NAME, le_tui_table);
+    if (!table) {
+        RETURN_THROWS();
+    }
+
+    tui_border_style border_style = TUI_BORDER_SINGLE;
+    if (border) {
+        const char *bs = ZSTR_VAL(border);
+        if (strcmp(bs, "double") == 0) border_style = TUI_BORDER_DOUBLE;
+        else if (strcmp(bs, "round") == 0) border_style = TUI_BORDER_ROUND;
+        else if (strcmp(bs, "bold") == 0) border_style = TUI_BORDER_BOLD;
+    }
+
+    tui_style header_style = {0}, cell_style = {0};
+    if (zheader_style) {
+        parse_style_array(zheader_style, &header_style);
+    }
+    if (zcell_style) {
+        parse_style_array(zcell_style, &cell_style);
+    }
+
+    int height = tui_table_render(buffer, table, (int)x, (int)y, border_style, &header_style, &cell_style);
+    RETURN_LONG(height);
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Progress/Spinner Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_render_progress_bar(resource $buffer, int $x, int $y, int $width, float $progress, ?array $style = null): void */
+PHP_FUNCTION(tui_render_progress_bar)
+{
+    zval *zbuffer;
+    zend_long x, y, width;
+    double progress;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(5, 6)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(width)
+        Z_PARAM_DOUBLE(progress)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_render_progress(buffer, (int)x, (int)y, (int)width, progress, 0, 0, &style, NULL);
+}
+/* }}} */
+
+/* {{{ tui_render_busy_bar(resource $buffer, int $x, int $y, int $width, int $frame, string $style_name = 'pulse', ?array $style = null): void */
+PHP_FUNCTION(tui_render_busy_bar)
+{
+    zval *zbuffer;
+    zend_long x, y, width, frame;
+    zend_string *style_name = NULL;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(5, 7)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_LONG(width)
+        Z_PARAM_LONG(frame)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(style_name)
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    tui_busy_style busy_style = TUI_BUSY_PULSE;
+    if (style_name) {
+        const char *sn = ZSTR_VAL(style_name);
+        if (strcmp(sn, "snake") == 0) busy_style = TUI_BUSY_SNAKE;
+        else if (strcmp(sn, "gradient") == 0) busy_style = TUI_BUSY_GRADIENT;
+        else if (strcmp(sn, "wave") == 0) busy_style = TUI_BUSY_WAVE;
+        else if (strcmp(sn, "shimmer") == 0) busy_style = TUI_BUSY_SHIMMER;
+        else if (strcmp(sn, "rainbow") == 0) busy_style = TUI_BUSY_RAINBOW;
+    }
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_render_busy(buffer, (int)x, (int)y, (int)width, (int)frame, busy_style, &style);
+}
+/* }}} */
+
+/* {{{ tui_spinner_frame(string $type, int $frame): string */
+PHP_FUNCTION(tui_spinner_frame)
+{
+    zend_string *type;
+    zend_long frame;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STR(type)
+        Z_PARAM_LONG(frame)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_spinner_type spinner_type = TUI_SPINNER_DOTS;
+    const char *t = ZSTR_VAL(type);
+    if (strcmp(t, "line") == 0) spinner_type = TUI_SPINNER_LINE;
+    else if (strcmp(t, "circle") == 0) spinner_type = TUI_SPINNER_CIRCLE;
+    else if (strcmp(t, "arrow") == 0) spinner_type = TUI_SPINNER_ARROW;
+    else if (strcmp(t, "box") == 0) spinner_type = TUI_SPINNER_BOX;
+    else if (strcmp(t, "bounce") == 0) spinner_type = TUI_SPINNER_BOUNCE;
+    else if (strcmp(t, "clock") == 0) spinner_type = TUI_SPINNER_CLOCK;
+    else if (strcmp(t, "moon") == 0) spinner_type = TUI_SPINNER_MOON;
+    else if (strcmp(t, "earth") == 0) spinner_type = TUI_SPINNER_EARTH;
+
+    char output[16];
+    int len = tui_spinner_frame(spinner_type, (int)frame, output);
+    RETURN_STRINGL(output, len);
+}
+/* }}} */
+
+/* {{{ tui_spinner_frame_count(string $type): int */
+PHP_FUNCTION(tui_spinner_frame_count)
+{
+    zend_string *type;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(type)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_spinner_type spinner_type = TUI_SPINNER_DOTS;
+    const char *t = ZSTR_VAL(type);
+    if (strcmp(t, "line") == 0) spinner_type = TUI_SPINNER_LINE;
+    else if (strcmp(t, "circle") == 0) spinner_type = TUI_SPINNER_CIRCLE;
+    else if (strcmp(t, "arrow") == 0) spinner_type = TUI_SPINNER_ARROW;
+    else if (strcmp(t, "box") == 0) spinner_type = TUI_SPINNER_BOX;
+    else if (strcmp(t, "bounce") == 0) spinner_type = TUI_SPINNER_BOUNCE;
+    else if (strcmp(t, "clock") == 0) spinner_type = TUI_SPINNER_CLOCK;
+    else if (strcmp(t, "moon") == 0) spinner_type = TUI_SPINNER_MOON;
+    else if (strcmp(t, "earth") == 0) spinner_type = TUI_SPINNER_EARTH;
+
+    RETURN_LONG(tui_spinner_frame_count(spinner_type));
+}
+/* }}} */
+
+/* {{{ tui_render_spinner(resource $buffer, int $x, int $y, string $type, int $frame, ?array $style = null): void */
+PHP_FUNCTION(tui_render_spinner)
+{
+    zval *zbuffer;
+    zend_long x, y, frame;
+    zend_string *type;
+    zval *zstyle = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(5, 6)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+        Z_PARAM_STR(type)
+        Z_PARAM_LONG(frame)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ARRAY_OR_NULL(zstyle)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    tui_spinner_type spinner_type = TUI_SPINNER_DOTS;
+    const char *t = ZSTR_VAL(type);
+    if (strcmp(t, "line") == 0) spinner_type = TUI_SPINNER_LINE;
+    else if (strcmp(t, "circle") == 0) spinner_type = TUI_SPINNER_CIRCLE;
+    else if (strcmp(t, "arrow") == 0) spinner_type = TUI_SPINNER_ARROW;
+    else if (strcmp(t, "box") == 0) spinner_type = TUI_SPINNER_BOX;
+    else if (strcmp(t, "bounce") == 0) spinner_type = TUI_SPINNER_BOUNCE;
+    else if (strcmp(t, "clock") == 0) spinner_type = TUI_SPINNER_CLOCK;
+    else if (strcmp(t, "moon") == 0) spinner_type = TUI_SPINNER_MOON;
+    else if (strcmp(t, "earth") == 0) spinner_type = TUI_SPINNER_EARTH;
+
+    tui_style style = {0};
+    if (zstyle) {
+        parse_style_array(zstyle, &style);
+    }
+
+    tui_render_spinner(buffer, (int)x, (int)y, spinner_type, (int)frame, &style);
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Sprite Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_sprite_create(array $frames, string $name = 'default', bool $loop = true): resource */
+PHP_FUNCTION(tui_sprite_create)
+{
+    zval *zframes;
+    zend_string *name = NULL;
+    zend_bool loop = 1;
+
+    ZEND_PARSE_PARAMETERS_START(1, 3)
+        Z_PARAM_ARRAY(zframes)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(name)
+        Z_PARAM_BOOL(loop)
+    ZEND_PARSE_PARAMETERS_END();
+
+    HashTable *ht = Z_ARRVAL_P(zframes);
+    int frame_count = zend_hash_num_elements(ht);
+
+    if (frame_count == 0) {
+        RETURN_FALSE;
+    }
+
+    tui_sprite_frame *frames = ecalloc(frame_count, sizeof(tui_sprite_frame));
+    int i = 0;
+    zval *zframe;
+
+    ZEND_HASH_FOREACH_VAL(ht, zframe) {
+        if (Z_TYPE_P(zframe) != IS_ARRAY) continue;
+
+        HashTable *frame_ht = Z_ARRVAL_P(zframe);
+        zval *zlines = zend_hash_str_find(frame_ht, "lines", 5);
+        zval *zduration = zend_hash_str_find(frame_ht, "duration", 8);
+
+        int duration = zduration ? (int)zval_get_long(zduration) : 100;
+
+        if (zlines && Z_TYPE_P(zlines) == IS_ARRAY) {
+            HashTable *lines_ht = Z_ARRVAL_P(zlines);
+            int line_count = zend_hash_num_elements(lines_ht);
+            const char **lines = emalloc(sizeof(char*) * line_count);
+
+            int j = 0;
+            zval *zline;
+            ZEND_HASH_FOREACH_VAL(lines_ht, zline) {
+                convert_to_string(zline);
+                lines[j++] = Z_STRVAL_P(zline);
+            } ZEND_HASH_FOREACH_END();
+
+            frames[i] = tui_sprite_frame_create(lines, line_count, duration);
+            efree(lines);
+        }
+        i++;
+    } ZEND_HASH_FOREACH_END();
+
+    const char *anim_name = name ? ZSTR_VAL(name) : "default";
+    tui_sprite *sprite = tui_sprite_create(frames, frame_count, anim_name, loop ? 1 : 0);
+
+    /* Free temporary frame data (sprite makes copies) */
+    for (i = 0; i < frame_count; i++) {
+        tui_sprite_frame_free(&frames[i]);
+    }
+    efree(frames);
+
+    if (!sprite) {
+        RETURN_FALSE;
+    }
+
+    RETURN_RES(zend_register_resource(sprite, le_tui_sprite));
+}
+/* }}} */
+
+/* {{{ tui_sprite_update(resource $sprite, int $delta_ms): void */
+PHP_FUNCTION(tui_sprite_update)
+{
+    zval *zsprite;
+    zend_long delta_ms;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_RESOURCE(zsprite)
+        Z_PARAM_LONG(delta_ms)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_sprite *sprite = (tui_sprite *)zend_fetch_resource(Z_RES_P(zsprite), TUI_SPRITE_RES_NAME, le_tui_sprite);
+    if (!sprite) {
+        RETURN_THROWS();
+    }
+
+    tui_sprite_update(sprite, (int)delta_ms);
+}
+/* }}} */
+
+/* {{{ tui_sprite_set_animation(resource $sprite, string $name): bool */
+PHP_FUNCTION(tui_sprite_set_animation)
+{
+    zval *zsprite;
+    zend_string *name;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_RESOURCE(zsprite)
+        Z_PARAM_STR(name)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_sprite *sprite = (tui_sprite *)zend_fetch_resource(Z_RES_P(zsprite), TUI_SPRITE_RES_NAME, le_tui_sprite);
+    if (!sprite) {
+        RETURN_THROWS();
+    }
+
+    RETURN_BOOL(tui_sprite_set_animation(sprite, ZSTR_VAL(name)) == 0);
+}
+/* }}} */
+
+/* {{{ tui_sprite_set_position(resource $sprite, int $x, int $y): void */
+PHP_FUNCTION(tui_sprite_set_position)
+{
+    zval *zsprite;
+    zend_long x, y;
+
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_RESOURCE(zsprite)
+        Z_PARAM_LONG(x)
+        Z_PARAM_LONG(y)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_sprite *sprite = (tui_sprite *)zend_fetch_resource(Z_RES_P(zsprite), TUI_SPRITE_RES_NAME, le_tui_sprite);
+    if (!sprite) {
+        RETURN_THROWS();
+    }
+
+    tui_sprite_set_position(sprite, (int)x, (int)y);
+}
+/* }}} */
+
+/* {{{ tui_sprite_flip(resource $sprite, bool $flipped): void */
+PHP_FUNCTION(tui_sprite_flip)
+{
+    zval *zsprite;
+    zend_bool flipped;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_RESOURCE(zsprite)
+        Z_PARAM_BOOL(flipped)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_sprite *sprite = (tui_sprite *)zend_fetch_resource(Z_RES_P(zsprite), TUI_SPRITE_RES_NAME, le_tui_sprite);
+    if (!sprite) {
+        RETURN_THROWS();
+    }
+
+    tui_sprite_flip(sprite, flipped ? 1 : 0);
+}
+/* }}} */
+
+/* {{{ tui_sprite_set_visible(resource $sprite, bool $visible): void */
+PHP_FUNCTION(tui_sprite_set_visible)
+{
+    zval *zsprite;
+    zend_bool visible;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_RESOURCE(zsprite)
+        Z_PARAM_BOOL(visible)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_sprite *sprite = (tui_sprite *)zend_fetch_resource(Z_RES_P(zsprite), TUI_SPRITE_RES_NAME, le_tui_sprite);
+    if (!sprite) {
+        RETURN_THROWS();
+    }
+
+    tui_sprite_set_visible(sprite, visible ? 1 : 0);
+}
+/* }}} */
+
+/* {{{ tui_sprite_render(resource $buffer, resource $sprite): void */
+PHP_FUNCTION(tui_sprite_render)
+{
+    zval *zbuffer, *zsprite;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_RESOURCE(zbuffer)
+        Z_PARAM_RESOURCE(zsprite)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_buffer *buffer = (tui_buffer *)zend_fetch_resource(Z_RES_P(zbuffer), TUI_BUFFER_RES_NAME, le_tui_buffer);
+    if (!buffer) {
+        RETURN_THROWS();
+    }
+
+    tui_sprite *sprite = (tui_sprite *)zend_fetch_resource(Z_RES_P(zsprite), TUI_SPRITE_RES_NAME, le_tui_sprite);
+    if (!sprite) {
+        RETURN_THROWS();
+    }
+
+    tui_sprite_render(buffer, sprite);
+}
+/* }}} */
+
+/* {{{ tui_sprite_get_bounds(resource $sprite): array */
+PHP_FUNCTION(tui_sprite_get_bounds)
+{
+    zval *zsprite;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_RESOURCE(zsprite)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_sprite *sprite = (tui_sprite *)zend_fetch_resource(Z_RES_P(zsprite), TUI_SPRITE_RES_NAME, le_tui_sprite);
+    if (!sprite) {
+        RETURN_THROWS();
+    }
+
+    int x, y, width, height;
+    tui_sprite_get_bounds(sprite, &x, &y, &width, &height);
+
+    array_init(return_value);
+    add_assoc_long(return_value, "x", x);
+    add_assoc_long(return_value, "y", y);
+    add_assoc_long(return_value, "width", width);
+    add_assoc_long(return_value, "height", height);
+}
+/* }}} */
+
+/* {{{ tui_sprite_collides(resource $a, resource $b): bool */
+PHP_FUNCTION(tui_sprite_collides)
+{
+    zval *za, *zb;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_RESOURCE(za)
+        Z_PARAM_RESOURCE(zb)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_sprite *a = (tui_sprite *)zend_fetch_resource(Z_RES_P(za), TUI_SPRITE_RES_NAME, le_tui_sprite);
+    if (!a) {
+        RETURN_THROWS();
+    }
+
+    tui_sprite *b = (tui_sprite *)zend_fetch_resource(Z_RES_P(zb), TUI_SPRITE_RES_NAME, le_tui_sprite);
+    if (!b) {
+        RETURN_THROWS();
+    }
+
+    RETURN_BOOL(tui_sprite_collides(a, b));
+}
+/* }}} */
+
+/* {{{ arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_terminal_size, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_is_interactive, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_is_ci, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_string_width, 0, 1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_wrap_text, 0, 2, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_truncate, 0, 2, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, ellipsis, IS_STRING, 0, "\"...\"")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_render, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, component, IS_CALLABLE, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "[]")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_rerender, 0, 1, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_unmount, 0, 1, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_wait_until_exit, 0, 1, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_set_input_handler, 0, 2, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+    ZEND_ARG_TYPE_INFO(0, handler, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_set_focus_handler, 0, 2, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+    ZEND_ARG_TYPE_INFO(0, handler, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_focus_next, 0, 1, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_focus_prev, 0, 1, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_set_resize_handler, 0, 2, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+    ZEND_ARG_TYPE_INFO(0, handler, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_size, 0, 1, IS_ARRAY, 1)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_focused_node, 0, 1, IS_ARRAY, 1)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+ZEND_END_ARG_INFO()
+
+/* Timer arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_add_timer, 0, 3, IS_LONG, 0)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+    ZEND_ARG_TYPE_INFO(0, interval_ms, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, callback, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_remove_timer, 0, 2, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+    ZEND_ARG_TYPE_INFO(0, timer_id, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_set_tick_handler, 0, 2, IS_VOID, 0)
+    ZEND_ARG_OBJ_INFO(0, instance, TuiInstance, 0)
+    ZEND_ARG_TYPE_INFO(0, handler, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+/* Text utility arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_pad, 0, 2, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, align, IS_STRING, 0, "\"l\"")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, pad_char, IS_STRING, 0, "\" \"")
+ZEND_END_ARG_INFO()
+
+/* Buffer arginfo */
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_buffer_create, 0, 0, 2)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, height, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_buffer_clear, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_buffer_render, 0, 1, IS_STRING, 0)
+    ZEND_ARG_INFO(0, buffer)
+ZEND_END_ARG_INFO()
+
+/* Drawing primitives arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_draw_line, 0, 5, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, x1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, x2, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y2, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, char, IS_STRING, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_draw_rect, 0, 5, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, height, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, border, IS_STRING, 1, "\"single\"")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_fill_rect, 0, 5, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, height, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, char, IS_STRING, 1, "\" \"")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_draw_circle, 0, 4, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, cx, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, cy, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, radius, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, char, IS_STRING, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_fill_circle, 0, 4, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, cx, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, cy, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, radius, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, char, IS_STRING, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_draw_ellipse, 0, 5, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, cx, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, cy, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, rx, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, ry, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, char, IS_STRING, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_fill_ellipse, 0, 5, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, cx, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, cy, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, rx, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, ry, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, char, IS_STRING, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_draw_triangle, 0, 7, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, x1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, x2, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y2, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, x3, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y3, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, char, IS_STRING, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_fill_triangle, 0, 7, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, x1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, x2, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y2, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, x3, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y3, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, char, IS_STRING, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+/* Canvas arginfo */
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_canvas_create, 0, 0, 2)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, height, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, mode, IS_STRING, 1, "\"braille\"")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_set, 0, 3, IS_VOID, 0)
+    ZEND_ARG_INFO(0, canvas)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_unset, 0, 3, IS_VOID, 0)
+    ZEND_ARG_INFO(0, canvas)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_toggle, 0, 3, IS_VOID, 0)
+    ZEND_ARG_INFO(0, canvas)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_get, 0, 3, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, canvas)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_clear, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, canvas)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_line, 0, 5, IS_VOID, 0)
+    ZEND_ARG_INFO(0, canvas)
+    ZEND_ARG_TYPE_INFO(0, x1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, x2, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y2, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_rect, 0, 5, IS_VOID, 0)
+    ZEND_ARG_INFO(0, canvas)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, height, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_fill_rect, 0, 5, IS_VOID, 0)
+    ZEND_ARG_INFO(0, canvas)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, height, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_circle, 0, 4, IS_VOID, 0)
+    ZEND_ARG_INFO(0, canvas)
+    ZEND_ARG_TYPE_INFO(0, cx, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, cy, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, radius, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_fill_circle, 0, 4, IS_VOID, 0)
+    ZEND_ARG_INFO(0, canvas)
+    ZEND_ARG_TYPE_INFO(0, cx, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, cy, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, radius, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_set_color, 0, 4, IS_VOID, 0)
+    ZEND_ARG_INFO(0, canvas)
+    ZEND_ARG_TYPE_INFO(0, r, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, g, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, b, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_get_resolution, 0, 1, IS_ARRAY, 0)
+    ZEND_ARG_INFO(0, canvas)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_canvas_render, 0, 1, IS_ARRAY, 0)
+    ZEND_ARG_INFO(0, canvas)
+ZEND_END_ARG_INFO()
+
+/* Animation arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_ease, 0, 1, IS_DOUBLE, 0)
+    ZEND_ARG_TYPE_INFO(0, t, IS_DOUBLE, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, easing, IS_STRING, 1, "\"linear\"")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_lerp, 0, 3, IS_DOUBLE, 0)
+    ZEND_ARG_TYPE_INFO(0, a, IS_DOUBLE, 0)
+    ZEND_ARG_TYPE_INFO(0, b, IS_DOUBLE, 0)
+    ZEND_ARG_TYPE_INFO(0, t, IS_DOUBLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_lerp_color, 0, 3, IS_STRING, 0)
+    ZEND_ARG_INFO(0, a)
+    ZEND_ARG_INFO(0, b)
+    ZEND_ARG_TYPE_INFO(0, t, IS_DOUBLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_color_from_hex, 0, 1, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO(0, hex, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_gradient, 0, 2, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO(0, colors, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO(0, steps, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+/* Table arginfo */
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_table_create, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, headers, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_table_add_row, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, table)
+    ZEND_ARG_TYPE_INFO(0, cells, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_table_set_align, 0, 3, IS_VOID, 0)
+    ZEND_ARG_INFO(0, table)
+    ZEND_ARG_TYPE_INFO(0, column, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, right_align, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_table_render_to_buffer, 0, 4, IS_LONG, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_INFO(0, table)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, border, IS_STRING, 1, "\"single\"")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, header_style, IS_ARRAY, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, cell_style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+/* Progress/Spinner arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_render_progress_bar, 0, 5, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, progress, IS_DOUBLE, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_render_busy_bar, 0, 5, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, frame, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style_name, IS_STRING, 1, "\"pulse\"")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_spinner_frame, 0, 2, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, type, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, frame, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_spinner_frame_count, 0, 1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, type, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_render_spinner, 0, 5, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, type, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, frame, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, style, IS_ARRAY, 1, "null")
+ZEND_END_ARG_INFO()
+
+/* Sprite arginfo */
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_sprite_create, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, frames, IS_ARRAY, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, name, IS_STRING, 1, "\"default\"")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, loop, _IS_BOOL, 0, "true")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_sprite_update, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, sprite)
+    ZEND_ARG_TYPE_INFO(0, delta_ms, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_sprite_set_animation, 0, 2, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, sprite)
+    ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_sprite_set_position, 0, 3, IS_VOID, 0)
+    ZEND_ARG_INFO(0, sprite)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_sprite_flip, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, sprite)
+    ZEND_ARG_TYPE_INFO(0, flipped, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_sprite_set_visible, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, sprite)
+    ZEND_ARG_TYPE_INFO(0, visible, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_sprite_render, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, buffer)
+    ZEND_ARG_INFO(0, sprite)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_sprite_get_bounds, 0, 1, IS_ARRAY, 0)
+    ZEND_ARG_INFO(0, sprite)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_sprite_collides, 0, 2, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, a)
+    ZEND_ARG_INFO(0, b)
+ZEND_END_ARG_INFO()
+/* }}} */
+
+/* {{{ tui_functions[] */
+static const zend_function_entry tui_functions[] = {
+    /* Terminal info */
+    PHP_FE(tui_get_terminal_size, arginfo_tui_get_terminal_size)
+    PHP_FE(tui_is_interactive, arginfo_tui_is_interactive)
+    PHP_FE(tui_is_ci, arginfo_tui_is_ci)
+
+    /* Text utilities */
+    PHP_FE(tui_string_width, arginfo_tui_string_width)
+    PHP_FE(tui_wrap_text, arginfo_tui_wrap_text)
+    PHP_FE(tui_truncate, arginfo_tui_truncate)
+    PHP_FE(tui_pad, arginfo_tui_pad)
+
+    /* Render/App */
+    PHP_FE(tui_render, arginfo_tui_render)
+    PHP_FE(tui_rerender, arginfo_tui_rerender)
+    PHP_FE(tui_unmount, arginfo_tui_unmount)
+    PHP_FE(tui_wait_until_exit, arginfo_tui_wait_until_exit)
+    PHP_FE(tui_set_input_handler, arginfo_tui_set_input_handler)
+    PHP_FE(tui_set_focus_handler, arginfo_tui_set_focus_handler)
+    PHP_FE(tui_focus_next, arginfo_tui_focus_next)
+    PHP_FE(tui_focus_prev, arginfo_tui_focus_prev)
+    PHP_FE(tui_set_resize_handler, arginfo_tui_set_resize_handler)
+    PHP_FE(tui_get_size, arginfo_tui_get_size)
+    PHP_FE(tui_get_focused_node, arginfo_tui_get_focused_node)
+
+    /* Timers */
+    PHP_FE(tui_add_timer, arginfo_tui_add_timer)
+    PHP_FE(tui_remove_timer, arginfo_tui_remove_timer)
+    PHP_FE(tui_set_tick_handler, arginfo_tui_set_tick_handler)
+
+    /* Buffer */
+    PHP_FE(tui_buffer_create, arginfo_tui_buffer_create)
+    PHP_FE(tui_buffer_clear, arginfo_tui_buffer_clear)
+    PHP_FE(tui_buffer_render, arginfo_tui_buffer_render)
+
+    /* Drawing primitives */
+    PHP_FE(tui_draw_line, arginfo_tui_draw_line)
+    PHP_FE(tui_draw_rect, arginfo_tui_draw_rect)
+    PHP_FE(tui_fill_rect, arginfo_tui_fill_rect)
+    PHP_FE(tui_draw_circle, arginfo_tui_draw_circle)
+    PHP_FE(tui_fill_circle, arginfo_tui_fill_circle)
+    PHP_FE(tui_draw_ellipse, arginfo_tui_draw_ellipse)
+    PHP_FE(tui_fill_ellipse, arginfo_tui_fill_ellipse)
+    PHP_FE(tui_draw_triangle, arginfo_tui_draw_triangle)
+    PHP_FE(tui_fill_triangle, arginfo_tui_fill_triangle)
+
+    /* Canvas (braille) */
+    PHP_FE(tui_canvas_create, arginfo_tui_canvas_create)
+    PHP_FE(tui_canvas_set, arginfo_tui_canvas_set)
+    PHP_FE(tui_canvas_unset, arginfo_tui_canvas_unset)
+    PHP_FE(tui_canvas_toggle, arginfo_tui_canvas_toggle)
+    PHP_FE(tui_canvas_get, arginfo_tui_canvas_get)
+    PHP_FE(tui_canvas_clear, arginfo_tui_canvas_clear)
+    PHP_FE(tui_canvas_line, arginfo_tui_canvas_line)
+    PHP_FE(tui_canvas_rect, arginfo_tui_canvas_rect)
+    PHP_FE(tui_canvas_fill_rect, arginfo_tui_canvas_fill_rect)
+    PHP_FE(tui_canvas_circle, arginfo_tui_canvas_circle)
+    PHP_FE(tui_canvas_fill_circle, arginfo_tui_canvas_fill_circle)
+    PHP_FE(tui_canvas_set_color, arginfo_tui_canvas_set_color)
+    PHP_FE(tui_canvas_get_resolution, arginfo_tui_canvas_get_resolution)
+    PHP_FE(tui_canvas_render, arginfo_tui_canvas_render)
+
+    /* Animation */
+    PHP_FE(tui_ease, arginfo_tui_ease)
+    PHP_FE(tui_lerp, arginfo_tui_lerp)
+    PHP_FE(tui_lerp_color, arginfo_tui_lerp_color)
+    PHP_FE(tui_color_from_hex, arginfo_tui_color_from_hex)
+    PHP_FE(tui_gradient, arginfo_tui_gradient)
+
+    /* Table */
+    PHP_FE(tui_table_create, arginfo_tui_table_create)
+    PHP_FE(tui_table_add_row, arginfo_tui_table_add_row)
+    PHP_FE(tui_table_set_align, arginfo_tui_table_set_align)
+    PHP_FE(tui_table_render_to_buffer, arginfo_tui_table_render_to_buffer)
+
+    /* Progress/Spinner */
+    PHP_FE(tui_render_progress_bar, arginfo_tui_render_progress_bar)
+    PHP_FE(tui_render_busy_bar, arginfo_tui_render_busy_bar)
+    PHP_FE(tui_spinner_frame, arginfo_tui_spinner_frame)
+    PHP_FE(tui_spinner_frame_count, arginfo_tui_spinner_frame_count)
+    PHP_FE(tui_render_spinner, arginfo_tui_render_spinner)
+
+    /* Sprite */
+    PHP_FE(tui_sprite_create, arginfo_tui_sprite_create)
+    PHP_FE(tui_sprite_update, arginfo_tui_sprite_update)
+    PHP_FE(tui_sprite_set_animation, arginfo_tui_sprite_set_animation)
+    PHP_FE(tui_sprite_set_position, arginfo_tui_sprite_set_position)
+    PHP_FE(tui_sprite_flip, arginfo_tui_sprite_flip)
+    PHP_FE(tui_sprite_set_visible, arginfo_tui_sprite_set_visible)
+    PHP_FE(tui_sprite_render, arginfo_tui_sprite_render)
+    PHP_FE(tui_sprite_get_bounds, arginfo_tui_sprite_get_bounds)
+    PHP_FE(tui_sprite_collides, arginfo_tui_sprite_collides)
+
+    PHP_FE_END
+};
+/* }}} */
+
+/* {{{ PHP_GINIT_FUNCTION */
+static PHP_GINIT_FUNCTION(tui)
+{
+#if defined(COMPILE_DL_TUI) && defined(ZTS)
+    ZEND_TSRMLS_CACHE_UPDATE();
+#endif
+    tui_globals->raw_mode_active = 0;
+    tui_globals->original_termios_saved = 0;
+    tui_globals->terminal_width = 80;
+    tui_globals->terminal_height = 24;
+}
+/* }}} */
+
+/* {{{ PHP_MINIT_FUNCTION */
+static PHP_MINIT_FUNCTION(tui)
+{
+    zend_class_entry ce;
+
+    /* Register resource types for canvas, table, sprite, buffer */
+    le_tui_canvas = zend_register_list_destructors_ex(tui_canvas_dtor, NULL, TUI_CANVAS_RES_NAME, module_number);
+    le_tui_table = zend_register_list_destructors_ex(tui_table_dtor, NULL, TUI_TABLE_RES_NAME, module_number);
+    le_tui_sprite = zend_register_list_destructors_ex(tui_sprite_dtor, NULL, TUI_SPRITE_RES_NAME, module_number);
+    le_tui_buffer = zend_register_list_destructors_ex(tui_buffer_dtor, NULL, TUI_BUFFER_RES_NAME, module_number);
+
+    /* Register TuiBox class with methods */
+    INIT_CLASS_ENTRY(ce, "TuiBox", tui_box_methods);
+    tui_box_ce = zend_register_internal_class(&ce);
+
+    /* TuiBox properties */
+    zend_declare_property_string(tui_box_ce, "flexDirection", sizeof("flexDirection")-1, "column", ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "alignItems", sizeof("alignItems")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "justifyContent", sizeof("justifyContent")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "flexGrow", sizeof("flexGrow")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "flexShrink", sizeof("flexShrink")-1, 1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "flexBasis", sizeof("flexBasis")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "alignSelf", sizeof("alignSelf")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "width", sizeof("width")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "height", sizeof("height")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "padding", sizeof("padding")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "paddingTop", sizeof("paddingTop")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "paddingBottom", sizeof("paddingBottom")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "paddingLeft", sizeof("paddingLeft")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "paddingRight", sizeof("paddingRight")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "paddingX", sizeof("paddingX")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "paddingY", sizeof("paddingY")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "margin", sizeof("margin")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "marginTop", sizeof("marginTop")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "marginBottom", sizeof("marginBottom")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "marginLeft", sizeof("marginLeft")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "marginRight", sizeof("marginRight")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "marginX", sizeof("marginX")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "marginY", sizeof("marginY")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "gap", sizeof("gap")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "columnGap", sizeof("columnGap")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "rowGap", sizeof("rowGap")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "flexWrap", sizeof("flexWrap")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "minWidth", sizeof("minWidth")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "minHeight", sizeof("minHeight")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "maxWidth", sizeof("maxWidth")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "maxHeight", sizeof("maxHeight")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_string(tui_box_ce, "overflow", sizeof("overflow")-1, "visible", ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "overflowX", sizeof("overflowX")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "overflowY", sizeof("overflowY")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_string(tui_box_ce, "display", sizeof("display")-1, "flex", ZEND_ACC_PUBLIC);
+    zend_declare_property_string(tui_box_ce, "position", sizeof("position")-1, "relative", ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "borderStyle", sizeof("borderStyle")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "borderColor", sizeof("borderColor")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_box_ce, "focusable", sizeof("focusable")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_box_ce, "focused", sizeof("focused")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "children", sizeof("children")-1, ZEND_ACC_PUBLIC);
+
+    /* Register TuiText class with methods */
+    INIT_CLASS_ENTRY(ce, "TuiText", tui_text_methods);
+    tui_text_ce = zend_register_internal_class(&ce);
+
+    /* TuiText properties */
+    zend_declare_property_string(tui_text_ce, "content", sizeof("content")-1, "", ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_text_ce, "color", sizeof("color")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_text_ce, "backgroundColor", sizeof("backgroundColor")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_text_ce, "bold", sizeof("bold")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_text_ce, "dim", sizeof("dim")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_text_ce, "italic", sizeof("italic")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_text_ce, "underline", sizeof("underline")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_text_ce, "inverse", sizeof("inverse")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_text_ce, "strikethrough", sizeof("strikethrough")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_text_ce, "wrap", sizeof("wrap")-1, ZEND_ACC_PUBLIC);
+
+    /* Register TuiInstance class with methods and custom object handlers */
+    INIT_CLASS_ENTRY(ce, "TuiInstance", tui_instance_methods);
+    tui_instance_ce = zend_register_internal_class(&ce);
+    tui_instance_ce->create_object = tui_instance_create_object;
+
+    memcpy(&tui_instance_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+    tui_instance_handlers.offset = XtOffsetOf(tui_instance_object, std);
+    tui_instance_handlers.free_obj = tui_instance_free_object;
+
+    /* Register TuiKey class */
+    INIT_CLASS_ENTRY(ce, "TuiKey", NULL);
+    tui_key_ce = zend_register_internal_class(&ce);
+
+    /* TuiKey properties */
+    zend_declare_property_string(tui_key_ce, "key", sizeof("key")-1, "", ZEND_ACC_PUBLIC);
+    zend_declare_property_string(tui_key_ce, "name", sizeof("name")-1, "", ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "upArrow", sizeof("upArrow")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "downArrow", sizeof("downArrow")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "leftArrow", sizeof("leftArrow")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "rightArrow", sizeof("rightArrow")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "return", sizeof("return")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "escape", sizeof("escape")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "backspace", sizeof("backspace")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "delete", sizeof("delete")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "tab", sizeof("tab")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "home", sizeof("home")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "end", sizeof("end")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "pageUp", sizeof("pageUp")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "pageDown", sizeof("pageDown")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_key_ce, "functionKey", sizeof("functionKey")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "ctrl", sizeof("ctrl")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "alt", sizeof("alt")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "meta", sizeof("meta")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_key_ce, "shift", sizeof("shift")-1, 0, ZEND_ACC_PUBLIC);
+
+    /* Register TuiFocusEvent class */
+    INIT_CLASS_ENTRY(ce, "TuiFocusEvent", NULL);
+    tui_focus_event_ce = zend_register_internal_class(&ce);
+
+    /* TuiFocusEvent properties */
+    zend_declare_property_null(tui_focus_event_ce, "previous", sizeof("previous")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_focus_event_ce, "current", sizeof("current")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_string(tui_focus_event_ce, "direction", sizeof("direction")-1, "", ZEND_ACC_PUBLIC);
+
+    return SUCCESS;
+}
+/* }}} */
+
+/* {{{ PHP_MINFO_FUNCTION */
+static PHP_MINFO_FUNCTION(tui)
+{
+    php_info_print_table_start();
+    php_info_print_table_header(2, "tui support", "enabled");
+    php_info_print_table_row(2, "Version", PHP_TUI_VERSION);
+    php_info_print_table_end();
+}
+/* }}} */
+
+/* {{{ tui_module_entry */
+zend_module_entry tui_module_entry = {
+    STANDARD_MODULE_HEADER,
+    "tui",
+    tui_functions,
+    PHP_MINIT(tui),
+    NULL,  /* MSHUTDOWN */
+    NULL,  /* RINIT */
+    NULL,  /* RSHUTDOWN */
+    PHP_MINFO(tui),
+    PHP_TUI_VERSION,
+    PHP_MODULE_GLOBALS(tui),
+    PHP_GINIT(tui),
+    NULL,  /* GSHUTDOWN */
+    NULL,  /* PRSHUTDOWN */
+    STANDARD_MODULE_PROPERTIES_EX
+};
+/* }}} */
+
+#ifdef COMPILE_DL_TUI
+#ifdef ZTS
+ZEND_TSRMLS_CACHE_DEFINE()
+#endif
+ZEND_GET_MODULE(tui)
+#endif

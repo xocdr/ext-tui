@@ -1,0 +1,119 @@
+/*
+  +----------------------------------------------------------------------+
+  | ext-tui: Application state management                               |
+  +----------------------------------------------------------------------+
+*/
+
+#ifndef TUI_APP_H
+#define TUI_APP_H
+
+#include "../node/node.h"
+#include "../render/buffer.h"
+#include "../render/output.h"
+#include "../event/loop.h"
+#include "php.h"
+
+typedef struct {
+    /* Terminal state */
+    int fullscreen;
+    int exit_on_ctrl_c;
+    int running;
+    int should_exit;
+    int exit_code;
+
+    /* Layout dimensions */
+    int width;
+    int height;
+
+    /* Component callback */
+    zend_fcall_info component_fci;
+    zend_fcall_info_cache component_fcc;
+
+    /* Input callback */
+    zend_fcall_info input_fci;
+    zend_fcall_info_cache input_fcc;
+    int has_input_handler;
+
+    /* Focus change callback */
+    zend_fcall_info focus_fci;
+    zend_fcall_info_cache focus_fcc;
+    int has_focus_handler;
+
+    /* Resize callback */
+    zend_fcall_info resize_fci;
+    zend_fcall_info_cache resize_fcc;
+    int has_resize_handler;
+
+    /* Tick callback */
+    zend_fcall_info tick_fci;
+    zend_fcall_info_cache tick_fcc;
+    int has_tick_handler;
+
+    /* Current focused node */
+    tui_node *focused_node;
+
+    /* Virtual DOM */
+    tui_node *root_node;
+
+    /* Render state */
+    tui_buffer *buffer;
+    tui_output *output;
+
+    /* Event loop */
+    tui_loop *loop;
+
+    /* Render throttling */
+    int render_pending;
+    int min_render_interval_ms;  /* 16ms = 60fps */
+
+    /* Timer callbacks - store PHP callbacks for timers */
+    #define TUI_MAX_TIMERS 32
+    struct {
+        int id;
+        zend_fcall_info fci;
+        zend_fcall_info_cache fcc;
+        int active;
+    } timer_callbacks[TUI_MAX_TIMERS];
+    int timer_callback_count;
+
+    /* Cleanup state */
+    int destroyed;  /* Prevent double-free */
+} tui_app;
+
+/* Lifecycle */
+tui_app* tui_app_create(void);
+void tui_app_destroy(tui_app *app);
+
+/* Configuration */
+void tui_app_set_fullscreen(tui_app *app, int fullscreen);
+void tui_app_set_exit_on_ctrl_c(tui_app *app, int enabled);
+
+/* Component */
+void tui_app_set_component(tui_app *app, zend_fcall_info *fci, zend_fcall_info_cache *fcc);
+void tui_app_set_input_handler(tui_app *app, zend_fcall_info *fci, zend_fcall_info_cache *fcc);
+void tui_app_set_focus_handler(tui_app *app, zend_fcall_info *fci, zend_fcall_info_cache *fcc);
+void tui_app_set_resize_handler(tui_app *app, zend_fcall_info *fci, zend_fcall_info_cache *fcc);
+void tui_app_set_tick_handler(tui_app *app, zend_fcall_info *fci, zend_fcall_info_cache *fcc);
+
+/* Focus management */
+void tui_app_focus_next(tui_app *app);
+void tui_app_focus_prev(tui_app *app);
+void tui_app_set_focus(tui_app *app, tui_node *node);
+
+/* Rendering */
+int tui_app_start(tui_app *app);
+void tui_app_render(tui_app *app);
+void tui_app_render_tree(tui_app *app);  /* Render existing tree without calling component */
+void tui_app_stop(tui_app *app);
+void tui_app_wait_until_exit(tui_app *app);
+void tui_app_exit(tui_app *app, int code);
+
+/* Timers */
+int tui_app_add_timer(tui_app *app, int interval_ms, zend_fcall_info *fci, zend_fcall_info_cache *fcc);
+void tui_app_remove_timer(tui_app *app, int timer_id);
+
+/* Internal callbacks */
+void tui_app_on_input(const char *input, int len, void *userdata);
+void tui_app_on_resize(int width, int height, void *userdata);
+
+#endif /* TUI_APP_H */

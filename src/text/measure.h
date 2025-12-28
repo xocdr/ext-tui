@@ -1,0 +1,75 @@
+/*
+  +----------------------------------------------------------------------+
+  | ext-tui: Text measurement (Unicode width)                           |
+  +----------------------------------------------------------------------+
+  | Provides Unicode-aware text width calculation and UTF-8 encoding/   |
+  | decoding utilities.                                                 |
+  +----------------------------------------------------------------------+
+*/
+
+#ifndef TUI_MEASURE_H
+#define TUI_MEASURE_H
+
+#include <stdint.h>
+#include <stddef.h>
+
+/**
+ * Get display width of a Unicode codepoint.
+ * Returns 0 for control/combining, 1 for most chars, 2 for CJK/emoji.
+ */
+int tui_char_width(uint32_t codepoint);
+
+/**
+ * Get display width of a null-terminated UTF-8 string.
+ */
+int tui_string_width(const char *str);
+
+/**
+ * Get display width of a UTF-8 string with known byte length.
+ */
+int tui_string_width_n(const char *str, int len);
+
+/**
+ * Decode UTF-8 character from null-terminated string.
+ * @return Bytes consumed (1-4), or 0 if str is NULL/empty
+ */
+int tui_utf8_decode(const char *str, uint32_t *codepoint);
+
+/**
+ * Decode UTF-8 character with bounds checking.
+ * @param str Input string
+ * @param len Remaining bytes in string
+ * @param codepoint Output codepoint
+ * @return Bytes consumed (1-4), 0 on error
+ */
+int tui_utf8_decode_n(const char *str, int len, uint32_t *codepoint);
+
+/**
+ * Encode codepoint to UTF-8.
+ * @param codepoint Unicode codepoint
+ * @param buf Output buffer (must have at least 4 bytes)
+ * @return Bytes written (1-4)
+ */
+int tui_utf8_encode(uint32_t codepoint, char *buf);
+
+/**
+ * Pad string to width with bounds checking.
+ * @param text Input text (NULL treated as empty)
+ * @param width Target display width
+ * @param align 'l'=left, 'r'=right, 'c'=center
+ * @param pad_char Padding character
+ * @param output Output buffer
+ * @param output_size Size of output buffer
+ * @return Bytes written, or -1 on error
+ */
+int tui_pad_n(const char *text, int width, char align, char pad_char,
+              char *output, size_t output_size);
+
+/**
+ * Pad string to width (legacy, no bounds check).
+ * WARNING: Caller must ensure output buffer is large enough.
+ * Use tui_pad_n() for safer operation.
+ */
+int tui_pad(const char *text, int width, char align, char pad_char, char *output);
+
+#endif /* TUI_MEASURE_H */
