@@ -26,10 +26,31 @@ tui_sprite_frame tui_sprite_frame_create(const char **lines, int line_count,
     for (int i = 0; i < line_count; i++) {
         if (lines[i]) {
             frame.lines[i] = strdup(lines[i]);
+            if (!frame.lines[i]) {
+                /* Allocation failed - clean up and return empty frame */
+                for (int j = 0; j < i; j++) {
+                    free(frame.lines[j]);
+                }
+                free(frame.lines);
+                frame.lines = NULL;
+                frame.height = 0;
+                frame.width = 0;
+                return frame;
+            }
             int w = tui_string_width_n(lines[i], strlen(lines[i]));
             if (w > frame.width) frame.width = w;
         } else {
             frame.lines[i] = strdup("");
+            if (!frame.lines[i]) {
+                for (int j = 0; j < i; j++) {
+                    free(frame.lines[j]);
+                }
+                free(frame.lines);
+                frame.lines = NULL;
+                frame.height = 0;
+                frame.width = 0;
+                return frame;
+            }
         }
     }
 
@@ -102,12 +123,16 @@ int tui_sprite_add_animation(tui_sprite *sprite, tui_sprite_frame *frames,
     memset(anim, 0, sizeof(tui_sprite_animation));
 
     anim->name = name ? strdup(name) : strdup("default");
+    if (!anim->name) {
+        return -1;
+    }
     anim->loop = loop;
     anim->frame_count = frame_count;
     anim->frames = calloc(frame_count, sizeof(tui_sprite_frame));
 
     if (!anim->frames) {
         free(anim->name);
+        anim->name = NULL;
         return -1;
     }
 
@@ -117,8 +142,44 @@ int tui_sprite_add_animation(tui_sprite *sprite, tui_sprite_frame *frames,
         /* Deep copy lines */
         if (frames[i].lines) {
             anim->frames[i].lines = calloc(frames[i].height, sizeof(char*));
+            if (!anim->frames[i].lines) {
+                /* Clean up on failure */
+                for (int k = 0; k < i; k++) {
+                    if (anim->frames[k].lines) {
+                        for (int j = 0; j < anim->frames[k].height; j++) {
+                            free(anim->frames[k].lines[j]);
+                        }
+                        free(anim->frames[k].lines);
+                    }
+                }
+                free(anim->frames);
+                free(anim->name);
+                anim->name = NULL;
+                anim->frames = NULL;
+                return -1;
+            }
             for (int j = 0; j < frames[i].height; j++) {
                 anim->frames[i].lines[j] = strdup(frames[i].lines[j]);
+                if (!anim->frames[i].lines[j]) {
+                    /* Clean up on failure */
+                    for (int l = 0; l < j; l++) {
+                        free(anim->frames[i].lines[l]);
+                    }
+                    free(anim->frames[i].lines);
+                    for (int k = 0; k < i; k++) {
+                        if (anim->frames[k].lines) {
+                            for (int l = 0; l < anim->frames[k].height; l++) {
+                                free(anim->frames[k].lines[l]);
+                            }
+                            free(anim->frames[k].lines);
+                        }
+                    }
+                    free(anim->frames);
+                    free(anim->name);
+                    anim->name = NULL;
+                    anim->frames = NULL;
+                    return -1;
+                }
             }
         }
     }

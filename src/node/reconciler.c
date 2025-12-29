@@ -8,6 +8,7 @@
 #include "reconciler.h"
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #define INITIAL_DIFF_CAPACITY 16
 #define KEY_MAP_INITIAL_SIZE 32
@@ -96,16 +97,22 @@ static tui_diff_result* diff_result_create(void)
     return result;
 }
 
-static void diff_result_add(tui_diff_result *result, tui_diff_type type,
-                            tui_node *old_node, tui_node *new_node,
-                            int old_index, int new_index)
+/**
+ * Add a diff operation to the result.
+ * @return 0 on success, -1 on allocation failure
+ */
+static int diff_result_add(tui_diff_result *result, tui_diff_type type,
+                           tui_node *old_node, tui_node *new_node,
+                           int old_index, int new_index)
 {
-    if (!result) return;
+    if (!result) return -1;
 
     if (result->count >= result->capacity) {
+        /* Check for overflow before doubling */
+        if (result->capacity > INT_MAX / 2) return -1;
         int new_capacity = result->capacity * 2;
         tui_diff_op *new_ops = realloc(result->ops, new_capacity * sizeof(tui_diff_op));
-        if (!new_ops) return;  /* Allocation failed */
+        if (!new_ops) return -1;  /* Allocation failed */
         result->ops = new_ops;
         result->capacity = new_capacity;
     }
@@ -116,6 +123,7 @@ static void diff_result_add(tui_diff_result *result, tui_diff_type type,
     op->new_node = new_node;
     op->old_index = old_index;
     op->new_index = new_index;
+    return 0;
 }
 
 static int nodes_same_type(tui_node *a, tui_node *b)

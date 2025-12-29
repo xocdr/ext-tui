@@ -12,6 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <limits.h>
 
 /* External class entries for event objects (defined in tui.c) */
 extern zend_class_entry *tui_key_ce;
@@ -277,13 +278,21 @@ void tui_app_set_tick_handler(tui_app *app, zend_fcall_info *fci, zend_fcall_inf
     }
 }
 
-/* Helper: collect all focusable nodes */
-static int collect_focusable_nodes(tui_node *node, tui_node ***nodes, int *count, int *capacity)
+/* Maximum tree depth to prevent stack overflow from circular references or very deep trees */
+#define MAX_TREE_DEPTH 256
+
+/* Helper: collect all focusable nodes with depth limit */
+static int collect_focusable_nodes_impl(tui_node *node, tui_node ***nodes, int *count, int *capacity, int depth)
 {
     if (!node) return 0;
 
+    /* Prevent stack overflow from very deep trees or circular references */
+    if (depth > MAX_TREE_DEPTH) return -1;
+
     if (node->focusable) {
         if (*count >= *capacity) {
+            /* Check for overflow before doubling */
+            if (*capacity > INT_MAX / 2) return -1;
             int new_capacity = *capacity * 2;
             tui_node **new_nodes = realloc(*nodes, new_capacity * sizeof(tui_node*));
             if (!new_nodes) {
@@ -297,12 +306,18 @@ static int collect_focusable_nodes(tui_node *node, tui_node ***nodes, int *count
     }
 
     for (int i = 0; i < node->child_count; i++) {
-        if (collect_focusable_nodes(node->children[i], nodes, count, capacity) < 0) {
+        if (collect_focusable_nodes_impl(node->children[i], nodes, count, capacity, depth + 1) < 0) {
             return -1;
         }
     }
 
     return 0;
+}
+
+/* Helper: collect all focusable nodes */
+static int collect_focusable_nodes(tui_node *node, tui_node ***nodes, int *count, int *capacity)
+{
+    return collect_focusable_nodes_impl(node, nodes, count, capacity, 0);
 }
 
 /* Helper: create array with node info */

@@ -176,13 +176,16 @@ static size_t apply_style_diff(char *buf, const tui_style *old_style, const tui_
     return len;
 }
 
+/* Maximum size for a single ANSI escape sequence (generous for RGB colors + attributes) */
+#define ANSI_BUFFER_SIZE 256
+
 void tui_output_render(tui_output *out, tui_buffer *buf)
 {
     if (!out || !buf) return;
 
     char output[OUTPUT_BUFFER_SIZE];
     size_t output_len = 0;
-    char ansi[128];
+    char ansi[ANSI_BUFFER_SIZE];
     size_t ansi_len;
 
     tui_style current_style = {0};
@@ -207,29 +210,38 @@ void tui_output_render(tui_output *out, tui_buffer *buf)
             /* Move cursor if not sequential */
             if (x != last_x + 1 || y != last_y) {
                 tui_ansi_cursor_move(ansi, &ansi_len, x, y);
-                if (output_len + ansi_len < OUTPUT_BUFFER_SIZE) {
-                    memcpy(output + output_len, ansi, ansi_len);
-                    output_len += ansi_len;
+                /* Flush buffer if it would overflow */
+                if (output_len + ansi_len >= OUTPUT_BUFFER_SIZE) {
+                    write_all(STDOUT_FILENO, output, output_len);
+                    output_len = 0;
                 }
+                memcpy(output + output_len, ansi, ansi_len);
+                output_len += ansi_len;
             }
 
             /* Apply style if changed */
             if (!styles_equal(&new_cell->style, &current_style)) {
                 ansi_len = apply_style_diff(ansi, &current_style, &new_cell->style);
-                if (output_len + ansi_len < OUTPUT_BUFFER_SIZE) {
-                    memcpy(output + output_len, ansi, ansi_len);
-                    output_len += ansi_len;
+                /* Flush buffer if it would overflow */
+                if (output_len + ansi_len >= OUTPUT_BUFFER_SIZE) {
+                    write_all(STDOUT_FILENO, output, output_len);
+                    output_len = 0;
                 }
+                memcpy(output + output_len, ansi, ansi_len);
+                output_len += ansi_len;
                 current_style = new_cell->style;
             }
 
             /* Write character with proper UTF-8 encoding */
             char utf8_buf[4];
             int utf8_len = tui_utf8_encode(new_cell->codepoint, utf8_buf);
-            if (output_len + utf8_len < OUTPUT_BUFFER_SIZE) {
-                memcpy(output + output_len, utf8_buf, utf8_len);
-                output_len += utf8_len;
+            /* Flush buffer if it would overflow */
+            if (output_len + (size_t)utf8_len >= OUTPUT_BUFFER_SIZE) {
+                write_all(STDOUT_FILENO, output, output_len);
+                output_len = 0;
             }
+            memcpy(output + output_len, utf8_buf, (size_t)utf8_len);
+            output_len += (size_t)utf8_len;
 
             /* Update front buffer */
             *old_cell = *new_cell;
@@ -244,10 +256,13 @@ void tui_output_render(tui_output *out, tui_buffer *buf)
     /* Reset style at end */
     if (output_len > 0) {
         tui_ansi_reset(ansi, &ansi_len);
-        if (output_len + ansi_len < OUTPUT_BUFFER_SIZE) {
-            memcpy(output + output_len, ansi, ansi_len);
-            output_len += ansi_len;
+        /* Flush buffer if it would overflow */
+        if (output_len + ansi_len >= OUTPUT_BUFFER_SIZE) {
+            write_all(STDOUT_FILENO, output, output_len);
+            output_len = 0;
         }
+        memcpy(output + output_len, ansi, ansi_len);
+        output_len += ansi_len;
     }
 
     /* Write all output at once */

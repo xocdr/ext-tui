@@ -162,8 +162,8 @@ int tui_utf8_decode(const char *str, uint32_t *codepoint)
     }
 
     if ((c & 0xE0) == 0xC0) {
-        /* 2-byte - validate continuation byte exists */
-        if (!str[1]) {
+        /* 2-byte - validate continuation byte exists and is valid (10xxxxxx) */
+        if (!str[1] || ((unsigned char)str[1] & 0xC0) != 0x80) {
             *codepoint = c;
             return 1;
         }
@@ -172,8 +172,10 @@ int tui_utf8_decode(const char *str, uint32_t *codepoint)
     }
 
     if ((c & 0xF0) == 0xE0) {
-        /* 3-byte */
-        if (!str[1] || !str[2]) {
+        /* 3-byte - validate continuation bytes exist and are valid (10xxxxxx) */
+        if (!str[1] || !str[2] ||
+            ((unsigned char)str[1] & 0xC0) != 0x80 ||
+            ((unsigned char)str[2] & 0xC0) != 0x80) {
             *codepoint = c;
             return 1;
         }
@@ -184,8 +186,11 @@ int tui_utf8_decode(const char *str, uint32_t *codepoint)
     }
 
     if ((c & 0xF8) == 0xF0) {
-        /* 4-byte */
-        if (!str[1] || !str[2] || !str[3]) {
+        /* 4-byte - validate continuation bytes exist and are valid (10xxxxxx) */
+        if (!str[1] || !str[2] || !str[3] ||
+            ((unsigned char)str[1] & 0xC0) != 0x80 ||
+            ((unsigned char)str[2] & 0xC0) != 0x80 ||
+            ((unsigned char)str[3] & 0xC0) != 0x80) {
             *codepoint = c;
             return 1;
         }

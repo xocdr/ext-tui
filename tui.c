@@ -225,13 +225,25 @@ static int parse_color(zval *value, tui_color *color)
     if (Z_TYPE_P(value) == IS_STRING) {
         const char *str = Z_STRVAL_P(value);
         if (str[0] == '#' && Z_STRLEN_P(value) == 7) {
-            unsigned int r, g, b;
-            if (sscanf(str, "#%02x%02x%02x", &r, &g, &b) == 3) {
-                color->r = r;
-                color->g = g;
-                color->b = b;
-                color->is_set = 1;
-                return 1;
+            /* Validate all characters are hex digits before parsing */
+            int valid = 1;
+            for (int i = 1; i < 7; i++) {
+                if (!((str[i] >= '0' && str[i] <= '9') ||
+                      (str[i] >= 'a' && str[i] <= 'f') ||
+                      (str[i] >= 'A' && str[i] <= 'F'))) {
+                    valid = 0;
+                    break;
+                }
+            }
+            if (valid) {
+                unsigned int r, g, b;
+                if (sscanf(str, "#%02x%02x%02x", &r, &g, &b) == 3) {
+                    color->r = (uint8_t)r;
+                    color->g = (uint8_t)g;
+                    color->b = (uint8_t)b;
+                    color->is_set = 1;
+                    return 1;
+                }
             }
         }
     } else if (Z_TYPE_P(value) == IS_ARRAY) {
@@ -684,12 +696,19 @@ static tui_node* php_to_tui_node(zval *obj)
         prop = zend_read_property(ce, Z_OBJ_P(obj), "key", sizeof("key")-1, 1, &rv);
         if (prop && Z_TYPE_P(prop) == IS_STRING) {
             node->key = strdup(Z_STRVAL_P(prop));
+            if (!node->key) {
+                tui_node_destroy(node);
+                return NULL;
+            }
         }
 
         /* id - for focus-by-id */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "id", sizeof("id")-1, 1, &rv);
         if (prop && Z_TYPE_P(prop) == IS_STRING) {
-            tui_node_set_id(node, Z_STRVAL_P(prop));
+            if (tui_node_set_id(node, Z_STRVAL_P(prop)) < 0) {
+                tui_node_destroy(node);
+                return NULL;
+            }
         }
 
         /* Per-side border colors */

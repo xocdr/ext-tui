@@ -83,10 +83,14 @@ tui_canvas* tui_canvas_create(int width, int height, tui_canvas_mode mode)
     int pixel_width = width * cell_w;
     int pixel_height = height * cell_h;
 
-    /* Check for overflow in pixel count calculation */
-    if (pixel_width > 0 && pixel_height > (INT_MAX - 7) / pixel_width) return NULL;
+    /* Check for overflow in pixel count calculation using size_t */
+    if (pixel_width > 0 && (size_t)pixel_height > SIZE_MAX / (size_t)pixel_width) return NULL;
     size_t pixel_count = (size_t)pixel_width * (size_t)pixel_height;
+
+    /* Check for overflow in byte count calculation */
+    if (pixel_count > SIZE_MAX - 7) return NULL;
     size_t byte_count = (pixel_count + 7) / 8;
+    if (byte_count == 0) byte_count = 1;  /* At least 1 byte */
 
     tui_canvas *canvas = calloc(1, sizeof(tui_canvas));
     if (!canvas) return NULL;

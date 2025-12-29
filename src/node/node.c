@@ -127,12 +127,18 @@ tui_node* tui_node_create_spacer(void)
     return node;
 }
 
-void tui_node_set_id(tui_node *node, const char *id)
+int tui_node_set_id(tui_node *node, const char *id)
 {
-    if (!node) return;
+    if (!node) return -1;
 
     free(node->id);
-    node->id = id ? strdup(id) : NULL;
+    if (id) {
+        node->id = strdup(id);
+        if (!node->id) return -1;  /* Allocation failed */
+    } else {
+        node->id = NULL;
+    }
+    return 0;
 }
 
 void tui_node_destroy(tui_node *node)

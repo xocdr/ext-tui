@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <stdatomic.h>
+#include <limits.h>
 
 #define MAX_TIMERS 32
 
@@ -96,6 +97,10 @@ int tui_loop_add_timer(tui_loop *loop, int interval_ms, tui_timer_callback cb, v
         return -1;
     }
 
+    /* Handle timer ID overflow by wrapping to 1 (0 is invalid) */
+    if (loop->next_timer_id >= INT_MAX) {
+        loop->next_timer_id = 1;
+    }
     int id = loop->next_timer_id++;
     tui_timer *t = &loop->timers[loop->timer_count++];
     t->id = id;
@@ -147,16 +152,23 @@ int tui_loop_run(tui_loop *loop)
 
     int ret = poll(fds, 1, timeout);
 
-    /* Check for resize using atomic flag to avoid race condition */
+    /* Check for resize using atomic flag
+     * Note: test_and_set returns the previous value (0 if was clear, 1 if was set)
+     * We clear immediately after detecting, then process the resize.
+     * This pattern may miss rapid consecutive signals, but that's acceptable
+     * as we always get the current terminal size when handling. */
     if (loop->resize_cb) {
-        /* Test and clear atomically - returns true if flag was set */
         if (atomic_flag_test_and_set(&resize_pending)) {
+            /* Flag was already set, meaning a resize occurred */
             atomic_flag_clear(&resize_pending);
-            /* Get actual terminal size */
+            /* Get actual terminal size (always current, regardless of signal count) */
             int width, height;
             if (tui_terminal_get_size(&width, &height) == 0) {
                 loop->resize_cb(width, height, loop->resize_userdata);
             }
+        } else {
+            /* Flag was clear, we just set it - clear it back */
+            atomic_flag_clear(&resize_pending);
         }
     }
 
