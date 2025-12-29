@@ -407,15 +407,23 @@ $color = Color::from("#ff0000");      // Color::Red
 $color = Color::tryFrom("#invalid");  // null
 ```
 
-### Available Cases (49 colors)
+### Available Cases (141 colors)
 
-| Category | Colors |
-|----------|--------|
-| Basic | Black, White, Red, Green, Blue, Yellow, Cyan, Magenta |
-| Extended | Gray, Silver, Maroon, Olive, Lime, Aqua, Teal, Navy, Fuchsia, Purple |
-| Web | Orange, Pink, Brown, Coral, Crimson, Gold, Indigo, Ivory, Khaki, Lavender, Salmon, Tan, Tomato, Turquoise, Violet, Wheat |
-| Dark | DarkBlue, DarkCyan, DarkGray, DarkGreen, DarkMagenta, DarkOrange, DarkRed, DarkViolet |
-| Light | LightBlue, LightCoral, LightCyan, LightGray, LightGreen, LightPink, LightYellow |
+All 147 CSS named colors are available (excluding 6 grey/gray duplicates - American spelling is used).
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| Basic | 17 | Black, White, Red, Green, Blue, Yellow, Cyan, Magenta, Gray... |
+| Reds | 8 | IndianRed, LightCoral, Salmon, Crimson, FireBrick, DarkRed... |
+| Pinks | 6 | Pink, LightPink, HotPink, DeepPink, MediumVioletRed... |
+| Oranges | 5 | Orange, DarkOrange, OrangeRed, Tomato, Coral |
+| Yellows | 10 | Gold, LightYellow, LemonChiffon, PapayaWhip, Khaki... |
+| Purples | 16 | Lavender, Violet, Orchid, RebeccaPurple, Indigo, SlateBlue... |
+| Greens | 19 | Chartreuse, LimeGreen, SpringGreen, ForestGreen, DarkGreen... |
+| Blues/Cyans | 20 | Turquoise, SteelBlue, SkyBlue, DodgerBlue, RoyalBlue, MidnightBlue... |
+| Browns | 16 | Wheat, Tan, Peru, Chocolate, SaddleBrown, Sienna, Brown... |
+| Whites | 16 | Snow, Azure, AliceBlue, GhostWhite, Ivory, Linen, MistyRose... |
+| Grays | 7 | Gainsboro, LightGray, DarkGray, DimGray, SlateGray... |
 
 ### Methods
 
