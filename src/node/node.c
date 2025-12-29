@@ -170,9 +170,11 @@ void tui_node_destroy(tui_node *node)
 {
     if (!node) return;
 
-    /* Destroy children recursively */
-    for (int i = 0; i < node->child_count; i++) {
-        tui_node_destroy(node->children[i]);
+    /* Destroy children recursively (child_count is 0 if children is NULL) */
+    if (node->children) {
+        for (int i = 0; i < node->child_count; i++) {
+            tui_node_destroy(node->children[i]);
+        }
     }
 
     /* Free resources */

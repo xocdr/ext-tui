@@ -56,6 +56,8 @@ static int key_map_add(key_map *map, const char *key, tui_node *node, int index)
 
     /* Grow if needed */
     if (map->count >= map->capacity) {
+        /* Check for overflow before doubling */
+        if (map->capacity > INT_MAX / 2) return 0;
         int new_capacity = map->capacity * 2;
         key_map_entry *new_entries = realloc(map->entries,
             new_capacity * sizeof(key_map_entry));

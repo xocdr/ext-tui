@@ -556,8 +556,11 @@ PHP_METHOD(Color, toAnsi)
     }
 
     char ansi[32];
-    snprintf(ansi, sizeof(ansi), "\033[38;2;%d;%d;%dm",
+    int len = snprintf(ansi, sizeof(ansi), "\033[38;2;%d;%d;%dm",
              named_colors[idx].r, named_colors[idx].g, named_colors[idx].b);
+    if (len < 0 || (size_t)len >= sizeof(ansi)) {
+        RETURN_EMPTY_STRING();
+    }
     RETURN_STRING(ansi);
 }
 
@@ -577,8 +580,11 @@ PHP_METHOD(Color, toAnsiBg)
     }
 
     char ansi[32];
-    snprintf(ansi, sizeof(ansi), "\033[48;2;%d;%d;%dm",
+    int len = snprintf(ansi, sizeof(ansi), "\033[48;2;%d;%d;%dm",
              named_colors[idx].r, named_colors[idx].g, named_colors[idx].b);
+    if (len < 0 || (size_t)len >= sizeof(ansi)) {
+        RETURN_EMPTY_STRING();
+    }
     RETURN_STRING(ansi);
 }
 
@@ -596,8 +602,11 @@ PHP_METHOD(Color, fromName)
         if (strcasecmp(ZSTR_VAL(name), named_colors[i].name) == 0) {
             /* Build hex value */
             char hex[8];
-            snprintf(hex, sizeof(hex), "#%02x%02x%02x",
+            int len = snprintf(hex, sizeof(hex), "#%02x%02x%02x",
                      named_colors[i].r, named_colors[i].g, named_colors[i].b);
+            if (len < 0 || (size_t)len >= sizeof(hex)) {
+                break;  /* Encoding error - return NULL */
+            }
 
             /* Get enum case by value */
             zend_string *hex_str = zend_string_init(hex, 7, 0);
@@ -5341,8 +5350,11 @@ static PHP_MINIT_FUNCTION(tui)
 
         /* Build hex value */
         char hex[8];
-        snprintf(hex, sizeof(hex), "#%02x%02x%02x",
+        int hex_len = snprintf(hex, sizeof(hex), "#%02x%02x%02x",
                  named_colors[i].r, named_colors[i].g, named_colors[i].b);
+        if (hex_len < 0 || (size_t)hex_len >= sizeof(hex)) {
+            continue;  /* Skip on encoding error */
+        }
 
         /* Add enum case with interned string (persistent=1 for module-lifetime) */
         zval value;
