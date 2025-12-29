@@ -152,6 +152,19 @@ new Text("Error!", [
 ])
 ```
 
+### Using Color Enum
+
+```php
+use Xocdr\Tui\Ext\Color;
+
+// Get color by name
+Color::Red->value         // "#ff0000"
+Color::Red->toRgb()       // ['r' => 255, 'g' => 0, 'b' => 0]
+Color::Blue->toAnsi()     // ANSI escape for foreground
+Color::Green->toAnsiBg()  // ANSI escape for background
+Color::fromName("coral")  // Color::Coral
+```
+
 ### Equal Columns
 
 ```php

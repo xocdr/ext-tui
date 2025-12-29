@@ -17,6 +17,7 @@
 #include "php_ini.h"
 #include "ext/standard/info.h"
 #include "zend_exceptions.h"
+#include "zend_enum.h"
 #include "php_tui.h"
 
 #include "src/text/measure.h"
@@ -103,6 +104,7 @@ zend_class_entry *tui_newline_ce;
 zend_class_entry *tui_spacer_ce;
 zend_class_entry *tui_transform_ce;
 zend_class_entry *tui_static_ce;
+zend_class_entry *tui_color_ce;
 
 /* Object handlers */
 static zend_object_handlers tui_box_handlers;
@@ -304,6 +306,174 @@ static int lookup_named_color(const char *name, tui_color *color)
     }
     return 0;
 }
+
+/* ------------------------------------------------------------------
+ * Color enum helper: Convert CSS name to PascalCase (e.g., "darkblue" -> "DarkBlue")
+ * ------------------------------------------------------------------ */
+static void css_name_to_pascal_case(const char *name, char *out, size_t out_size)
+{
+    if (!name || !out || out_size == 0) return;
+
+    size_t j = 0;
+    int capitalize_next = 1;
+
+    for (size_t i = 0; name[i] && j < out_size - 1; i++) {
+        if (capitalize_next && name[i] >= 'a' && name[i] <= 'z') {
+            out[j++] = name[i] - 'a' + 'A';
+            capitalize_next = 0;
+        } else {
+            out[j++] = name[i];
+            /* Capitalize after known prefixes: dark, light */
+            if (i >= 3) {
+                if ((i == 3 && strncmp(name, "dark", 4) == 0) ||
+                    (i == 4 && strncmp(name, "light", 5) == 0)) {
+                    capitalize_next = 1;
+                }
+            }
+        }
+    }
+    out[j] = '\0';
+}
+
+/* ------------------------------------------------------------------
+ * Color enum helper: Get named_colors index from enum case (by hex value)
+ * ------------------------------------------------------------------ */
+static int get_color_index_from_hex(const char *hex)
+{
+    if (!hex || hex[0] != '#' || strlen(hex) != 7) return -1;
+
+    unsigned int r, g, b;
+    if (sscanf(hex, "#%02x%02x%02x", &r, &g, &b) != 3) return -1;
+
+    for (int i = 0; named_colors[i].name != NULL; i++) {
+        if (named_colors[i].r == r && named_colors[i].g == g && named_colors[i].b == b) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* ------------------------------------------------------------------
+ * Color enum methods
+ * ------------------------------------------------------------------ */
+
+/* Color::toRgb(): array{r: int, g: int, b: int} */
+PHP_METHOD(Color, toRgb)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    zval *value = zend_enum_fetch_case_value(Z_OBJ_P(ZEND_THIS));
+    if (!value || Z_TYPE_P(value) != IS_STRING) {
+        RETURN_NULL();
+    }
+
+    int idx = get_color_index_from_hex(Z_STRVAL_P(value));
+    if (idx < 0) {
+        RETURN_NULL();
+    }
+
+    array_init(return_value);
+    add_assoc_long(return_value, "r", named_colors[idx].r);
+    add_assoc_long(return_value, "g", named_colors[idx].g);
+    add_assoc_long(return_value, "b", named_colors[idx].b);
+}
+
+/* Color::toAnsi(): string - ANSI escape sequence for foreground */
+PHP_METHOD(Color, toAnsi)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    zval *value = zend_enum_fetch_case_value(Z_OBJ_P(ZEND_THIS));
+    if (!value || Z_TYPE_P(value) != IS_STRING) {
+        RETURN_EMPTY_STRING();
+    }
+
+    int idx = get_color_index_from_hex(Z_STRVAL_P(value));
+    if (idx < 0) {
+        RETURN_EMPTY_STRING();
+    }
+
+    char ansi[32];
+    snprintf(ansi, sizeof(ansi), "\033[38;2;%d;%d;%dm",
+             named_colors[idx].r, named_colors[idx].g, named_colors[idx].b);
+    RETURN_STRING(ansi);
+}
+
+/* Color::toAnsiBg(): string - ANSI escape sequence for background */
+PHP_METHOD(Color, toAnsiBg)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    zval *value = zend_enum_fetch_case_value(Z_OBJ_P(ZEND_THIS));
+    if (!value || Z_TYPE_P(value) != IS_STRING) {
+        RETURN_EMPTY_STRING();
+    }
+
+    int idx = get_color_index_from_hex(Z_STRVAL_P(value));
+    if (idx < 0) {
+        RETURN_EMPTY_STRING();
+    }
+
+    char ansi[32];
+    snprintf(ansi, sizeof(ansi), "\033[48;2;%d;%d;%dm",
+             named_colors[idx].r, named_colors[idx].g, named_colors[idx].b);
+    RETURN_STRING(ansi);
+}
+
+/* Color::fromName(string $name): ?Color - Get color case by CSS name */
+PHP_METHOD(Color, fromName)
+{
+    zend_string *name;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(name)
+    ZEND_PARSE_PARAMETERS_END();
+
+    /* Lookup by CSS name (case-insensitive) */
+    for (int i = 0; named_colors[i].name != NULL; i++) {
+        if (strcasecmp(ZSTR_VAL(name), named_colors[i].name) == 0) {
+            /* Build hex value */
+            char hex[8];
+            snprintf(hex, sizeof(hex), "#%02x%02x%02x",
+                     named_colors[i].r, named_colors[i].g, named_colors[i].b);
+
+            /* Get enum case by value */
+            zend_string *hex_str = zend_string_init(hex, 7, 0);
+            zend_object *case_obj = NULL;
+            zend_result result = zend_enum_get_case_by_value(&case_obj, tui_color_ce, 0, hex_str, true);
+            zend_string_release(hex_str);
+
+            if (result == SUCCESS && case_obj) {
+                RETURN_OBJ_COPY(case_obj);
+            }
+            break;
+        }
+    }
+
+    RETURN_NULL();
+}
+
+/* Color enum arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_color_torgb, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_color_toansi, 0, 0, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_color_toansibg, 0, 0, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_color_fromname, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+static const zend_function_entry tui_color_methods[] = {
+    PHP_ME(Color, toRgb, arginfo_color_torgb, ZEND_ACC_PUBLIC)
+    PHP_ME(Color, toAnsi, arginfo_color_toansi, ZEND_ACC_PUBLIC)
+    PHP_ME(Color, toAnsiBg, arginfo_color_toansibg, ZEND_ACC_PUBLIC)
+    PHP_ME(Color, fromName, arginfo_color_fromname, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+    PHP_FE_END
+};
 
 /* ------------------------------------------------------------------
  * Helper: Parse RGB color from string (#RRGGBB, named) or array [r, g, b]
@@ -4962,6 +5132,34 @@ static PHP_MINIT_FUNCTION(tui)
     /* StaticOutput properties */
     zend_declare_property_null(tui_static_ce, "items", sizeof("items")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_static_ce, "render", sizeof("render")-1, ZEND_ACC_PUBLIC);
+
+    /* Register Xocdr\Tui\Ext\Color enum (backed by string hex values) */
+    tui_color_ce = zend_register_internal_enum("Xocdr\\Tui\\Ext\\Color", IS_STRING, tui_color_methods);
+
+    /* Add all color cases from named_colors table (skip aliases like grey/darkgrey/lightgrey) */
+    for (int i = 0; named_colors[i].name != NULL; i++) {
+        /* Skip British spellings (aliases) - prefer American spellings */
+        if (strcmp(named_colors[i].name, "grey") == 0 ||
+            strcmp(named_colors[i].name, "darkgrey") == 0 ||
+            strcmp(named_colors[i].name, "lightgrey") == 0) {
+            continue;
+        }
+
+        /* Convert name to PascalCase */
+        char pascal_name[32];
+        css_name_to_pascal_case(named_colors[i].name, pascal_name, sizeof(pascal_name));
+
+        /* Build hex value */
+        char hex[8];
+        snprintf(hex, sizeof(hex), "#%02x%02x%02x",
+                 named_colors[i].r, named_colors[i].g, named_colors[i].b);
+
+        /* Add enum case with interned string (persistent=1 for module-lifetime) */
+        zval value;
+        zend_string *str = zend_string_init_interned(hex, 7, 1);
+        ZVAL_INTERNED_STR(&value, str);
+        zend_enum_add_case_cstr(tui_color_ce, pascal_name, &value);
+    }
 
     return SUCCESS;
 }

@@ -375,3 +375,63 @@ Static output component (extends Box). Content rendered above dynamic UI.
 |----------|------|-------------|
 | `items` | array\|null | Items to render statically |
 | `render` | callable\|null | Render function for items |
+
+---
+
+## Xocdr\Tui\Ext\Color
+
+Backed string enum containing CSS named colors. Each case value is the hex color string (e.g., `#ff0000`).
+
+### Usage
+
+```php
+use Xocdr\Tui\Ext\Color;
+
+// Access by case name
+$red = Color::Red;
+echo $red->value; // "#ff0000"
+
+// Get RGB components
+$rgb = Color::Coral->toRgb();
+// ['r' => 255, 'g' => 127, 'b' => 80]
+
+// Get ANSI escape sequences for terminal styling
+echo Color::Blue->toAnsi() . "Blue text" . "\033[0m";
+echo Color::Green->toAnsiBg() . "Green background" . "\033[0m";
+
+// Lookup by CSS name (case-insensitive)
+$color = Color::fromName("darkorange"); // Color::DarkOrange
+
+// Use built-in BackedEnum methods
+$color = Color::from("#ff0000");      // Color::Red
+$color = Color::tryFrom("#invalid");  // null
+```
+
+### Available Cases (49 colors)
+
+| Category | Colors |
+|----------|--------|
+| Basic | Black, White, Red, Green, Blue, Yellow, Cyan, Magenta |
+| Extended | Gray, Silver, Maroon, Olive, Lime, Aqua, Teal, Navy, Fuchsia, Purple |
+| Web | Orange, Pink, Brown, Coral, Crimson, Gold, Indigo, Ivory, Khaki, Lavender, Salmon, Tan, Tomato, Turquoise, Violet, Wheat |
+| Dark | DarkBlue, DarkCyan, DarkGray, DarkGreen, DarkMagenta, DarkOrange, DarkRed, DarkViolet |
+| Light | LightBlue, LightCoral, LightCyan, LightGray, LightGreen, LightPink, LightYellow |
+
+### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `toRgb()` | `(): array{r: int, g: int, b: int}` | Get RGB color components |
+| `toAnsi()` | `(): string` | ANSI escape sequence for foreground color |
+| `toAnsiBg()` | `(): string` | ANSI escape sequence for background color |
+| `fromName()` | `static (string $name): ?Color` | Lookup by CSS color name (case-insensitive) |
+
+### Inherited BackedEnum Methods
+
+| Method | Description |
+|--------|-------------|
+| `Color::cases()` | Returns all enum cases |
+| `Color::from(string $value)` | Get case by hex value (throws on invalid) |
+| `Color::tryFrom(string $value)` | Get case by hex value (returns null on invalid) |
+| `$color->value` | Get backing hex string |
+| `$color->name` | Get case name (e.g., "Red") |

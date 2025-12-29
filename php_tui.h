@@ -59,6 +59,7 @@ extern zend_class_entry *tui_box_ce;
 extern zend_class_entry *tui_text_ce;
 extern zend_class_entry *tui_instance_ce;
 extern zend_class_entry *tui_key_ce;
+extern zend_class_entry *tui_color_ce;
 
 /* Function declarations */
 PHP_FUNCTION(tui_render);
