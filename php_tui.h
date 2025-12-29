@@ -7,6 +7,16 @@
   | This source file is subject to the MIT license that is bundled with |
   | this package in the file LICENSE.                                    |
   +----------------------------------------------------------------------+
+  | Thread Safety (ZTS):                                                 |
+  | This extension uses ZEND_BEGIN_MODULE_GLOBALS for per-thread state. |
+  | Terminal operations (raw mode, output) are NOT thread-safe and      |
+  | should only be used from the main thread. The TUI application model |
+  | assumes single-threaded terminal access. In ZTS builds:             |
+  | - Module globals are thread-local via TUI_G() macro                 |
+  | - Terminal state (termios) is process-global (use main thread only) |
+  | - Yoga layout nodes are per-request, not shared between threads     |
+  | - Signal handlers (SIGWINCH) affect the entire process              |
+  +----------------------------------------------------------------------+
 */
 
 #ifndef PHP_TUI_H

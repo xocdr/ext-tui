@@ -67,9 +67,12 @@ int tui_pad_n(const char *text, int width, char align, char pad_char,
 
 /**
  * Pad string to width (legacy, no bounds check).
- * WARNING: Caller must ensure output buffer is large enough.
- * Use tui_pad_n() for safer operation.
+ * @deprecated Use tui_pad_n() instead - this function has no buffer overflow protection.
+ * WARNING: Caller must ensure output buffer is large enough (at least width + strlen(text) + 1).
  */
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((deprecated("Use tui_pad_n() instead for buffer overflow protection")))
+#endif
 int tui_pad(const char *text, int width, char align, char pad_char, char *output);
 
 /* ----------------------------------------------------------------

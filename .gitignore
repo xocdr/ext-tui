@@ -49,5 +49,11 @@ modules/
 # macOS
 .DS_Store
 
-# Test results
+# Test results (legacy location)
 php_test_results_*.txt
+
+# Temp directory (test results, build artifacts)
+tmp/
+
+# Working directory (temp files, summaries, todos)
+.working/

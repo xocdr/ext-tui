@@ -51,4 +51,9 @@ void tui_buffer_mark_clean(tui_buffer *buf);
 /* Rendering to string */
 char* tui_buffer_to_string(tui_buffer *buf);
 
+/* Configuration - set by tui.c from INI values */
+void tui_buffer_set_max_dimensions(int max_width, int max_height);
+int tui_buffer_get_max_width(void);
+int tui_buffer_get_max_height(void);
+
 #endif /* TUI_BUFFER_H */

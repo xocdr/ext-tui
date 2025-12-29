@@ -10,15 +10,36 @@
 #include <string.h>
 #include <stdio.h>
 
-/* Configuration constants */
-#define MAX_BUFFER_DIMENSION 500   /* Max 500x500 = 250K cells = ~4MB */
-#define ANSI_MAX_PER_CELL 64       /* Max ANSI bytes per cell for output */
+/* Configuration - defaults, can be overridden via tui_buffer_set_max_dimensions() */
+static int g_max_buffer_width = 500;   /* Default max width */
+static int g_max_buffer_height = 500;  /* Default max height */
+#define ANSI_MAX_PER_CELL 64           /* Max ANSI bytes per cell for output */
+
+void tui_buffer_set_max_dimensions(int max_width, int max_height)
+{
+    if (max_width > 0 && max_width <= 10000) {
+        g_max_buffer_width = max_width;
+    }
+    if (max_height > 0 && max_height <= 10000) {
+        g_max_buffer_height = max_height;
+    }
+}
+
+int tui_buffer_get_max_width(void)
+{
+    return g_max_buffer_width;
+}
+
+int tui_buffer_get_max_height(void)
+{
+    return g_max_buffer_height;
+}
 
 tui_buffer* tui_buffer_create(int width, int height)
 {
-    /* Validate dimensions */
+    /* Validate dimensions against configurable limits */
     if (width <= 0 || height <= 0) return NULL;
-    if (width > MAX_BUFFER_DIMENSION || height > MAX_BUFFER_DIMENSION) return NULL;
+    if (width > g_max_buffer_width || height > g_max_buffer_height) return NULL;
 
     /* Check for integer overflow before allocation */
     size_t cell_count = (size_t)width * (size_t)height;
@@ -57,7 +78,7 @@ int tui_buffer_resize(tui_buffer *buf, int width, int height)
 {
     if (!buf) return -1;
     if (width <= 0 || height <= 0) return -1;
-    if (width > MAX_BUFFER_DIMENSION || height > MAX_BUFFER_DIMENSION) return -1;
+    if (width > g_max_buffer_width || height > g_max_buffer_height) return -1;
 
     /* Check for integer overflow before allocation */
     size_t cell_count = (size_t)width * (size_t)height;

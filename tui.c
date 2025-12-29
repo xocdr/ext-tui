@@ -31,6 +31,7 @@
 #include "src/drawing/table.h"
 #include "src/drawing/progress.h"
 #include "src/drawing/sprite.h"
+#include "src/render/buffer.h"
 
 #include <termios.h>
 #include <sys/ioctl.h>
@@ -5079,6 +5080,12 @@ static PHP_MINIT_FUNCTION(tui)
     zend_class_entry ce;
 
     REGISTER_INI_ENTRIES();
+
+    /* Apply INI settings to subsystems */
+    tui_buffer_set_max_dimensions(
+        (int)TUI_G(max_buffer_width),
+        (int)TUI_G(max_buffer_height)
+    );
 
     /* Initialize shared Yoga configuration */
     TUI_G(yoga_config) = YGConfigNew();

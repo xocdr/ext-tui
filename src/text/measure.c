@@ -341,6 +341,13 @@ int tui_string_width(const char *str)
 }
 
 /**
+ * Maximum length for ANSI escape sequences.
+ * Prevents excessive looping on pathological input.
+ * Most real sequences are < 20 bytes; 64 is very generous.
+ */
+#define MAX_ANSI_SEQUENCE_LENGTH 64
+
+/**
  * Skip ANSI escape sequence starting at position.
  *
  * ANSI sequences start with ESC (0x1B) followed by:
@@ -357,6 +364,9 @@ static int skip_ansi_sequence(const char *str, int pos, int len)
     if (pos >= len || str[pos] != '\033') return 0;
 
     int start = pos;
+    int max_end = pos + MAX_ANSI_SEQUENCE_LENGTH;
+    if (max_end > len) max_end = len;
+
     pos++;  /* Skip ESC */
 
     if (pos >= len) return 1;  /* Just ESC at end */
@@ -364,7 +374,7 @@ static int skip_ansi_sequence(const char *str, int pos, int len)
     if (str[pos] == '[') {
         /* CSI sequence: ESC [ params letter */
         pos++;
-        while (pos < len) {
+        while (pos < max_end) {
             unsigned char c = (unsigned char)str[pos];
             if (c >= 0x40 && c <= 0x7E) {
                 /* Final byte found (letter) */
@@ -376,11 +386,11 @@ static int skip_ansi_sequence(const char *str, int pos, int len)
             }
             pos++;
         }
-        return pos - start;  /* Incomplete sequence */
+        return pos - start;  /* Incomplete or too-long sequence */
     } else if (str[pos] == ']') {
         /* OSC sequence: ESC ] ... ST or BEL */
         pos++;
-        while (pos < len) {
+        while (pos < max_end) {
             if (str[pos] == '\007') {  /* BEL */
                 return pos - start + 1;
             }
@@ -390,7 +400,7 @@ static int skip_ansi_sequence(const char *str, int pos, int len)
             }
             pos++;
         }
-        return pos - start;
+        return pos - start;  /* Incomplete or too-long sequence */
     } else {
         /* Single-character escape (e.g., ESC ( B) */
         return 2;
