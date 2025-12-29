@@ -4327,8 +4327,8 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_bool(tui_text_ce, "strikethrough", sizeof("strikethrough")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_text_ce, "wrap", sizeof("wrap")-1, ZEND_ACC_PUBLIC);
 
-    /* Register TuiInstance class with methods and custom object handlers */
-    INIT_CLASS_ENTRY(ce, "TuiInstance", tui_instance_methods);
+    /* Register Xocdr\Tui\Instance class with methods and custom object handlers */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Instance", tui_instance_methods);
     tui_instance_ce = zend_register_internal_class(&ce);
     tui_instance_ce->create_object = tui_instance_create_object;
 
@@ -4336,8 +4336,8 @@ static PHP_MINIT_FUNCTION(tui)
     tui_instance_handlers.offset = XtOffsetOf(tui_instance_object, std);
     tui_instance_handlers.free_obj = tui_instance_free_object;
 
-    /* Register TuiKey class */
-    INIT_CLASS_ENTRY(ce, "TuiKey", NULL);
+    /* Register Xocdr\Tui\Key class */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Key", NULL);
     tui_key_ce = zend_register_internal_class(&ce);
 
     /* TuiKey properties */
@@ -4362,8 +4362,8 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_bool(tui_key_ce, "meta", sizeof("meta")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_bool(tui_key_ce, "shift", sizeof("shift")-1, 0, ZEND_ACC_PUBLIC);
 
-    /* Register TuiFocusEvent class */
-    INIT_CLASS_ENTRY(ce, "TuiFocusEvent", NULL);
+    /* Register Xocdr\Tui\FocusEvent class */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\FocusEvent", NULL);
     tui_focus_event_ce = zend_register_internal_class(&ce);
 
     /* TuiFocusEvent properties */
@@ -4451,6 +4451,11 @@ static PHP_MINIT_FUNCTION(tui)
     /* StaticOutput properties */
     zend_declare_property_null(tui_static_ce, "items", sizeof("items")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_static_ce, "render", sizeof("render")-1, ZEND_ACC_PUBLIC);
+
+    /* Register deprecated aliases for backwards compatibility */
+    zend_register_class_alias("TuiInstance", tui_instance_ce);
+    zend_register_class_alias("TuiKey", tui_key_ce);
+    zend_register_class_alias("TuiFocusEvent", tui_focus_event_ce);
 
     return SUCCESS;
 }
