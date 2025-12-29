@@ -8,6 +8,10 @@
 #include "../text/measure.h"  /* For tui_utf8_decode_n() */
 #include <string.h>
 
+/* Maximum ANSI numeric parameter value to parse (prevents overflow).
+   Valid key codes are all <= 24, so any higher value is invalid. */
+#define MAX_KEY_CODE_VALUE 9999
+
 int tui_input_parse(const char *buf, int len, tui_key_event *event)
 {
     memset(event, 0, sizeof(tui_key_event));
@@ -150,7 +154,7 @@ int tui_input_parse(const char *buf, int len, tui_key_event *event)
             int num = 0;
             for (int i = 2; i < len - 1; i++) {
                 if (buf[i] >= '0' && buf[i] <= '9') {
-                    if (num > 9999) break;  /* Prevent overflow - no valid key code is > 24 */
+                    if (num > MAX_KEY_CODE_VALUE) break;
                     num = num * 10 + (buf[i] - '0');
                 }
             }

@@ -46,6 +46,9 @@ static int le_tui_table;
 static int le_tui_sprite;
 static int le_tui_buffer;
 
+/* Maximum depth for recursive tree operations - matches app.c */
+#define MAX_TREE_DEPTH 256
+
 #define TUI_CANVAS_RES_NAME "TuiCanvas"
 #define TUI_TABLE_RES_NAME "TuiTable"
 #define TUI_SPRITE_RES_NAME "TuiSprite"
@@ -452,21 +455,27 @@ static void css_name_to_pascal_case(const char *name, char *out, size_t out_size
     size_t j = 0;
     size_t i = 0;
     size_t name_len = strlen(name);
+    size_t remaining = out_size - 1;  /* Reserve space for null terminator */
 
-    while (name[i] && j < out_size - 1) {
+    while (name[i] && remaining > 0) {
         /* Try to match a known word at current position */
         int matched = 0;
         for (int w = 0; words[w] != NULL; w++) {
             size_t wlen = strlen(words[w]);
             if (i + wlen <= name_len && strncmp(name + i, words[w], wlen) == 0) {
-                /* Found a word - capitalize first letter */
-                if (j < out_size - 1) {
-                    out[j++] = (name[i] >= 'a' && name[i] <= 'z')
-                               ? name[i] - 'a' + 'A' : name[i];
+                /* Check if entire word fits */
+                if (wlen > remaining) {
+                    /* Word doesn't fit - stop here */
+                    goto done;
                 }
+                /* Found a word - capitalize first letter */
+                out[j++] = (name[i] >= 'a' && name[i] <= 'z')
+                           ? name[i] - 'a' + 'A' : name[i];
+                remaining--;
                 /* Copy rest of word */
-                for (size_t k = 1; k < wlen && j < out_size - 1; k++) {
+                for (size_t k = 1; k < wlen; k++) {
                     out[j++] = name[i + k];
+                    remaining--;
                 }
                 i += wlen;
                 matched = 1;
@@ -480,9 +489,11 @@ static void css_name_to_pascal_case(const char *name, char *out, size_t out_size
             } else {
                 out[j++] = name[i];
             }
+            remaining--;
             i++;
         }
     }
+done:
     out[j] = '\0';
 }
 
@@ -686,9 +697,23 @@ static int parse_color(zval *value, tui_color *color)
 /* ------------------------------------------------------------------
  * PHP-to-C Node Tree Conversion
  * ------------------------------------------------------------------ */
+static tui_node* php_to_tui_node_impl(zval *obj, int depth);
+
+/* Public wrapper that starts recursion at depth 0 */
 static tui_node* php_to_tui_node(zval *obj)
 {
+    return php_to_tui_node_impl(obj, 0);
+}
+
+static tui_node* php_to_tui_node_impl(zval *obj, int depth)
+{
     if (!obj || Z_TYPE_P(obj) != IS_OBJECT) {
+        return NULL;
+    }
+
+    /* Prevent stack overflow from deeply nested trees */
+    if (depth > MAX_TREE_DEPTH) {
+        php_error_docref(NULL, E_WARNING, "Maximum node tree depth exceeded (%d)", MAX_TREE_DEPTH);
         return NULL;
     }
 
@@ -1180,7 +1205,7 @@ static tui_node* php_to_tui_node(zval *obj)
             HashTable *ht = Z_ARRVAL_P(prop);
             zval *child;
             ZEND_HASH_FOREACH_VAL(ht, child) {
-                tui_node *child_node = php_to_tui_node(child);
+                tui_node *child_node = php_to_tui_node_impl(child, depth + 1);
                 if (child_node) {
                     if (tui_node_append_child(node, child_node) < 0) {
                         /* Failed to append - destroy the orphan child to prevent leak */
@@ -1780,21 +1805,29 @@ PHP_METHOD(TuiInstance, focusPrev)
 }
 /* }}} */
 
-/* Helper: find node by ID in tree */
-static tui_node* find_node_by_id_in_tree(tui_node *node, const char *id)
+/* Helper: find node by ID in tree (with depth limit to prevent stack overflow) */
+static tui_node* find_node_by_id_in_tree_impl(tui_node *node, const char *id, int depth)
 {
     if (!node || !id) return NULL;
+
+    /* Prevent stack overflow from deeply nested trees */
+    if (depth > MAX_TREE_DEPTH) return NULL;
 
     if (node->id && strcmp(node->id, id) == 0) {
         return node;
     }
 
     for (int i = 0; i < node->child_count; i++) {
-        tui_node *found = find_node_by_id_in_tree(node->children[i], id);
+        tui_node *found = find_node_by_id_in_tree_impl(node->children[i], id, depth + 1);
         if (found) return found;
     }
 
     return NULL;
+}
+
+static tui_node* find_node_by_id_in_tree(tui_node *node, const char *id)
+{
+    return find_node_by_id_in_tree_impl(node, id, 0);
 }
 
 /* {{{ TuiInstance::measureElement(string $id): ?array */

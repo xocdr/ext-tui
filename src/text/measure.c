@@ -428,8 +428,7 @@ int tui_string_width_n(const char *str, int len)
     int pos = 0;
     int after_zwj = 0;           /* Skip width after ZWJ */
     int regional_count = 0;      /* Count regional indicators for flag pairs */
-    uint32_t prev_codepoint = 0; /* Track previous character for VS16 handling */
-    int prev_width = 0;          /* Width of previous character */
+    int prev_width = 0;          /* Width of previous character for VS16 handling */
 
     while (pos < len && str[pos]) {
         /* Skip ANSI escape sequences */
@@ -475,7 +474,6 @@ int tui_string_width_n(const char *str, int len)
                 regional_count = 0;
             }
             pos += bytes;
-            prev_codepoint = codepoint;
             prev_width = 0;  /* Don't track width for regional indicators */
             continue;
         } else {
@@ -491,7 +489,6 @@ int tui_string_width_n(const char *str, int len)
         if (after_zwj && is_emoji_base(codepoint)) {
             after_zwj = 0;
             pos += bytes;
-            prev_codepoint = codepoint;
             prev_width = 0;  /* No width added */
             continue;
         }
@@ -499,7 +496,6 @@ int tui_string_width_n(const char *str, int len)
 
         int char_width = tui_char_width(codepoint);
         width += char_width;
-        prev_codepoint = codepoint;
         prev_width = char_width;
         pos += bytes;
     }

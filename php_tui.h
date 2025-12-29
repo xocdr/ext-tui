@@ -17,6 +17,13 @@
   | - Yoga layout nodes are per-request, not shared between threads     |
   | - Signal handlers (SIGWINCH) affect the entire process              |
   +----------------------------------------------------------------------+
+  | Error Return Conventions:                                            |
+  | - Functions returning int: return -1 on error, 0 or positive on ok  |
+  | - Functions returning pointers: return NULL on error                 |
+  | - Append/add functions: return -1 on error, 0 on success            |
+  | - Create functions: return NULL on error, valid pointer on success  |
+  | - Width/size functions: return 0 for empty input, -1 never          |
+  +----------------------------------------------------------------------+
 */
 
 #ifndef PHP_TUI_H

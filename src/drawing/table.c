@@ -12,6 +12,7 @@
 #include "../text/measure.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 /**
  * Create a new table with specified headers.
@@ -26,13 +27,20 @@ tui_table* tui_table_create(const char **headers, int header_count)
         return NULL;
     }
 
+    /* Check for potential overflow in allocations */
+    size_t count = (size_t)header_count;
+    if (count > SIZE_MAX / sizeof(char*) ||
+        count > SIZE_MAX / sizeof(int)) {
+        return NULL;
+    }
+
     tui_table *table = calloc(1, sizeof(tui_table));
     if (!table) return NULL;
 
     table->header_count = header_count;
-    table->headers = calloc((size_t)header_count, sizeof(char*));
-    table->column_widths = calloc((size_t)header_count, sizeof(int));
-    table->column_align_right = calloc((size_t)header_count, sizeof(int));
+    table->headers = calloc(count, sizeof(char*));
+    table->column_widths = calloc(count, sizeof(int));
+    table->column_align_right = calloc(count, sizeof(int));
 
     if (!table->headers || !table->column_widths || !table->column_align_right) {
         tui_table_free(table);

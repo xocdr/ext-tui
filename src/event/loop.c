@@ -15,6 +15,12 @@
 /* Constants for configuration */
 #define DEFAULT_POLL_TIMEOUT_MS 100
 #define MIN_POLL_TIMEOUT_MS 1
+
+/* Maximum terminal dimension in characters. This caps the terminal size
+   reported to applications, preventing excessive memory allocation in
+   render buffers (width * height * sizeof(cell) bytes). 1000x1000 allows
+   for very large terminals while keeping buffer size manageable (~8MB max).
+   Standard terminals are typically 80-200 columns and 24-100 rows. */
 #define MAX_TERMINAL_DIMENSION 1000
 
 #define MAX_TIMERS 32
@@ -97,6 +103,15 @@ void tui_loop_on_tick(tui_loop *loop, tui_tick_callback cb, void *userdata)
     loop->tick_userdata = userdata;
 }
 
+/* Check if a timer ID is already in use */
+static int timer_id_in_use(tui_loop *loop, int id)
+{
+    for (int i = 0; i < loop->timer_count; i++) {
+        if (loop->timers[i].id == id) return 1;
+    }
+    return 0;
+}
+
 int tui_loop_add_timer(tui_loop *loop, int interval_ms, tui_timer_callback cb, void *userdata)
 {
     if (!loop) return -1;
@@ -108,7 +123,22 @@ int tui_loop_add_timer(tui_loop *loop, int interval_ms, tui_timer_callback cb, v
     if (loop->next_timer_id >= INT_MAX) {
         loop->next_timer_id = 1;
     }
+
+    /* Skip IDs already in use (can happen after wrap) */
     int id = loop->next_timer_id++;
+    int attempts = 0;
+    while (timer_id_in_use(loop, id) && attempts < MAX_TIMERS) {
+        if (loop->next_timer_id >= INT_MAX) {
+            loop->next_timer_id = 1;
+        }
+        id = loop->next_timer_id++;
+        attempts++;
+    }
+    if (attempts >= MAX_TIMERS) {
+        /* All IDs in range are in use (should never happen with MAX_TIMERS < INT_MAX) */
+        return -1;
+    }
+
     tui_timer *t = &loop->timers[loop->timer_count++];
     t->id = id;
     t->interval_ms = interval_ms;
