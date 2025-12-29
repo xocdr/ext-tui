@@ -238,3 +238,20 @@ void tui_loop_stop(tui_loop *loop)
     if (!loop) return;
     loop->running = 0;
 }
+
+void tui_loop_tick_timers(tui_loop *loop, int ms)
+{
+    if (!loop || ms <= 0) return;
+
+    /* Advance all timers by the specified milliseconds */
+    for (int i = 0; i < loop->timer_count; i++) {
+        loop->timers[i].elapsed_ms += ms;
+        /* Fire timer if it's due */
+        while (loop->timers[i].elapsed_ms >= loop->timers[i].interval_ms) {
+            loop->timers[i].elapsed_ms -= loop->timers[i].interval_ms;
+            if (loop->timers[i].callback) {
+                loop->timers[i].callback(loop->timers[i].userdata);
+            }
+        }
+    }
+}

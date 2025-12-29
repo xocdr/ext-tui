@@ -31,4 +31,13 @@ void tui_loop_on_tick(tui_loop *loop, tui_tick_callback cb, void *userdata);
 int tui_loop_add_timer(tui_loop *loop, int interval_ms, tui_timer_callback cb, void *userdata);
 void tui_loop_remove_timer(tui_loop *loop, int timer_id);
 
+/**
+ * Manually tick timers by a specified number of milliseconds.
+ * Used for headless testing to simulate time passage.
+ *
+ * @param loop The event loop
+ * @param ms Milliseconds to advance
+ */
+void tui_loop_tick_timers(tui_loop *loop, int ms);
+
 #endif /* TUI_LOOP_H */

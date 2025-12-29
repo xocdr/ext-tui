@@ -1078,3 +1078,130 @@ void tui_app_disable_focus(tui_app *app)
         }
     }
 }
+
+/* ------------------------------------------------------------------
+ * Testing support functions
+ * ------------------------------------------------------------------ */
+
+void tui_app_inject_input(tui_app *app, const char *input, int len)
+{
+    if (!app || !input || len <= 0) return;
+
+    /* Call the input handler directly, simulating input without polling */
+    tui_app_on_input(input, len, app);
+}
+
+/* Render node tree to external buffer (for headless testing) */
+static void render_node_to_buffer_external(tui_buffer *buffer, tui_node *node, int offset_x, int offset_y);
+
+/* Render wrapped text to external buffer */
+static void render_wrapped_text_external(tui_buffer *buffer, tui_node *node, int x, int y, int max_width, int max_height)
+{
+    if (!node || !node->text || !node->text[0]) return;
+
+    if (max_width <= 0 || max_height <= 0) {
+        return;
+    }
+
+    switch (node->wrap_mode) {
+        case TUI_WRAP_NONE:
+            {
+                char *truncated = tui_truncate_text(node->text, max_width, "…");
+                if (truncated) {
+                    tui_buffer_write_text(buffer, x, y, truncated, &node->style);
+                    free(truncated);
+                }
+            }
+            break;
+
+        case TUI_WRAP_CHAR:
+        case TUI_WRAP_WORD:
+        case TUI_WRAP_WORD_CHAR:
+            {
+                tui_wrapped_text *wrapped = tui_wrap_text(node->text, max_width, node->wrap_mode);
+                if (wrapped) {
+                    int lines_to_render = wrapped->count < max_height ? wrapped->count : max_height;
+                    for (int i = 0; i < lines_to_render; i++) {
+                        tui_buffer_write_text(buffer, x, y + i, wrapped->lines[i], &node->style);
+                    }
+                    tui_wrapped_text_free(wrapped);
+                }
+            }
+            break;
+    }
+}
+
+/* Render border to external buffer */
+static void render_border_external(tui_buffer *buffer, tui_node *node, int x, int y, int w, int h)
+{
+    if (!buffer || !node || node->border_style == TUI_BORDER_NONE || w < 2 || h < 2) return;
+
+    static const char* border_chars_ext[6][6] = {
+        {"", "", "", "", "", ""},
+        {"┌", "┐", "└", "┘", "─", "│"},
+        {"╔", "╗", "╚", "╝", "═", "║"},
+        {"╭", "╮", "╰", "╯", "─", "│"},
+        {"┏", "┓", "┗", "┛", "━", "┃"},
+        {"┌", "┐", "└", "┘", "┄", "┆"}
+    };
+
+    const char **chars = border_chars_ext[node->border_style];
+    tui_style border_style = {0};
+    if (node->border_color.is_set) {
+        border_style.fg = node->border_color;
+    }
+
+    tui_buffer_write_text(buffer, x, y, chars[0], &border_style);
+    tui_buffer_write_text(buffer, x + w - 1, y, chars[1], &border_style);
+    tui_buffer_write_text(buffer, x, y + h - 1, chars[2], &border_style);
+    tui_buffer_write_text(buffer, x + w - 1, y + h - 1, chars[3], &border_style);
+
+    for (int i = 1; i < w - 1; i++) {
+        tui_buffer_write_text(buffer, x + i, y, chars[4], &border_style);
+        tui_buffer_write_text(buffer, x + i, y + h - 1, chars[4], &border_style);
+    }
+
+    for (int i = 1; i < h - 1; i++) {
+        tui_buffer_write_text(buffer, x, y + i, chars[5], &border_style);
+        tui_buffer_write_text(buffer, x + w - 1, y + i, chars[5], &border_style);
+    }
+}
+
+static void render_node_to_buffer_external(tui_buffer *buffer, tui_node *node, int offset_x, int offset_y)
+{
+    if (!buffer || !node) return;
+
+    int x = offset_x + (int)node->x;
+    int y = offset_y + (int)node->y;
+    int w = (int)node->width;
+    int h = (int)node->height;
+
+    if (node->type == TUI_NODE_TEXT && node->text) {
+        render_wrapped_text_external(buffer, node, x, y, w, h);
+    } else if (node->type == TUI_NODE_BOX) {
+        if (node->style.bg.is_set) {
+            tui_buffer_fill_rect(buffer, x, y, w, h, ' ', &node->style);
+        }
+        if (node->border_style != TUI_BORDER_NONE) {
+            render_border_external(buffer, node, x, y, w, h);
+        }
+    }
+
+    for (int i = 0; i < node->child_count; i++) {
+        render_node_to_buffer_external(buffer, node->children[i], x, y);
+    }
+}
+
+void tui_app_render_node_to_buffer(tui_buffer *buffer, tui_node *node,
+                                    int offset_x, int offset_y,
+                                    int clip_x, int clip_y,
+                                    int clip_w, int clip_h)
+{
+    /* clip parameters reserved for future use */
+    (void)clip_x;
+    (void)clip_y;
+    (void)clip_w;
+    (void)clip_h;
+
+    render_node_to_buffer_external(buffer, node, offset_x, offset_y);
+}

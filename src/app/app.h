@@ -159,4 +159,33 @@ int tui_app_focus_by_id(tui_app *app, const char *id);
 void tui_app_enable_focus(tui_app *app);
 void tui_app_disable_focus(tui_app *app);
 
+/* Testing support */
+
+/**
+ * Inject input directly without polling (for headless testing).
+ *
+ * @param app The app instance
+ * @param input Input buffer (characters or escape sequences)
+ * @param len Length of input buffer
+ */
+void tui_app_inject_input(tui_app *app, const char *input, int len);
+
+/**
+ * Render a node tree to a buffer (for headless testing).
+ * Uses the same rendering logic as normal rendering but to an external buffer.
+ *
+ * @param buffer Target buffer
+ * @param node Root node to render
+ * @param offset_x X offset
+ * @param offset_y Y offset
+ * @param clip_x Clip region X (unused, reserved)
+ * @param clip_y Clip region Y (unused, reserved)
+ * @param clip_w Clip region width (unused, reserved)
+ * @param clip_h Clip region height (unused, reserved)
+ */
+void tui_app_render_node_to_buffer(tui_buffer *buffer, tui_node *node,
+                                    int offset_x, int offset_y,
+                                    int clip_x, int clip_y,
+                                    int clip_w, int clip_h);
+
 #endif /* TUI_APP_H */

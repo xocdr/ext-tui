@@ -41,7 +41,9 @@ if test "$PHP_TUI" != "no"; then
      src/drawing/table.c \
      src/drawing/progress.c \
      src/drawing/sprite.c \
-     src/app/app.c"
+     src/app/app.c \
+     src/testing/renderer.c \
+     src/testing/query.c"
 
   dnl Define C++ sources (Yoga layout engine)
   YOGA_SOURCES="src/yoga/YGConfig.cpp \
@@ -88,6 +90,7 @@ if test "$PHP_TUI" != "no"; then
   PHP_ADD_BUILD_DIR([$ext_builddir/src/text])
   PHP_ADD_BUILD_DIR([$ext_builddir/src/drawing])
   PHP_ADD_BUILD_DIR([$ext_builddir/src/app])
+  PHP_ADD_BUILD_DIR([$ext_builddir/src/testing])
 
   dnl Add build directories for Yoga
   PHP_ADD_BUILD_DIR([$ext_builddir/src/yoga])
