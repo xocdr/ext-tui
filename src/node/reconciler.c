@@ -6,6 +6,7 @@
 */
 
 #include "reconciler.h"
+#include "../pool/pool.h"
 #include "php.h"
 #include "php_tui.h"
 #include <stdlib.h>
@@ -36,7 +37,13 @@ static key_map* key_map_create(int initial_capacity)
     if (!map) return NULL;
 
     map->capacity = initial_capacity > 0 ? initial_capacity : KEY_MAP_INITIAL_SIZE;
-    map->entries = calloc(map->capacity, sizeof(key_map_entry));
+
+    /* Try to get entries from pool */
+    if (TUI_G(pools)) {
+        map->entries = tui_key_map_pool_acquire(TUI_G(pools), map->capacity, sizeof(key_map_entry));
+    } else {
+        map->entries = calloc(map->capacity, sizeof(key_map_entry));
+    }
     if (!map->entries) {
         free(map);
         return NULL;
@@ -47,7 +54,12 @@ static key_map* key_map_create(int initial_capacity)
 static void key_map_destroy(key_map *map)
 {
     if (map) {
-        free(map->entries);
+        /* Release entries back to pool */
+        if (TUI_G(pools)) {
+            tui_key_map_pool_release(TUI_G(pools));
+        } else {
+            free(map->entries);
+        }
         free(map);
     }
 }

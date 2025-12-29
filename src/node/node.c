@@ -6,6 +6,7 @@
 
 #include "node.h"
 #include "../text/measure.h"
+#include "../pool/pool.h"
 #include "php.h"
 #include "php_tui.h"
 #include <stdlib.h>
@@ -35,13 +36,19 @@ tui_node* tui_node_create_box(void)
         return NULL;
     }
 
-    node->child_capacity = INITIAL_CHILDREN_CAPACITY;
-    node->children = calloc(node->child_capacity, sizeof(tui_node*));
+    /* Allocate children array from pool if available */
+    int actual_capacity = INITIAL_CHILDREN_CAPACITY;
+    if (TUI_G(pools)) {
+        node->children = tui_children_pool_alloc(TUI_G(pools), INITIAL_CHILDREN_CAPACITY, &actual_capacity);
+    } else {
+        node->children = calloc(INITIAL_CHILDREN_CAPACITY, sizeof(tui_node*));
+    }
     if (!node->children) {
         YGNodeFree(node->yoga_node);
         free(node);
         return NULL;
     }
+    node->child_capacity = actual_capacity;
 
     /* Set up context and dirtied callback for incremental layout */
     YGNodeSetContext(node->yoga_node, node);
@@ -100,13 +107,19 @@ tui_node* tui_node_create_static(void)
         return NULL;
     }
 
-    node->child_capacity = INITIAL_CHILDREN_CAPACITY;
-    node->children = calloc(node->child_capacity, sizeof(tui_node*));
+    /* Allocate children array from pool if available */
+    int actual_capacity = INITIAL_CHILDREN_CAPACITY;
+    if (TUI_G(pools)) {
+        node->children = tui_children_pool_alloc(TUI_G(pools), INITIAL_CHILDREN_CAPACITY, &actual_capacity);
+    } else {
+        node->children = calloc(INITIAL_CHILDREN_CAPACITY, sizeof(tui_node*));
+    }
     if (!node->children) {
         YGNodeFree(node->yoga_node);
         free(node);
         return NULL;
     }
+    node->child_capacity = actual_capacity;
 
     /* Set up context and dirtied callback */
     YGNodeSetContext(node->yoga_node, node);
@@ -210,7 +223,14 @@ void tui_node_destroy(tui_node *node)
     if (node->yoga_node) {
         YGNodeFree(node->yoga_node);
     }
-    free(node->children);
+    /* Return children array to pool if available */
+    if (node->children) {
+        if (TUI_G(pools)) {
+            tui_children_pool_free(TUI_G(pools), node->children, node->child_capacity);
+        } else {
+            free(node->children);
+        }
+    }
     free(node->text);
     free(node->key);
     free(node->id);

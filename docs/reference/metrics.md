@@ -187,6 +187,24 @@ Returns only event loop metrics:
 ]
 ```
 
+### tui_get_pool_metrics
+
+```php
+tui_get_pool_metrics(): array
+```
+
+Returns object pool metrics:
+
+```php
+[
+    'children_allocs' => int,      // Successful pool allocations
+    'children_fallbacks' => int,   // Allocations that fell back to malloc
+    'children_reuses' => int,      // Arrays returned to pool
+    'keymap_reuses' => int,        // Key map reuses
+    'children_hit_rate' => float,  // Pool hit rate percentage
+]
+```
+
 ---
 
 ## Performance Overhead

@@ -23,7 +23,7 @@ typedef enum {
     TUI_DIFF_REORDER = 1 << 4   /* Node needs repositioning */
 } tui_diff_type;
 
-typedef struct {
+typedef struct tui_diff_op {
     tui_diff_type type;
     tui_node *old_node;
     tui_node *new_node;

@@ -49,6 +49,9 @@ extern zend_module_entry tui_module_entry;
 #include <yoga/Yoga.h>
 #include <stdint.h>
 
+/* Forward declaration for pools */
+struct tui_pools;
+
 /* Telemetry/Metrics structure */
 typedef struct {
     int enabled;
@@ -86,6 +89,15 @@ typedef struct {
     int64_t input_events;
     int64_t resize_events;
     int64_t timer_fires;
+
+    /* Pool metrics */
+    int64_t pool_diff_allocs;
+    int64_t pool_diff_fallbacks;
+    int64_t pool_diff_reuses;
+    int64_t pool_children_allocs;
+    int64_t pool_children_fallbacks;
+    int64_t pool_children_reuses;
+    int64_t pool_keymap_reuses;
 } tui_metrics;
 
 /* Module globals */
@@ -107,6 +119,9 @@ ZEND_BEGIN_MODULE_GLOBALS(tui)
     /* Telemetry */
     zend_bool metrics_enabled;
     tui_metrics metrics;
+
+    /* Object pools (pointer to avoid header dependency) */
+    struct tui_pools *pools;
 ZEND_END_MODULE_GLOBALS(tui)
 
 ZEND_EXTERN_MODULE_GLOBALS(tui)

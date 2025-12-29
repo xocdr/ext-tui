@@ -34,6 +34,7 @@
 #include "src/render/buffer.h"
 #include "src/testing/renderer.h"
 #include "src/testing/query.h"
+#include "src/pool/pool.h"
 
 #include <termios.h>
 #include <sys/ioctl.h>
@@ -4970,6 +4971,15 @@ PHP_FUNCTION(tui_get_metrics)
     add_assoc_long(return_value, "input_events", (zend_long)m->input_events);
     add_assoc_long(return_value, "resize_events", (zend_long)m->resize_events);
     add_assoc_long(return_value, "timer_fires", (zend_long)m->timer_fires);
+
+    /* Pool metrics */
+    if (TUI_G(pools)) {
+        tui_pools *p = TUI_G(pools);
+        add_assoc_long(return_value, "pool_children_allocs", (zend_long)p->children_allocated);
+        add_assoc_long(return_value, "pool_children_fallbacks", (zend_long)p->children_fallback);
+        add_assoc_long(return_value, "pool_children_reuses", (zend_long)p->children_reused);
+        add_assoc_long(return_value, "pool_keymap_reuses", (zend_long)p->key_map_reused);
+    }
 }
 
 /**
@@ -5058,6 +5068,34 @@ PHP_FUNCTION(tui_get_loop_metrics)
     add_assoc_long(return_value, "input_events", (zend_long)m->input_events);
     add_assoc_long(return_value, "resize_events", (zend_long)m->resize_events);
     add_assoc_long(return_value, "timer_fires", (zend_long)m->timer_fires);
+}
+
+/**
+ * tui_get_pool_metrics(): array
+ * Get object pool metrics
+ */
+PHP_FUNCTION(tui_get_pool_metrics)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    array_init(return_value);
+
+    if (TUI_G(pools)) {
+        tui_pools *p = TUI_G(pools);
+        add_assoc_long(return_value, "children_allocs", (zend_long)p->children_allocated);
+        add_assoc_long(return_value, "children_fallbacks", (zend_long)p->children_fallback);
+        add_assoc_long(return_value, "children_reuses", (zend_long)p->children_reused);
+        add_assoc_long(return_value, "keymap_reuses", (zend_long)p->key_map_reused);
+
+        /* Pool efficiency percentages */
+        int64_t total_children = p->children_allocated + p->children_fallback;
+        if (total_children > 0) {
+            add_assoc_double(return_value, "children_hit_rate",
+                (double)p->children_allocated / (double)total_children * 100.0);
+        } else {
+            add_assoc_double(return_value, "children_hit_rate", 0.0);
+        }
+    }
 }
 /* }}} */
 
@@ -5587,6 +5625,9 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_loop_metrics, 0, 0, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_pool_metrics, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
 /* }}} */
 
 /* {{{ tui_functions[] */
@@ -5711,6 +5752,7 @@ static const zend_function_entry tui_functions[] = {
     PHP_FE(tui_get_reconciler_metrics, arginfo_tui_get_reconciler_metrics)
     PHP_FE(tui_get_render_metrics, arginfo_tui_get_render_metrics)
     PHP_FE(tui_get_loop_metrics, arginfo_tui_get_loop_metrics)
+    PHP_FE(tui_get_pool_metrics, arginfo_tui_get_pool_metrics)
 
     PHP_FE_END
 };
@@ -5728,6 +5770,7 @@ static PHP_GINIT_FUNCTION(tui)
     tui_globals->terminal_height = 24;
     tui_globals->metrics_enabled = 0;
     memset(&tui_globals->metrics, 0, sizeof(tui_metrics));
+    tui_globals->pools = NULL;
 }
 /* }}} */
 
@@ -5768,6 +5811,15 @@ static PHP_MINIT_FUNCTION(tui)
     if (TUI_G(yoga_config)) {
         YGConfigSetPointScaleFactor(TUI_G(yoga_config), 1.0f);  /* Terminal uses integer positions */
         YGConfigSetUseWebDefaults(TUI_G(yoga_config), false);
+    }
+
+    /* Initialize object pools */
+    TUI_G(pools) = malloc(sizeof(tui_pools));
+    if (TUI_G(pools)) {
+        if (tui_pools_init(TUI_G(pools)) != 0) {
+            free(TUI_G(pools));
+            TUI_G(pools) = NULL;
+        }
     }
 
     /* Register resource types for canvas, table, sprite, buffer, test renderer */
@@ -6006,6 +6058,13 @@ static PHP_MINIT_FUNCTION(tui)
 static PHP_MSHUTDOWN_FUNCTION(tui)
 {
     UNREGISTER_INI_ENTRIES();
+
+    /* Free object pools */
+    if (TUI_G(pools)) {
+        tui_pools_shutdown(TUI_G(pools));
+        free(TUI_G(pools));
+        TUI_G(pools) = NULL;
+    }
 
     /* Free shared Yoga configuration */
     if (TUI_G(yoga_config)) {
