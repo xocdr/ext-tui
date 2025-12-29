@@ -118,6 +118,13 @@ void tui_app_destroy(tui_app *app)
     /* Clean up useState slots */
     tui_app_cleanup_states(app);
 
+    /* Free captured output buffer */
+    if (app->captured_output) {
+        free(app->captured_output);
+        app->captured_output = NULL;
+        app->captured_output_len = 0;
+    }
+
     /* Free resources */
     if (app->root_node) {
         tui_node_destroy(app->root_node);
@@ -609,8 +616,14 @@ void tui_app_wait_until_exit(tui_app *app)
     while (app->running && !app->should_exit) {
         tui_loop_run(app->loop);
 
-        /* Re-render if pending (focus/resize changes - tree already exists) */
-        if (app->render_pending) {
+        /* Full re-render if needed (e.g., terminal resize) */
+        if (app->rerender_pending && app->rerender_callback) {
+            app->rerender_pending = 0;
+            app->rerender_callback(app);  /* Rebuild tree */
+            tui_app_render_tree(app);     /* Render to screen */
+        }
+        /* Re-render existing tree if pending (focus changes) */
+        else if (app->render_pending) {
             tui_app_render_tree(app);
         }
     }
@@ -825,8 +838,8 @@ void tui_app_on_resize(int width, int height, void *userdata)
         }
     }
 
-    /* Request re-render */
-    app->render_pending = 1;
+    /* Request FULL re-render (call component callback to rebuild tree with new size) */
+    app->rerender_pending = 1;
 }
 
 /* Border characters for different styles */

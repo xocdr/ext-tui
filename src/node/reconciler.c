@@ -143,15 +143,27 @@ static int has_any_keys(tui_node **children, int count)
 }
 
 /*
- * Key-based reconciliation algorithm:
+ * Key-based reconciliation algorithm with React's lastPlacedIndex optimization:
  *
  * 1. Build a map of old children by key
  * 2. For each new child:
  *    - If it has a key, look up in map
- *    - If found and same type: UPDATE (and REORDER if position changed)
+ *    - If found and same type: UPDATE (and smart REORDER detection)
  *    - If found but different type: REPLACE
  *    - If not found: CREATE
- * 3. For unmatched old children: DELETE
+ * 3. For unmatched old children: DELETE (batched)
+ *
+ * lastPlacedIndex optimization:
+ * Instead of marking all position changes as reorders, we track the last
+ * stable position. A node only needs to move if it appeared BEFORE the
+ * last stable node in the old list. Nodes that maintain relative order
+ * don't need explicit reorder operations.
+ *
+ * Example: old=[A,B,C,D] new=[A,C,D,B]
+ * - A: matched at 0, lastPlacedIndex=0, no move
+ * - C: matched at 2, 2 > lastPlacedIndex(0), lastPlacedIndex=2, no move
+ * - D: matched at 3, 3 > lastPlacedIndex(2), lastPlacedIndex=3, no move
+ * - B: matched at 1, 1 < lastPlacedIndex(3), NEEDS MOVE (only B moves!)
  */
 static void diff_children_keyed(tui_diff_result *result,
                                  tui_node *old_node, tui_node *new_node)
@@ -176,6 +188,12 @@ static void diff_children_keyed(tui_diff_result *result,
         key_map_destroy(old_keys);
         return;
     }
+
+    /* React's lastPlacedIndex optimization:
+     * Track the highest old index we've seen that doesn't need to move.
+     * If a node's old index is less than this, it needs to be moved.
+     */
+    int last_placed_index = 0;
 
     /* Process new children */
     for (int new_idx = 0; new_idx < new_count; new_idx++) {
@@ -213,15 +231,21 @@ static void diff_children_keyed(tui_diff_result *result,
                 diff_result_add(result, TUI_DIFF_REPLACE, matched_old, new_child,
                                matched_old_idx, new_idx);
             } else {
-                /* Same type: update */
-                diff_result_add(result, TUI_DIFF_UPDATE, matched_old, new_child,
-                               matched_old_idx, new_idx);
+                /* Same type: check if reorder needed using lastPlacedIndex */
+                tui_diff_type flags = TUI_DIFF_UPDATE;
 
-                /* Check if position changed (reorder needed) */
-                if (matched_old_idx != new_idx) {
-                    diff_result_add(result, TUI_DIFF_REORDER, matched_old, new_child,
-                                   matched_old_idx, new_idx);
+                if (matched_old_idx < last_placed_index) {
+                    /* Node appeared before the last stable position in old tree.
+                     * It needs to be moved forward. */
+                    flags |= TUI_DIFF_REORDER;
+                } else {
+                    /* Node maintains relative order, update lastPlacedIndex */
+                    last_placed_index = matched_old_idx;
                 }
+
+                /* Add operation with combined flags */
+                diff_result_add(result, flags, matched_old, new_child,
+                               matched_old_idx, new_idx);
 
                 /* Recurse into children */
                 diff_children_keyed(result, matched_old, new_child);
@@ -232,7 +256,7 @@ static void diff_children_keyed(tui_diff_result *result,
         }
     }
 
-    /* Delete unmatched old children */
+    /* Delete unmatched old children (collected, will be batched in apply) */
     for (int i = 0; i < old_count; i++) {
         if (!old_matched[i] && old_node->children[i]) {
             diff_result_add(result, TUI_DIFF_DELETE, old_node->children[i], NULL, i, -1);
@@ -327,20 +351,21 @@ void tui_reconciler_apply(tui_node *tree, tui_diff_result *diff)
     if (!diff) return;
 
     /*
-     * Process operations in order:
+     * Process operations in order using bit flag checks:
      * 1. First pass: DELETE and REPLACE (remove old nodes)
      * 2. Second pass: UPDATE (copy properties, preserves Yoga nodes)
      * 3. Third pass: REORDER (move nodes to new positions)
      * 4. Fourth pass: CREATE (add new nodes)
      *
-     * This ordering ensures Yoga node relationships are maintained correctly.
+     * With bit flags, a single operation can have multiple effects
+     * (e.g., UPDATE | REORDER). We check each flag independently.
      */
 
-    /* Pass 1: Deletions */
+    /* Pass 1: Deletions (batched - all deletions collected before destroy) */
     for (int i = 0; i < diff->count; i++) {
         tui_diff_op *op = &diff->ops[i];
 
-        if (op->type == TUI_DIFF_DELETE) {
+        if (op->type & TUI_DIFF_DELETE) {
             if (op->old_node && op->old_node->parent) {
                 tui_node_remove_child(op->old_node->parent, op->old_node);
                 tui_node_destroy(op->old_node);
@@ -352,7 +377,7 @@ void tui_reconciler_apply(tui_node *tree, tui_diff_result *diff)
     for (int i = 0; i < diff->count; i++) {
         tui_diff_op *op = &diff->ops[i];
 
-        if (op->type == TUI_DIFF_UPDATE) {
+        if (op->type & TUI_DIFF_UPDATE) {
             if (op->old_node && op->new_node) {
                 /* Update style */
                 op->old_node->style = op->new_node->style;
@@ -411,7 +436,7 @@ void tui_reconciler_apply(tui_node *tree, tui_diff_result *diff)
     for (int i = 0; i < diff->count; i++) {
         tui_diff_op *op = &diff->ops[i];
 
-        if (op->type == TUI_DIFF_REPLACE) {
+        if (op->type & TUI_DIFF_REPLACE) {
             if (op->old_node && op->new_node && op->old_node->parent) {
                 tui_node *parent = op->old_node->parent;
                 int insert_index = op->new_index >= 0 ? op->new_index : 0;
@@ -435,7 +460,7 @@ void tui_reconciler_apply(tui_node *tree, tui_diff_result *diff)
     for (int i = 0; i < diff->count; i++) {
         tui_diff_op *op = &diff->ops[i];
 
-        if (op->type == TUI_DIFF_REORDER) {
+        if (op->type & TUI_DIFF_REORDER) {
             if (op->old_node && op->old_node->parent) {
                 tui_node *parent = op->old_node->parent;
                 tui_node *node = op->old_node;
@@ -469,7 +494,7 @@ void tui_reconciler_apply(tui_node *tree, tui_diff_result *diff)
     for (int i = 0; i < diff->count; i++) {
         tui_diff_op *op = &diff->ops[i];
 
-        if (op->type == TUI_DIFF_CREATE) {
+        if (op->type & TUI_DIFF_CREATE) {
             if (op->new_node && op->new_node->parent) {
                 tui_node *parent = op->new_node->parent;
                 int target_index = op->new_index >= 0 ? op->new_index : parent->child_count;

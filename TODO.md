@@ -1,316 +1,337 @@
-# ext-tui: Code Review & Gap Analysis Report
+# ext-tui: Component Testing Framework Specification
 
-## Part 1: Code Review Summary
+## Overview
 
-The code review identified issues across 4 severity levels:
-
-### Critical Issues (4) - ✅ ALL FIXED
-
-1. ~~**Missing NULL checks after `strdup()` calls**~~
-   - ~~Files: `tui.c:686`, `src/node/node.c:56,135`, `src/drawing/sprite.c`, `src/drawing/table.c`, `src/text/wrap.c`~~
-   - ~~Impact: Potential NULL pointer dereference, crashes~~
-   - **FIXED:** Added NULL checks with proper cleanup in all locations
-
-2. ~~**Unsafe `tui_utf8_decode()` without bounds checking**~~
-   - ~~File: `src/text/measure.c:149-197`~~
-   - ~~Impact: Buffer over-read if string has incomplete UTF-8 sequences~~
-   - **FIXED:** Added continuation byte validation (`& 0xC0 == 0x80`)
-
-3. ~~**Incomplete UTF-8 validation**~~
-   - ~~Continuation bytes not validated for `10xxxxxx` pattern~~
-   - ~~Impact: Acceptance of invalid UTF-8 sequences~~
-   - **FIXED:** All continuation bytes now validated in `tui_utf8_decode()`
-
-4. ~~**Potential double-free in reconciler**~~
-   - ~~File: `src/node/reconciler.c:377-391` when `strdup()` fails~~
-   - ~~Impact: Silent data corruption, potential use-after-free~~
-   - **FIXED:** `diff_result_add()` now returns error code, overflow check added
-
-### High Severity Issues (4) - ✅ ALL FIXED
-
-1. ~~**Integer overflow in timer ID**~~
-   - ~~File: `src/event/loop.c:99`~~
-   - ~~Impact: Wraps after 2^31 timers, causing ID collisions~~
-   - **FIXED:** Timer ID wraps to 1 when reaching INT_MAX
-
-2. ~~**Allocation failure not propagated**~~
-   - ~~File: `src/node/reconciler.c:107-109`~~
-   - ~~Impact: Silent loss of diff operations, incomplete rendering~~
-   - **FIXED:** `diff_result_add()` returns -1 on failure
-
-3. ~~**Race condition in atomic flag**~~
-   - ~~File: `src/event/loop.c:153-154`~~
-   - ~~Impact: Missed window resize events under rapid resize~~
-   - **FIXED:** Improved atomic flag handling with proper clear
-
-4. ~~**Canvas size overflow check insufficient**~~
-   - ~~File: `src/drawing/canvas.c:81-89`~~
-   - ~~Impact: Incorrect allocation size for pixel data~~
-   - **FIXED:** Improved overflow checks using size_t
-
-### Medium Severity Issues (7) - ✅ ALL FIXED
-
-- ~~PHP callback reference counting issues (`src/app/app.c:61-100`, `tui.c:1000+`)~~ **VERIFIED:** Already correctly implemented with proper `zval_ptr_dtor`, `ZVAL_UNDEF`, and `OBJ_RELEASE` calls
-- ~~Buffer overflow risks in output/ANSI rendering (fixed 65536/128 byte buffers)~~ **FIXED:** Buffer now flushes when full instead of silently dropping data (`src/render/output.c:210-266`), increased ANSI buffer to 256 bytes
-- ~~Unsafe `sscanf()` for hex colors (`tui.c:229`)~~ **FIXED:** Added strict hex validation
-- ~~Missing state cleanup on exceptions (useState implementation)~~ **VERIFIED:** Already correctly handled via `tui_app_destroy()` → `tui_app_cleanup_states()` on all error paths
-- ~~No circular reference detection in focus system (`src/app/app.c:281-299`)~~ **FIXED:** Added MAX_TREE_DEPTH limit
-- ~~Missing NULL checks after `malloc()` (`src/text/wrap.c:42-43`)~~ **VERIFIED:** Already had NULL check
-- ~~Inconsistent error return values~~ **VERIFIED:** Codebase consistently uses `-1` for error, `0` for success on int-returning functions
-
-### Well-Implemented Areas
-
-- ✅ Overflow prevention in buffer management
-- ✅ Solid UTF-8 handling (with caveats noted above)
-- ✅ Clean reconciliation algorithm with key-based diffing
-- ✅ Proper terminal signal handling
-- ✅ Good reference counting in PHP objects
-- ✅ Style property diffing (only emit necessary ANSI codes)
-- ✅ Input parsing safety with comprehensive bounds checking
+This document specifies a component testing framework for ext-tui TUI applications. The framework enables automated testing of TUI components without requiring an actual terminal, similar to how React Testing Library works for React components.
 
 ---
 
-## Part 2: Yoga Layout Engine Analysis
+## Feature Requirements
 
-### Currently Used (29 functions)
+### 1. Headless Rendering
 
-- flexDirection, justifyContent, alignItems, alignSelf
-- flexGrow, flexShrink, flexBasis (all 3 variants)
-- width, height, min/max constraints (including % and auto)
-- margin, padding, border setters
-- gap setter
-- overflow, display, positionType
+Render TUI components to an in-memory buffer without terminal output.
 
-### ~~Not Currently Used (Significant Features)~~ - ✅ ALL NOW IMPLEMENTED
+**PHP API:**
+```php
+use Xocdr\Tui\Testing\TestRenderer;
 
-| Feature | Use Case | Priority | Status |
-|---------|----------|----------|--------|
-| ~~**Custom Measure Functions**~~ | Text measurement, dynamic sizing | HIGH | **ALREADY IMPLEMENTED** (text nodes use `text_measure_func`) |
-| ~~**Dirtied Callbacks**~~ | Incremental updates, avoid full recalc | HIGH | **FIXED:** Added `node_dirtied_func` callback |
-| ~~**Aspect Ratio**~~ | Maintain width/height proportions | MEDIUM | **FIXED:** Added `aspectRatio` property to Box |
-| ~~**Baseline Functions**~~ | Text baseline alignment | MEDIUM | **FIXED:** Added `text_baseline_func`, `alignItems: baseline` |
-| ~~**Node Context**~~ | Store metadata on layout nodes | LOW | **ALREADY IMPLEMENTED** (`YGNodeSetContext` used) |
-| ~~**RTL Support**~~ | Right-to-left layouts | LOW | **FIXED:** Added `direction` property (ltr/rtl) |
-| ~~**Configuration Sharing**~~ | Global config, errata modes | LOW | **FIXED:** Added shared `YGConfig` via `tui_get_yoga_config()` |
+$renderer = new TestRenderer(80, 24);  // width, height
+$instance = $renderer->render(fn($t) => new Box(['width' => 10], [
+    new Text('Hello')
+]));
 
----
+// Get rendered content as string grid
+$output = $renderer->getOutput();  // Returns 2D string array
+$text = $renderer->toString();     // Returns single string with newlines
+```
 
-## Part 3: React Reconciler Comparison
-
-### What ext-tui Does Well
-
-- ✅ Key-based reconciliation
-- ✅ Map-based child matching (O(n) lookup)
-- ✅ Multi-pass apply (DELETE → UPDATE → REORDER → CREATE)
-- ✅ Preserves Yoga node identity for layout caching
-
-### Missing Optimizations from React
-
-| Feature | React | ext-tui | Impact |
-|---------|-------|---------|--------|
-| **Smart Reorder Detection** | `placeChild()` with `lastPlacedIndex` | All position changes marked | React generates fewer DOM ops |
-| **Fast Path Separation** | Linear scan → Map fallback | Always keyed | React faster for simple cases |
-| **Effect Flags** | Bit flags for composable effects | Array of operations | React more memory efficient |
-| **Lazy Deletion** | Collected on parent | Immediate in diff | React batches deletions |
-
-### Recommended Optimization
-
-Implement `lastPlacedIndex` algorithm to reduce unnecessary reorder operations:
-
+**C API:**
 ```c
-static int last_placed_index = 0;
+tui_test_renderer* tui_test_renderer_create(int width, int height);
+void tui_test_renderer_render(tui_test_renderer *renderer, tui_node *root);
+const char** tui_test_renderer_get_output(tui_test_renderer *renderer);
+void tui_test_renderer_destroy(tui_test_renderer *renderer);
+```
 
-// Instead of marking all position changes:
-if (matched_old_idx != new_idx) {
-    diff_result_add(result, TUI_DIFF_REORDER, ...);
+**Implementation Location:** `src/testing/renderer.c`, `src/testing/renderer.h`
+
+---
+
+### 2. Input Simulation
+
+Simulate keyboard input for testing interactive components.
+
+**PHP API:**
+```php
+$renderer->sendInput('a');           // Single character
+$renderer->sendKey(Key::ENTER);      // Special key
+$renderer->sendKey(Key::ARROW_UP);
+$renderer->sendKey(Key::CTRL_C);
+$renderer->sendSequence('hello');    // Multiple characters
+```
+
+**C API:**
+```c
+void tui_test_send_input(tui_test_renderer *renderer, const char *input, int len);
+void tui_test_send_key(tui_test_renderer *renderer, int key_code);
+```
+
+---
+
+### 3. State Inspection
+
+Query the rendered tree and component state.
+
+**PHP API:**
+```php
+// Query by ID
+$element = $renderer->getById('submit-btn');
+$element->getText();      // Get text content
+$element->isFocused();    // Check focus state
+$element->getStyles();    // Get computed styles
+
+// Query by text content
+$elements = $renderer->getByText('Submit');
+
+// Query by type
+$boxes = $renderer->getAllByType(Box::class);
+```
+
+**C API:**
+```c
+tui_node* tui_test_get_by_id(tui_test_renderer *renderer, const char *id);
+tui_node** tui_test_get_by_text(tui_test_renderer *renderer, const char *text, int *count);
+int tui_test_node_is_focused(tui_node *node);
+```
+
+---
+
+### 4. Snapshot Testing
+
+Compare rendered output against saved snapshots.
+
+**PHP API:**
+```php
+// Auto-generates snapshot file on first run
+$renderer->assertMatchesSnapshot('my-component-initial');
+
+// After interaction
+$renderer->sendKey(Key::TAB);
+$renderer->assertMatchesSnapshot('my-component-focused');
+```
+
+**Snapshot Format:**
+```
+--- Snapshot: my-component-initial ---
+Width: 80, Height: 24
+Checksum: abc123
+---
+┌────────┐
+│ Hello  │
+└────────┘
+```
+
+**Storage:** `.tui-snapshots/` directory alongside test files
+
+---
+
+### 5. Async Testing Support
+
+Wait for state changes and re-renders.
+
+**PHP API:**
+```php
+// Wait for next render
+$renderer->waitForRender();
+
+// Wait for condition
+$renderer->waitFor(fn() => $renderer->getById('loading') === null);
+
+// Wait for text to appear
+$renderer->waitForText('Data loaded');
+
+// With timeout
+$renderer->waitFor(fn() => $condition, timeout: 5000);
+```
+
+---
+
+### 6. Timer Mocking
+
+Control time for testing timer-based behavior.
+
+**PHP API:**
+```php
+$renderer = new TestRenderer(80, 24, ['mockTimers' => true]);
+
+// Advance time
+$renderer->advanceTimersByTime(1000);  // Advance 1 second
+
+// Run all pending timers
+$renderer->runAllTimers();
+
+// Run only immediate timers
+$renderer->runOnlyPendingTimers();
+```
+
+---
+
+### 7. Assertions
+
+Built-in assertion helpers.
+
+**PHP API:**
+```php
+$renderer->assertTextPresent('Hello');
+$renderer->assertTextNotPresent('Error');
+$renderer->assertFocused('input-field');
+$renderer->assertVisible('modal');
+$renderer->assertHidden('tooltip');
+$renderer->assertOutputEquals($expectedString);
+$renderer->assertOutputContains('substring');
+```
+
+---
+
+## Integration with PHPUnit
+
+```php
+use Xocdr\Tui\Testing\TuiTestCase;
+
+class MyComponentTest extends TuiTestCase
+{
+    public function testRenders()
+    {
+        $this->render(fn($t) => new Box(['width' => 20], [
+            new Text('Hello World')
+        ]));
+
+        $this->assertTextPresent('Hello World');
+    }
+
+    public function testInteraction()
+    {
+        $this->render(fn($t) => new MyForm());
+
+        $this->sendKey(Key::TAB);
+        $this->assertFocused('email-input');
+
+        $this->sendSequence('test@example.com');
+        $this->sendKey(Key::ENTER);
+
+        $this->waitForText('Form submitted');
+    }
 }
+```
 
-// Do smart detection - only mark nodes that truly need movement:
-if (matched_old_idx < last_placed_index) {
-    diff_result_add(result, TUI_DIFF_REORDER, ...);
-    // Don't update last_placed_index
-} else {
-    last_placed_index = matched_old_idx;
-    // Item is already in correct relative position, no move needed
+---
+
+## Implementation Plan
+
+### Phase 1: Core Testing Infrastructure
+
+1. **TestRenderer class**
+   - Create `src/testing/renderer.c` with headless buffer rendering
+   - PHP wrapper class `Xocdr\Tui\Testing\TestRenderer`
+   - No terminal I/O, pure in-memory rendering
+
+2. **Output Capture**
+   - Reuse existing `tui_buffer` for off-screen rendering
+   - Add `tui_buffer_to_string()` for text extraction
+   - Handle ANSI codes (strip or preserve based on config)
+
+### Phase 2: Input Simulation
+
+3. **Input injection**
+   - Add `tui_test_inject_input()` to bypass terminal
+   - Map key constants to escape sequences
+   - Trigger input handlers synchronously
+
+4. **Focus simulation**
+   - Simulate Tab/Shift+Tab navigation
+   - Direct focus via ID
+
+### Phase 3: Querying
+
+5. **Element queries**
+   - Tree traversal helpers for finding nodes
+   - Text content extraction
+   - Style/state inspection
+
+6. **Wait utilities**
+   - Polling-based wait with timeout
+   - Integrate with PHP's event loop (if async)
+
+### Phase 4: Snapshot Testing
+
+7. **Snapshot capture/compare**
+   - File I/O for snapshots
+   - Diff output on mismatch
+   - Update mode for regenerating
+
+### Phase 5: Framework Integration
+
+8. **PHPUnit integration**
+   - Base test case class
+   - Custom assertions
+   - CI/CD compatibility (no terminal required)
+
+---
+
+## Files to Create
+
+| File | Purpose |
+|------|---------|
+| `src/testing/renderer.c` | Headless test renderer |
+| `src/testing/renderer.h` | Public C API |
+| `src/testing/query.c` | Element query functions |
+| `src/testing/input.c` | Input simulation |
+| `src/testing/snapshot.c` | Snapshot file handling |
+| `tests/testing/*.phpt` | Test framework tests |
+
+**PHP Package:** This feature is best implemented in `xocdr/tui-testing` composer package, with minimal C-level support in ext-tui for headless rendering.
+
+---
+
+## Example: Full Test
+
+```php
+<?php
+
+use Xocdr\Tui\Testing\TuiTestCase;
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\Key;
+
+class CounterTest extends TuiTestCase
+{
+    public function testCounterIncrements()
+    {
+        // Render counter component
+        $this->render(function ($t) {
+            [$count, $setCount] = $t->state(0);
+
+            $t->onInput(function ($input, $key) use ($setCount, $count) {
+                if ($key->name === 'return') {
+                    $setCount($count + 1);
+                }
+            });
+
+            return new Box(['padding' => 1], [
+                new Text("Count: {$count}"),
+                new Text(['id' => 'hint'], 'Press Enter to increment')
+            ]);
+        });
+
+        // Initial state
+        $this->assertTextPresent('Count: 0');
+
+        // Simulate Enter key
+        $this->sendKey(Key::ENTER);
+        $this->waitForRender();
+
+        // Verify increment
+        $this->assertTextPresent('Count: 1');
+
+        // Snapshot test
+        $this->assertMatchesSnapshot('counter-incremented');
+    }
 }
 ```
 
 ---
 
-## Part 4: Ink Feature Gap Analysis
+## Status
 
-### Critical Missing Features in ext-tui
-
-| Feature | Description | Difficulty |
-|---------|-------------|------------|
-| **Tab-based focus navigation** | `focusNext()`/`focusPrevious()` with Tab key | LOW |
-| **Focus-by-ID** | `focus(id)` programmatic control | LOW |
-| **useFocusManager hook** | Global focus control API | MEDIUM |
-| **Error boundary component** | Crash display with stack trace | MEDIUM |
-| **Text wrap modes** | `truncate-start`, `truncate-middle` | LOW |
-| **Named color support** | CSS color names, not just RGB | LOW |
-| **Console interception** | Patch echo/print during render | MEDIUM |
-| **measureElement API** | Get runtime dimensions of components | MEDIUM |
-| **Line-by-line transform** | Transform callback per line | LOW |
-| **React DevTools equivalent** | Debug component tree | HIGH |
-
-### Advantages ext-tui Has Over Ink
-
-- ✅ Built-in drawing primitives (table, progress, sprite, animation)
-- ✅ Canvas-based rendering architecture
-- ✅ Direct C API (lower level control)
-- ✅ No JS runtime dependency
-
----
-
-## Part 5: CLI Utility Features Worth Implementing
-
-### High Priority
-
-#### 1. ANSI Code Handling (from `ansi-regex`, `slice-ansi`)
-
-```c
-// Strip all ANSI escape codes from string
-char* tui_strip_ansi(const char *str);
-
-// Calculate display width excluding ANSI codes
-int tui_string_width_ignore_ansi(const char *str);
-
-// Extract substring while preserving ANSI codes
-char* tui_slice_ansi(const char *str, int start, int end);
-```
-
-#### 2. Advanced Truncation (from `cli-truncate`)
-
-```c
-typedef enum {
-    TUI_TRUNCATE_END,      // "Hello Wo..." (current)
-    TUI_TRUNCATE_START,    // "...lo World"
-    TUI_TRUNCATE_MIDDLE    // "Hello...orld"
-} tui_truncate_position;
-
-char* tui_truncate_ex(const char *str, int width,
-                      tui_truncate_position pos,
-                      const char *ellipsis,
-                      int preserve_ansi);
-```
-
-#### 3. Box Drawing (from `cli-boxes`)
-
-Pre-defined character sets for 8 styles:
-
-```c
-typedef struct {
-    const char *topLeft, *top, *topRight;
-    const char *left, *right;
-    const char *bottomLeft, *bottom, *bottomRight;
-} tui_box_chars;
-
-// Styles: single, double, round, bold, singleDouble, doubleSingle, classic, arrow
-const tui_box_chars* tui_get_box_chars(tui_border_style style);
-```
-
-#### 4. Emoji Support (from `emoji-regex`)
-
-Fix `tui_string_width()` for complex emoji sequences:
-- Handle ZWJ (Zero-Width Joiner) sequences
-- Handle skin tone modifiers
-- Emoji typically display as width 2
-
-### Medium Priority
-
-#### 5. Color Conversion (from `ansi-styles`)
-
-```c
-// Convert RGB to 256-color palette index
-int tui_rgb_to_ansi256(int r, int g, int b);
-
-// Parse hex color string
-tui_color tui_hex_to_rgb(const char *hex);
-
-// Named color constants
-extern const tui_color TUI_COLOR_RED;
-extern const tui_color TUI_COLOR_GREEN;
-// ... etc
-```
-
-#### 6. Additional Cursor/Screen Operations (from `ansi-escapes`)
-
-```c
-void tui_erase_start_line(tui_output *out);
-void tui_erase_end_line(tui_output *out);
-void tui_scroll_up(tui_output *out, int lines);
-void tui_scroll_down(tui_output *out, int lines);
-void tui_cursor_next_line(tui_output *out);
-void tui_cursor_prev_line(tui_output *out);
-```
-
----
-
-## Summary: Prioritized Recommendations
-
-### Immediate Fixes (Critical Bugs) - ✅ ALL COMPLETED
-
-- [x] Add NULL checks after all `strdup()` calls
-  - Fixed in `tui.c:686-690` (key property)
-  - Fixed in `tui.c:696-700` (id property via `tui_node_set_id()`)
-  - Fixed in `src/drawing/sprite.c:28-54` (frame lines)
-  - Fixed in `src/drawing/sprite.c:125-185` (animation name and frame lines)
-  - Fixed in `src/node/node.c:130-142` (`tui_node_set_id()` now returns error code)
-- [x] Fix UTF-8 continuation byte validation in `tui_utf8_decode()`
-  - Fixed in `src/text/measure.c:164-202` - all continuation bytes now validated for `10xxxxxx` pattern
-- [x] Add error return propagation from `diff_result_add()`
-  - Fixed in `src/node/reconciler.c:99-126` - now returns int (0 success, -1 failure)
-  - Added overflow check before capacity doubling
-- [x] Fix atomic flag race condition in resize handling
-  - Fixed in `src/event/loop.c:154-172` - improved atomic flag handling with proper clear on non-set case
-
-### High Severity Fixes - ✅ ALL COMPLETED
-
-- [x] Fix integer overflow in timer ID (`src/event/loop.c:99-102`)
-  - Timer ID now wraps to 1 when reaching INT_MAX
-- [x] Fix canvas size overflow check (`src/drawing/canvas.c:86-93`)
-  - Improved overflow checks using size_t for pixel count calculation
-  - Added check for byte_count overflow
-- [x] Add depth limit to focus tree traversal (`src/app/app.c:281-320`)
-  - Added MAX_TREE_DEPTH (256) limit to prevent stack overflow
-  - Added overflow check before capacity doubling
-
-### Medium Severity Fixes - ✅ COMPLETED
-
-- [x] Improved hex color validation (`tui.c:228-247`)
-  - Now validates all characters are valid hex digits before sscanf
-
-### Short-Term Enhancements
-
-- [ ] Implement `lastPlacedIndex` optimization in reconciler
-- [ ] Add ANSI-aware string functions (`strip`, `width_ignore_ansi`, `slice`)
-- [ ] Add truncation position modes (start/middle/end)
-- [ ] Implement `useFocusManager` with Tab navigation
-- [ ] Add box drawing character utilities
-
-### Medium-Term Features
-
-- [ ] Yoga custom measure functions for text
-- [ ] Yoga dirtied callbacks for incremental updates
-- [ ] Error boundary component
-- [ ] Focus-by-ID support
-- [ ] Emoji width handling
-- [ ] Named color constants
-
-### Long-Term Improvements
-
-- [ ] React DevTools equivalent for PHP
-- [ ] Console interception during render
-- [ ] RTL layout support
-- [ ] Aspect ratio support in Yoga
-- [ ] Component testing framework
+**Priority:** Future Enhancement
+**Delegated to:** `xocdr/tui-testing` (new package)
+**ext-tui support required:** Minimal - headless buffer mode only
 
 ---
 
 ## References
 
-- React Reconciler: Algorithm analysis from `react-reconciler` v0.29.2
-- Yoga Layout: Feature analysis from `yoga-layout` v3.2.1
-- Ink: Feature comparison from `ink` v5.2.1
-- CLI Utilities: `ansi-escapes`, `ansi-regex`, `ansi-styles`, `cli-boxes`, `cli-cursor`, `cli-truncate`, `emoji-regex`
+- [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/)
+- [Ink Testing](https://github.com/vadimdemedes/ink#testing)
+- [Jest Snapshot Testing](https://jestjs.io/docs/snapshot-testing)

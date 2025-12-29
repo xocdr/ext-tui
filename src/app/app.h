@@ -23,7 +23,10 @@ typedef struct {
 /* Maximum state slots per app */
 #define TUI_MAX_STATES 64
 
-typedef struct {
+/* Forward declaration for callback pointer */
+typedef struct tui_app tui_app;
+
+struct tui_app {
     /* Terminal state */
     int fullscreen;
     int exit_on_ctrl_c;
@@ -73,8 +76,16 @@ typedef struct {
     tui_loop *loop;
 
     /* Render throttling */
-    int render_pending;
-    int min_render_interval_ms;  /* 16ms = 60fps */
+    int render_pending;           /* Re-render existing tree */
+    int rerender_pending;         /* Full re-render (call component callback) */
+    int min_render_interval_ms;   /* 16ms = 60fps */
+
+    /* Rerender callback - set by tui.c to call render_component_callback */
+    void (*rerender_callback)(struct tui_app *app);
+
+    /* Captured console output from last render (echo/print during component) */
+    char *captured_output;
+    size_t captured_output_len;
 
     /* Timer callbacks - store PHP callbacks for timers */
     #define TUI_MAX_TIMERS 32
@@ -100,7 +111,7 @@ typedef struct {
 
     /* PHP Instance object reference (for passing to render callback) */
     zval *instance_zval;      /* Pointer to the Instance zval */
-} tui_app;
+};
 
 /* Lifecycle */
 tui_app* tui_app_create(void);

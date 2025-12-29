@@ -72,4 +72,33 @@ int tui_pad_n(const char *text, int width, char align, char pad_char,
  */
 int tui_pad(const char *text, int width, char align, char pad_char, char *output);
 
+/* ----------------------------------------------------------------
+ * ANSI escape code handling
+ * ---------------------------------------------------------------- */
+
+/**
+ * Strip all ANSI escape codes from string.
+ * @param str Input string (may contain ANSI codes)
+ * @return Newly allocated string without ANSI codes (caller must free)
+ */
+char* tui_strip_ansi(const char *str);
+
+/**
+ * Get display width of string, ignoring ANSI escape codes.
+ * @param str Input string (may contain ANSI codes)
+ * @return Display width (not counting ANSI codes)
+ */
+int tui_string_width_ansi(const char *str);
+
+/**
+ * Extract substring while preserving ANSI codes.
+ * Extracts characters from display position `start` to `end` (exclusive),
+ * but includes any ANSI codes that affect those characters.
+ * @param str Input string (may contain ANSI codes)
+ * @param start Start display position (0-indexed)
+ * @param end End display position (exclusive)
+ * @return Newly allocated substring (caller must free)
+ */
+char* tui_slice_ansi(const char *str, int start, int end);
+
 #endif /* TUI_MEASURE_H */

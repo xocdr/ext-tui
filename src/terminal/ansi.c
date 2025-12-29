@@ -113,3 +113,108 @@ void tui_ansi_strikethrough(char *buf, size_t *len)
 {
     *len = snprintf(buf, ANSI_BUF_SIZE, ESC "9m");
 }
+
+/* Additional cursor and screen operations */
+
+void tui_ansi_erase_line_start(char *buf, size_t *len)
+{
+    /* Erase from cursor to beginning of line */
+    *len = snprintf(buf, ANSI_BUF_SIZE, ESC "1K");
+}
+
+void tui_ansi_erase_line_end(char *buf, size_t *len)
+{
+    /* Erase from cursor to end of line */
+    *len = snprintf(buf, ANSI_BUF_SIZE, ESC "0K");
+}
+
+void tui_ansi_scroll_up(char *buf, size_t *len, int lines)
+{
+    /* Scroll screen up by n lines (new lines at bottom) */
+    if (lines <= 0) lines = 1;
+    *len = snprintf(buf, ANSI_BUF_SIZE, ESC "%dS", lines);
+}
+
+void tui_ansi_scroll_down(char *buf, size_t *len, int lines)
+{
+    /* Scroll screen down by n lines (new lines at top) */
+    if (lines <= 0) lines = 1;
+    *len = snprintf(buf, ANSI_BUF_SIZE, ESC "%dT", lines);
+}
+
+void tui_ansi_cursor_next_line(char *buf, size_t *len, int lines)
+{
+    /* Move cursor to beginning of line n lines down */
+    if (lines <= 0) lines = 1;
+    *len = snprintf(buf, ANSI_BUF_SIZE, ESC "%dE", lines);
+}
+
+void tui_ansi_cursor_prev_line(char *buf, size_t *len, int lines)
+{
+    /* Move cursor to beginning of line n lines up */
+    if (lines <= 0) lines = 1;
+    *len = snprintf(buf, ANSI_BUF_SIZE, ESC "%dF", lines);
+}
+
+void tui_ansi_cursor_column(char *buf, size_t *len, int col)
+{
+    /* Move cursor to specific column */
+    if (col < 0) col = 0;
+    *len = snprintf(buf, ANSI_BUF_SIZE, ESC "%dG", col + 1);
+}
+
+void tui_ansi_erase_screen_end(char *buf, size_t *len)
+{
+    /* Erase from cursor to end of screen */
+    *len = snprintf(buf, ANSI_BUF_SIZE, ESC "0J");
+}
+
+void tui_ansi_erase_screen_start(char *buf, size_t *len)
+{
+    /* Erase from cursor to beginning of screen */
+    *len = snprintf(buf, ANSI_BUF_SIZE, ESC "1J");
+}
+
+/* Color conversion utilities */
+
+/**
+ * Convert RGB color to ANSI 256-color palette index.
+ *
+ * The 256-color palette is organized as:
+ * - 0-15: Standard colors (system-dependent)
+ * - 16-231: 6x6x6 color cube (216 colors)
+ * - 232-255: Grayscale ramp (24 shades)
+ *
+ * @param r Red component (0-255)
+ * @param g Green component (0-255)
+ * @param b Blue component (0-255)
+ * @return ANSI 256-color palette index (0-255)
+ */
+int tui_rgb_to_ansi256(uint8_t r, uint8_t g, uint8_t b)
+{
+    /* Check if it's a grayscale color */
+    if (r == g && g == b) {
+        if (r < 8) {
+            return 16;  /* Black in the cube */
+        }
+        if (r > 248) {
+            return 231; /* White in the cube */
+        }
+        /* Use grayscale ramp (232-255): 24 shades from dark to light */
+        /* Each shade covers about 10 units (256/24 ≈ 10.67) */
+        return 232 + ((r - 8) / 10);
+    }
+
+    /* Map to 6x6x6 color cube (indices 16-231) */
+    /* Each RGB component maps to 0-5 */
+    int ri = (r < 48) ? 0 : (r < 115) ? 1 : (r - 35) / 40;
+    int gi = (g < 48) ? 0 : (g < 115) ? 1 : (g - 35) / 40;
+    int bi = (b < 48) ? 0 : (b < 115) ? 1 : (b - 35) / 40;
+
+    /* Clamp to 0-5 range */
+    if (ri > 5) ri = 5;
+    if (gi > 5) gi = 5;
+    if (bi > 5) bi = 5;
+
+    return 16 + (36 * ri) + (6 * gi) + bi;
+}

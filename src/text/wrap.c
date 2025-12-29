@@ -183,32 +183,18 @@ void tui_wrapped_text_free(tui_wrapped_text *wrapped)
 }
 
 /**
- * Truncate text to specified width with ellipsis.
- *
- * @param text Input text
- * @param width Maximum display width
- * @param ellipsis Ellipsis string (default "...")
- * @return Truncated string (caller must free), or NULL on error
+ * Truncate text at end: "Hello World" -> "Hello Wo..."
  */
-char* tui_truncate_text(const char *text, int width, const char *ellipsis)
+static char* truncate_end(const char *text, int width, const char *ellipsis)
 {
-    if (!text) return NULL;
-    if (!ellipsis) ellipsis = "...";
-
-    int text_width = tui_string_width(text);
-    if (text_width <= width) {
-        return strdup(text);
-    }
-
     int ellipsis_width = tui_string_width(ellipsis);
     int target_width = width - ellipsis_width;
 
     if (target_width <= 0) {
-        /* Not enough room for anything */
         return strdup(ellipsis);
     }
 
-    /* Find truncation point */
+    /* Find truncation point from start */
     const char *p = text;
     int current_width = 0;
 
@@ -238,4 +224,155 @@ char* tui_truncate_text(const char *text, int width, const char *ellipsis)
     memcpy(result + prefix_len, ellipsis, ellipsis_len + 1);
 
     return result;
+}
+
+/**
+ * Truncate text at start: "Hello World" -> "...lo World"
+ */
+static char* truncate_start(const char *text, int width, const char *ellipsis)
+{
+    int ellipsis_width = tui_string_width(ellipsis);
+    int target_width = width - ellipsis_width;
+
+    if (target_width <= 0) {
+        return strdup(ellipsis);
+    }
+
+    int text_width = tui_string_width(text);
+    int skip_width = text_width - target_width;
+
+    /* Find start point (skip skip_width characters) */
+    const char *p = text;
+    int current_width = 0;
+
+    while (*p && current_width < skip_width) {
+        uint32_t codepoint;
+        int bytes = tui_utf8_decode(p, &codepoint);
+        if (bytes <= 0) bytes = 1;
+        current_width += tui_char_width(codepoint);
+        p += bytes;
+    }
+
+    /* Build result */
+    size_t ellipsis_len = strlen(ellipsis);
+    size_t suffix_len = strlen(p);
+    size_t result_len = ellipsis_len + suffix_len;
+
+    char *result = malloc(result_len + 1);
+    if (!result) return NULL;
+
+    memcpy(result, ellipsis, ellipsis_len);
+    memcpy(result + ellipsis_len, p, suffix_len + 1);
+
+    return result;
+}
+
+/**
+ * Truncate text in middle: "Hello World" -> "Hello...orld"
+ */
+static char* truncate_middle(const char *text, int width, const char *ellipsis)
+{
+    int ellipsis_width = tui_string_width(ellipsis);
+    int target_width = width - ellipsis_width;
+
+    if (target_width <= 0) {
+        return strdup(ellipsis);
+    }
+
+    /* Split target_width in half for prefix and suffix */
+    int prefix_target = target_width / 2;
+    int suffix_target = target_width - prefix_target;
+
+    /* Find prefix end */
+    const char *p = text;
+    int current_width = 0;
+
+    while (*p) {
+        uint32_t codepoint;
+        int bytes = tui_utf8_decode(p, &codepoint);
+        if (bytes <= 0) bytes = 1;
+        int char_width = tui_char_width(codepoint);
+
+        if (current_width + char_width > prefix_target) {
+            break;
+        }
+
+        current_width += char_width;
+        p += bytes;
+    }
+    const char *prefix_end = p;
+    size_t prefix_len = (size_t)(prefix_end - text);
+
+    /* Find suffix start (from the end) */
+    int text_width = tui_string_width(text);
+    int skip_width = text_width - suffix_target;
+    p = text;
+    current_width = 0;
+
+    while (*p && current_width < skip_width) {
+        uint32_t codepoint;
+        int bytes = tui_utf8_decode(p, &codepoint);
+        if (bytes <= 0) bytes = 1;
+        current_width += tui_char_width(codepoint);
+        p += bytes;
+    }
+    const char *suffix_start = p;
+    size_t suffix_len = strlen(suffix_start);
+
+    /* Build result */
+    size_t ellipsis_len = strlen(ellipsis);
+    size_t result_len = prefix_len + ellipsis_len + suffix_len;
+
+    char *result = malloc(result_len + 1);
+    if (!result) return NULL;
+
+    memcpy(result, text, prefix_len);
+    memcpy(result + prefix_len, ellipsis, ellipsis_len);
+    memcpy(result + prefix_len + ellipsis_len, suffix_start, suffix_len + 1);
+
+    return result;
+}
+
+/**
+ * Truncate text to specified width with ellipsis and position control.
+ *
+ * @param text Input text
+ * @param width Maximum display width
+ * @param ellipsis Ellipsis string (default "...")
+ * @param position Where to place ellipsis (start, middle, end)
+ * @return Truncated string (caller must free), or NULL on error
+ */
+char* tui_truncate_text_ex(const char *text, int width, const char *ellipsis, tui_truncate_position position)
+{
+    if (!text) return NULL;
+    if (!ellipsis) ellipsis = "...";
+
+    int text_width = tui_string_width(text);
+    if (text_width <= width) {
+        return strdup(text);
+    }
+
+    switch (position) {
+        case TUI_TRUNCATE_START:
+            return truncate_start(text, width, ellipsis);
+        case TUI_TRUNCATE_MIDDLE:
+            return truncate_middle(text, width, ellipsis);
+        case TUI_TRUNCATE_END:
+        default:
+            return truncate_end(text, width, ellipsis);
+    }
+}
+
+/**
+ * Truncate text to specified width with ellipsis.
+ * Legacy function - calls tui_truncate_text_ex with TUI_TRUNCATE_END.
+ *
+ * @param text Input text
+ * @param width Maximum display width
+ * @param ellipsis Ellipsis string (default "...")
+ * @return Truncated string (caller must free), or NULL on error
+ */
+char* tui_truncate_text(const char *text, int width, const char *ellipsis)
+{
+    return tui_truncate_text_ex(text, width, ellipsis, TUI_TRUNCATE_END);
 }

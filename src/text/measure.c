@@ -10,6 +10,7 @@
 */
 
 #include "measure.h"
+#include <stdlib.h>
 #include <string.h>
 
 /**
@@ -25,6 +26,49 @@
  * @param codepoint Unicode codepoint
  * @return Display width (0, 1, or 2)
  */
+/* Unicode constants for emoji handling */
+#define UNICODE_ZWJ             0x200D   /* Zero-Width Joiner */
+#define UNICODE_VS16            0xFE0F   /* Variation Selector 16 (emoji presentation) */
+#define UNICODE_VS15            0xFE0E   /* Variation Selector 15 (text presentation) */
+
+/**
+ * Check if codepoint is an emoji modifier (skin tone).
+ * Fitzpatrick skin tone modifiers: U+1F3FB to U+1F3FF
+ */
+static int is_emoji_modifier(uint32_t codepoint)
+{
+    return (codepoint >= 0x1F3FB && codepoint <= 0x1F3FF);
+}
+
+/**
+ * Check if codepoint is part of an emoji sequence (ZWJ, VS, modifier).
+ */
+static int is_emoji_sequence_part(uint32_t codepoint)
+{
+    return (codepoint == UNICODE_ZWJ ||
+            codepoint == UNICODE_VS16 ||
+            codepoint == UNICODE_VS15 ||
+            is_emoji_modifier(codepoint) ||
+            /* Regional indicator symbols (flags): U+1F1E0 to U+1F1FF */
+            (codepoint >= 0x1F1E6 && codepoint <= 0x1F1FF) ||
+            /* Keycap combining sequence: digit + U+FE0F + U+20E3 */
+            codepoint == 0x20E3);
+}
+
+/**
+ * Check if codepoint is an emoji base (can start an emoji sequence).
+ */
+static int is_emoji_base(uint32_t codepoint)
+{
+    /* Emoji ranges */
+    return ((codepoint >= 0x1F300 && codepoint <= 0x1F9FF) ||  /* Misc Symbols & Pictographs */
+            (codepoint >= 0x1FA00 && codepoint <= 0x1FAFF) ||  /* Extended-A */
+            (codepoint >= 0x2600 && codepoint <= 0x26FF) ||    /* Misc Symbols */
+            (codepoint >= 0x2700 && codepoint <= 0x27BF) ||    /* Dingbats */
+            (codepoint >= 0x1F1E6 && codepoint <= 0x1F1FF) ||  /* Regional Indicators (flags) */
+            (codepoint >= 0x1F600 && codepoint <= 0x1F64F));   /* Emoticons */
+}
+
 int tui_char_width(uint32_t codepoint)
 {
     /* Control characters */
@@ -37,8 +81,25 @@ int tui_char_width(uint32_t codepoint)
         return 1;
     }
 
+    /* Zero-width characters */
+    if (codepoint == UNICODE_ZWJ ||
+        codepoint == UNICODE_VS16 ||
+        codepoint == UNICODE_VS15) {
+        return 0;
+    }
+
+    /* Emoji modifiers (skin tones) - zero width when modifying */
+    if (is_emoji_modifier(codepoint)) {
+        return 0;
+    }
+
     /* Combining marks (approximate) */
     if (codepoint >= 0x0300 && codepoint <= 0x036F) {
+        return 0;
+    }
+
+    /* Keycap combining mark */
+    if (codepoint == 0x20E3) {
         return 0;
     }
 
@@ -57,7 +118,8 @@ int tui_char_width(uint32_t codepoint)
 
     /* Emoji ranges - only characters that are reliably width 2 across terminals */
     if ((codepoint >= 0x1F300 && codepoint <= 0x1F9FF) ||  /* Misc Symbols & Pictographs, Emoticons, etc. */
-        (codepoint >= 0x1FA00 && codepoint <= 0x1FAFF)) {  /* Chess, symbols, etc. */
+        (codepoint >= 0x1FA00 && codepoint <= 0x1FAFF) ||  /* Chess, symbols, etc. */
+        (codepoint >= 0x1F1E6 && codepoint <= 0x1F1FF)) {  /* Regional Indicators (flags) */
         return 2;
     }
 
@@ -321,6 +383,10 @@ static int skip_ansi_sequence(const char *str, int pos, int len)
  * Get display width of a UTF-8 string with known length.
  *
  * ANSI escape sequences are ignored (they don't take display space).
+ * ZWJ (Zero-Width Joiner) sequences are handled: characters after ZWJ
+ * don't add width (they combine with the previous character).
+ * Flag sequences (regional indicators) are handled: two regional indicators
+ * combine to form one flag with width 2.
  *
  * @param str Input string
  * @param len Number of bytes to process
@@ -332,6 +398,10 @@ int tui_string_width_n(const char *str, int len)
 
     int width = 0;
     int pos = 0;
+    int after_zwj = 0;           /* Skip width after ZWJ */
+    int regional_count = 0;      /* Count regional indicators for flag pairs */
+    uint32_t prev_codepoint = 0; /* Track previous character for VS16 handling */
+    int prev_width = 0;          /* Width of previous character */
 
     while (pos < len && str[pos]) {
         /* Skip ANSI escape sequences */
@@ -344,8 +414,71 @@ int tui_string_width_n(const char *str, int len)
         uint32_t codepoint;
         int bytes = tui_utf8_decode_n(str + pos, len - pos, &codepoint);
         if (bytes <= 0) break;
-        width += tui_char_width(codepoint);
+
+        /* Handle ZWJ sequences: character after ZWJ combines with previous */
+        if (codepoint == UNICODE_ZWJ) {
+            after_zwj = 1;
+            pos += bytes;
+            continue;
+        }
+
+        /* VS16 (emoji presentation): upgrades previous char to width 2 */
+        if (codepoint == UNICODE_VS16) {
+            if (prev_width == 1) {
+                /* Previous char was text-width, upgrade to emoji-width */
+                width += 1;  /* Add the extra width */
+            }
+            pos += bytes;
+            continue;
+        }
+
+        /* VS15 (text presentation): no visual change for our purposes */
+        if (codepoint == UNICODE_VS15) {
+            pos += bytes;
+            continue;
+        }
+
+        /* Regional indicators: pairs form flags */
+        if (codepoint >= 0x1F1E6 && codepoint <= 0x1F1FF) {
+            regional_count++;
+            if (regional_count == 2) {
+                /* Second indicator completes the flag, which has width 2 */
+                width += 2;
+                regional_count = 0;
+            }
+            pos += bytes;
+            prev_codepoint = codepoint;
+            prev_width = 0;  /* Don't track width for regional indicators */
+            continue;
+        } else {
+            /* Reset regional counter if non-regional character seen */
+            if (regional_count == 1) {
+                /* Lone regional indicator - add its width */
+                width += 2;
+            }
+            regional_count = 0;
+        }
+
+        /* If we're after a ZWJ, the next emoji combines with previous */
+        if (after_zwj && is_emoji_base(codepoint)) {
+            after_zwj = 0;
+            pos += bytes;
+            prev_codepoint = codepoint;
+            prev_width = 0;  /* No width added */
+            continue;
+        }
+        after_zwj = 0;
+
+        int char_width = tui_char_width(codepoint);
+        width += char_width;
+        prev_codepoint = codepoint;
+        prev_width = char_width;
         pos += bytes;
+    }
+
+    /* Handle trailing lone regional indicator */
+    if (regional_count == 1) {
+        width += 2;
     }
 
     return width;
@@ -500,4 +633,138 @@ int tui_pad(const char *text, int width, char align, char pad_char, char *output
 
     output[pos] = '\0';
     return pos;
+}
+
+/* ----------------------------------------------------------------
+ * ANSI escape code handling
+ * ---------------------------------------------------------------- */
+
+/**
+ * Strip all ANSI escape codes from string.
+ *
+ * @param str Input string (may contain ANSI codes)
+ * @return Newly allocated string without ANSI codes (caller must free)
+ */
+char* tui_strip_ansi(const char *str)
+{
+    if (!str) return NULL;
+
+    size_t len = strlen(str);
+    char *result = malloc(len + 1);
+    if (!result) return NULL;
+
+    size_t out_pos = 0;
+    int pos = 0;
+
+    while (pos < (int)len && str[pos]) {
+        /* Skip ANSI escape sequences */
+        int skip = skip_ansi_sequence(str, pos, (int)len);
+        if (skip > 0) {
+            pos += skip;
+            continue;
+        }
+
+        /* Copy non-ANSI byte */
+        result[out_pos++] = str[pos++];
+    }
+
+    result[out_pos] = '\0';
+
+    /* Shrink allocation to actual size */
+    char *shrunk = realloc(result, out_pos + 1);
+    return shrunk ? shrunk : result;
+}
+
+/**
+ * Get display width of string, ignoring ANSI escape codes.
+ *
+ * This is identical to tui_string_width_n() since it already ignores ANSI codes.
+ *
+ * @param str Input string (may contain ANSI codes)
+ * @return Display width (not counting ANSI codes)
+ */
+int tui_string_width_ansi(const char *str)
+{
+    if (!str) return 0;
+    return tui_string_width_n(str, (int)strlen(str));
+}
+
+/**
+ * Extract substring while preserving ANSI codes.
+ *
+ * Extracts characters from display position `start` to `end` (exclusive),
+ * but includes any ANSI codes that appear within that range or that were
+ * active at the start position.
+ *
+ * @param str Input string (may contain ANSI codes)
+ * @param start Start display position (0-indexed)
+ * @param end End display position (exclusive)
+ * @return Newly allocated substring (caller must free)
+ */
+char* tui_slice_ansi(const char *str, int start, int end)
+{
+    if (!str || start < 0 || end <= start) return NULL;
+
+    size_t len = strlen(str);
+    /* Worst case: entire string fits in the slice */
+    char *result = malloc(len + 1);
+    if (!result) return NULL;
+
+    size_t out_pos = 0;
+    int pos = 0;
+    int display_pos = 0;  /* Current display position (not counting ANSI) */
+
+    /* Track ANSI codes encountered before the start position */
+    /* These need to be included to maintain proper styling */
+    size_t pending_ansi_start = 0;
+    size_t pending_ansi_len = 0;
+
+    while (pos < (int)len && str[pos]) {
+        /* Check for ANSI escape sequence */
+        int skip = skip_ansi_sequence(str, pos, (int)len);
+        if (skip > 0) {
+            if (display_pos < start) {
+                /* Before our slice - track for inclusion */
+                pending_ansi_start = (size_t)pos;
+                pending_ansi_len = (size_t)skip;
+            } else if (display_pos < end) {
+                /* Within our slice - include it */
+                memcpy(result + out_pos, str + pos, (size_t)skip);
+                out_pos += (size_t)skip;
+            }
+            pos += skip;
+            continue;
+        }
+
+        /* Regular character */
+        uint32_t codepoint;
+        int bytes = tui_utf8_decode_n(str + pos, (int)len - pos, &codepoint);
+        if (bytes <= 0) break;
+
+        int char_width = tui_char_width(codepoint);
+
+        /* Check if this character is within our slice */
+        if (display_pos >= start && display_pos < end) {
+            /* First character - include any pending ANSI codes */
+            if (out_pos == 0 && pending_ansi_len > 0) {
+                memcpy(result, str + pending_ansi_start, pending_ansi_len);
+                out_pos = pending_ansi_len;
+            }
+            /* Copy the character */
+            memcpy(result + out_pos, str + pos, (size_t)bytes);
+            out_pos += (size_t)bytes;
+        }
+
+        display_pos += char_width;
+        pos += bytes;
+
+        /* Stop if we've passed the end */
+        if (display_pos >= end) break;
+    }
+
+    result[out_pos] = '\0';
+
+    /* Shrink allocation to actual size */
+    char *shrunk = realloc(result, out_pos + 1);
+    return shrunk ? shrunk : result;
 }

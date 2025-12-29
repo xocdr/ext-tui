@@ -9,13 +9,18 @@
 
 #include "node.h"
 
+/*
+ * Diff operation types as bit flags for composable effects.
+ * A single operation can combine multiple flags (e.g., UPDATE | REORDER).
+ * This is more memory efficient than separate array entries.
+ */
 typedef enum {
-    TUI_DIFF_NONE,
-    TUI_DIFF_CREATE,
-    TUI_DIFF_UPDATE,
-    TUI_DIFF_DELETE,
-    TUI_DIFF_REPLACE,
-    TUI_DIFF_REORDER
+    TUI_DIFF_NONE    = 0,
+    TUI_DIFF_CREATE  = 1 << 0,  /* Node needs to be created */
+    TUI_DIFF_UPDATE  = 1 << 1,  /* Node properties need update */
+    TUI_DIFF_DELETE  = 1 << 2,  /* Node needs to be deleted */
+    TUI_DIFF_REPLACE = 1 << 3,  /* Node needs replacement (type change) */
+    TUI_DIFF_REORDER = 1 << 4   /* Node needs repositioning */
 } tui_diff_type;
 
 typedef struct {

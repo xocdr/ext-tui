@@ -224,13 +224,98 @@ static void tui_focus_manager_free_object(zend_object *obj)
 }
 
 /* ------------------------------------------------------------------
- * Helper: Parse RGB color from string (#RRGGBB) or array [r, g, b]
+ * CSS Named Colors lookup table
+ * ------------------------------------------------------------------ */
+static const struct {
+    const char *name;
+    uint8_t r, g, b;
+} named_colors[] = {
+    /* Basic colors */
+    {"black", 0, 0, 0},
+    {"white", 255, 255, 255},
+    {"red", 255, 0, 0},
+    {"green", 0, 128, 0},
+    {"blue", 0, 0, 255},
+    {"yellow", 255, 255, 0},
+    {"cyan", 0, 255, 255},
+    {"magenta", 255, 0, 255},
+    /* Extended colors */
+    {"gray", 128, 128, 128},
+    {"grey", 128, 128, 128},
+    {"silver", 192, 192, 192},
+    {"maroon", 128, 0, 0},
+    {"olive", 128, 128, 0},
+    {"lime", 0, 255, 0},
+    {"aqua", 0, 255, 255},
+    {"teal", 0, 128, 128},
+    {"navy", 0, 0, 128},
+    {"fuchsia", 255, 0, 255},
+    {"purple", 128, 0, 128},
+    /* Common web colors */
+    {"orange", 255, 165, 0},
+    {"pink", 255, 192, 203},
+    {"brown", 165, 42, 42},
+    {"coral", 255, 127, 80},
+    {"crimson", 220, 20, 60},
+    {"gold", 255, 215, 0},
+    {"indigo", 75, 0, 130},
+    {"ivory", 255, 255, 240},
+    {"khaki", 240, 230, 140},
+    {"lavender", 230, 230, 250},
+    {"salmon", 250, 128, 114},
+    {"tan", 210, 180, 140},
+    {"tomato", 255, 99, 71},
+    {"turquoise", 64, 224, 208},
+    {"violet", 238, 130, 238},
+    {"wheat", 245, 222, 179},
+    /* Dark variants */
+    {"darkblue", 0, 0, 139},
+    {"darkcyan", 0, 139, 139},
+    {"darkgray", 169, 169, 169},
+    {"darkgrey", 169, 169, 169},
+    {"darkgreen", 0, 100, 0},
+    {"darkmagenta", 139, 0, 139},
+    {"darkorange", 255, 140, 0},
+    {"darkred", 139, 0, 0},
+    {"darkviolet", 148, 0, 211},
+    /* Light variants */
+    {"lightblue", 173, 216, 230},
+    {"lightcoral", 240, 128, 128},
+    {"lightcyan", 224, 255, 255},
+    {"lightgray", 211, 211, 211},
+    {"lightgrey", 211, 211, 211},
+    {"lightgreen", 144, 238, 144},
+    {"lightpink", 255, 182, 193},
+    {"lightyellow", 255, 255, 224},
+    /* Sentinel */
+    {NULL, 0, 0, 0}
+};
+
+static int lookup_named_color(const char *name, tui_color *color)
+{
+    for (int i = 0; named_colors[i].name != NULL; i++) {
+        if (strcasecmp(name, named_colors[i].name) == 0) {
+            color->r = named_colors[i].r;
+            color->g = named_colors[i].g;
+            color->b = named_colors[i].b;
+            color->is_set = 1;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* ------------------------------------------------------------------
+ * Helper: Parse RGB color from string (#RRGGBB, named) or array [r, g, b]
  * ------------------------------------------------------------------ */
 static int parse_color(zval *value, tui_color *color)
 {
     if (Z_TYPE_P(value) == IS_STRING) {
         const char *str = Z_STRVAL_P(value);
-        if (str[0] == '#' && Z_STRLEN_P(value) == 7) {
+        size_t len = Z_STRLEN_P(value);
+
+        /* Try hex format first: #RRGGBB */
+        if (str[0] == '#' && len == 7) {
             /* Validate all characters are hex digits before parsing */
             int valid = 1;
             for (int i = 1; i < 7; i++) {
@@ -251,6 +336,11 @@ static int parse_color(zval *value, tui_color *color)
                     return 1;
                 }
             }
+        }
+
+        /* Try named color lookup */
+        if (lookup_named_color(str, color)) {
+            return 1;
         }
     } else if (Z_TYPE_P(value) == IS_ARRAY) {
         HashTable *ht = Z_ARRVAL_P(value);
@@ -843,6 +933,25 @@ static tui_node* php_to_tui_node(zval *obj)
                 node->wrap_mode = TUI_WRAP_NONE;
             }
         }
+
+        /* key - for reconciliation */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "key", sizeof("key")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            node->key = strdup(Z_STRVAL_P(prop));
+            if (!node->key) {
+                tui_node_destroy(node);
+                return NULL;
+            }
+        }
+
+        /* id - for focus-by-id and measureElement */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "id", sizeof("id")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            if (tui_node_set_id(node, Z_STRVAL_P(prop)) < 0) {
+                tui_node_destroy(node);
+                return NULL;
+            }
+        }
     }
 
     return node;
@@ -1347,6 +1456,51 @@ PHP_METHOD(TuiInstance, focusPrev)
 }
 /* }}} */
 
+/* Helper: find node by ID in tree */
+static tui_node* find_node_by_id_in_tree(tui_node *node, const char *id)
+{
+    if (!node || !id) return NULL;
+
+    if (node->id && strcmp(node->id, id) == 0) {
+        return node;
+    }
+
+    for (int i = 0; i < node->child_count; i++) {
+        tui_node *found = find_node_by_id_in_tree(node->children[i], id);
+        if (found) return found;
+    }
+
+    return NULL;
+}
+
+/* {{{ TuiInstance::measureElement(string $id): ?array */
+PHP_METHOD(TuiInstance, measureElement)
+{
+    zend_string *id;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(id)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app || !obj->app->root_node) {
+        RETURN_NULL();
+    }
+
+    tui_node *node = find_node_by_id_in_tree(obj->app->root_node, ZSTR_VAL(id));
+    if (!node) {
+        RETURN_NULL();
+    }
+
+    /* Return computed layout from Yoga */
+    array_init(return_value);
+    add_assoc_long(return_value, "x", (zend_long)node->x);
+    add_assoc_long(return_value, "y", (zend_long)node->y);
+    add_assoc_long(return_value, "width", (zend_long)node->width);
+    add_assoc_long(return_value, "height", (zend_long)node->height);
+}
+/* }}} */
+
 /* {{{ TuiInstance::setInputHandler(callable $handler): void */
 PHP_METHOD(TuiInstance, setInputHandler)
 {
@@ -1466,6 +1620,19 @@ PHP_METHOD(TuiInstance, clear)
 }
 /* }}} */
 
+/* {{{ TuiInstance::getCapturedOutput(): ?string */
+PHP_METHOD(TuiInstance, getCapturedOutput)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app && obj->app->captured_output && obj->app->captured_output_len > 0) {
+        RETURN_STRINGL(obj->app->captured_output, obj->app->captured_output_len);
+    }
+    RETURN_NULL();
+}
+/* }}} */
+
 /* TuiInstance arginfo */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_rerender, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -1519,6 +1686,10 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_focusprev, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_measureelement, 0, 1, IS_ARRAY, 1)
+    ZEND_ARG_TYPE_INFO(0, id, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_setinputhandler, 0, 1, IS_VOID, 0)
     ZEND_ARG_TYPE_INFO(0, handler, IS_CALLABLE, 0)
 ZEND_END_ARG_INFO()
@@ -1547,6 +1718,9 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_clear, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_getcapturedoutput, 0, 0, IS_STRING, 1)
+ZEND_END_ARG_INFO()
+
 static const zend_function_entry tui_instance_methods[] = {
     PHP_ME(TuiInstance, rerender, arginfo_tuiinstance_rerender, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, unmount, arginfo_tuiinstance_unmount, ZEND_ACC_PUBLIC)
@@ -1572,6 +1746,7 @@ static const zend_function_entry tui_instance_methods[] = {
     PHP_ME(TuiInstance, setState, arginfo_tuiinstance_setstate, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, focusNext, arginfo_tuiinstance_focusnext, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, focusPrev, arginfo_tuiinstance_focusprev, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, measureElement, arginfo_tuiinstance_measureelement, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, setInputHandler, arginfo_tuiinstance_setinputhandler, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, setFocusHandler, arginfo_tuiinstance_setfocushandler, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, setResizeHandler, arginfo_tuiinstance_setresizehandler, ZEND_ACC_PUBLIC)
@@ -1579,6 +1754,7 @@ static const zend_function_entry tui_instance_methods[] = {
     PHP_ME(TuiInstance, addTimer, arginfo_tuiinstance_addtimer, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, removeTimer, arginfo_tuiinstance_removetimer, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, clear, arginfo_tuiinstance_clear, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, getCapturedOutput, arginfo_tuiinstance_getcapturedoutput, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -1852,24 +2028,97 @@ PHP_FUNCTION(tui_wrap_text)
 }
 /* }}} */
 
-/* {{{ tui_truncate(string $text, int $width, string $ellipsis = '...'): string */
+/* {{{ tui_truncate(string $text, int $width, string $ellipsis = '...', string $position = 'end'): string */
 PHP_FUNCTION(tui_truncate)
 {
     zend_string *text;
     zend_long width;
     zend_string *ellipsis = NULL;
+    zend_string *position = NULL;
 
-    ZEND_PARSE_PARAMETERS_START(2, 3)
+    ZEND_PARSE_PARAMETERS_START(2, 4)
         Z_PARAM_STR(text)
         Z_PARAM_LONG(width)
         Z_PARAM_OPTIONAL
         Z_PARAM_STR(ellipsis)
+        Z_PARAM_STR(position)
     ZEND_PARSE_PARAMETERS_END();
 
     const char *ellipsis_str = ellipsis ? ZSTR_VAL(ellipsis) : "...";
 
+    /* Parse position mode */
+    tui_truncate_position pos = TUI_TRUNCATE_END;
+    if (position) {
+        const char *pos_str = ZSTR_VAL(position);
+        if (strcmp(pos_str, "start") == 0) {
+            pos = TUI_TRUNCATE_START;
+        } else if (strcmp(pos_str, "middle") == 0) {
+            pos = TUI_TRUNCATE_MIDDLE;
+        }
+        /* "end" is default */
+    }
+
     /* Use the C implementation from text/wrap.c */
-    char *result = tui_truncate_text(ZSTR_VAL(text), (int)width, ellipsis_str);
+    char *result = tui_truncate_text_ex(ZSTR_VAL(text), (int)width, ellipsis_str, pos);
+
+    if (result) {
+        RETVAL_STRING(result);
+        free(result);
+    } else {
+        RETURN_EMPTY_STRING();
+    }
+}
+/* }}} */
+
+/* {{{ tui_strip_ansi(string $text): string */
+PHP_FUNCTION(tui_strip_ansi)
+{
+    zend_string *text;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(text)
+    ZEND_PARSE_PARAMETERS_END();
+
+    char *result = tui_strip_ansi(ZSTR_VAL(text));
+
+    if (result) {
+        RETVAL_STRING(result);
+        free(result);
+    } else {
+        RETURN_EMPTY_STRING();
+    }
+}
+/* }}} */
+
+/* {{{ tui_string_width_ansi(string $text): int */
+PHP_FUNCTION(tui_string_width_ansi)
+{
+    zend_string *text;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(text)
+    ZEND_PARSE_PARAMETERS_END();
+
+    int width = tui_string_width_ansi(ZSTR_VAL(text));
+
+    RETURN_LONG(width);
+}
+/* }}} */
+
+/* {{{ tui_slice_ansi(string $text, int $start, int $end): string */
+PHP_FUNCTION(tui_slice_ansi)
+{
+    zend_string *text;
+    zend_long start;
+    zend_long end;
+
+    ZEND_PARSE_PARAMETERS_START(3, 3)
+        Z_PARAM_STR(text)
+        Z_PARAM_LONG(start)
+        Z_PARAM_LONG(end)
+    ZEND_PARSE_PARAMETERS_END();
+
+    char *result = tui_slice_ansi(ZSTR_VAL(text), (int)start, (int)end);
 
     if (result) {
         RETVAL_STRING(result);
@@ -1900,6 +2149,13 @@ static void render_component_callback(tui_app *app)
     fci_copy.params = params;
     fci_copy.retval = &retval;
 
+    /*
+     * Console interception: Start output buffering before calling the component.
+     * This prevents any stray echo/print/var_dump from corrupting the TUI.
+     * The captured output is stored in app->captured_output for later retrieval.
+     */
+    php_output_start_default();
+
     /* Call the PHP component function with Instance parameter */
     if (zend_call_function(&fci_copy, &app->component_fcc) == SUCCESS) {
         /* Convert PHP object tree to C node tree */
@@ -1915,6 +2171,31 @@ static void render_component_callback(tui_app *app)
 
         zval_ptr_dtor(&retval);
     }
+
+    /* Capture any output that occurred during render */
+    {
+        zval captured;
+        ZVAL_UNDEF(&captured);
+        php_output_get_contents(&captured);
+
+        /* Free previous captured output */
+        if (app->captured_output) {
+            efree(app->captured_output);
+            app->captured_output = NULL;
+            app->captured_output_len = 0;
+        }
+
+        /* Store new captured output (if any) */
+        if (Z_TYPE(captured) == IS_STRING && Z_STRLEN(captured) > 0) {
+            app->captured_output = estrndup(Z_STRVAL(captured), Z_STRLEN(captured));
+            app->captured_output_len = Z_STRLEN(captured);
+        }
+
+        zval_ptr_dtor(&captured);
+    }
+
+    /* Discard the buffer (don't flush to stdout) */
+    php_output_discard();
 
     /* Clean up the copied zval reference */
     zval_ptr_dtor(&params[0]);
@@ -1953,6 +2234,9 @@ PHP_FUNCTION(tui_render)
 
     /* Set component callback */
     tui_app_set_component(app, &fci, &fcc);
+
+    /* Set rerender callback for auto-rerender on resize */
+    app->rerender_callback = render_component_callback;
 
     /* Create Instance object FIRST - same object passed to callback and returned */
     object_init_ex(return_value, tui_instance_ce);
@@ -3889,6 +4173,7 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_truncate, 0, 2, IS_STRING, 0
     ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, ellipsis, IS_STRING, 0, "\"...\"")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, position, IS_STRING, 0, "\"end\"")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_render, 0, 0, 1)
@@ -3962,6 +4247,21 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_pad, 0, 2, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, align, IS_STRING, 0, "\"l\"")
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, pad_char, IS_STRING, 0, "\" \"")
+ZEND_END_ARG_INFO()
+
+/* ANSI utility arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_strip_ansi, 0, 1, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_string_width_ansi, 0, 1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_slice_ansi, 0, 3, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, start, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, end, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
 /* Buffer arginfo */
@@ -4311,6 +4611,11 @@ static const zend_function_entry tui_functions[] = {
     PHP_FE(tui_truncate, arginfo_tui_truncate)
     PHP_FE(tui_pad, arginfo_tui_pad)
 
+    /* ANSI utilities */
+    PHP_FE(tui_strip_ansi, arginfo_tui_strip_ansi)
+    PHP_FE(tui_string_width_ansi, arginfo_tui_string_width_ansi)
+    PHP_FE(tui_slice_ansi, arginfo_tui_slice_ansi)
+
     /* Render/App */
     PHP_FE(tui_render, arginfo_tui_render)
     PHP_FE(tui_rerender, arginfo_tui_rerender)
@@ -4498,6 +4803,8 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_bool(tui_text_ce, "inverse", sizeof("inverse")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_bool(tui_text_ce, "strikethrough", sizeof("strikethrough")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_text_ce, "wrap", sizeof("wrap")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_text_ce, "key", sizeof("key")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_text_ce, "id", sizeof("id")-1, ZEND_ACC_PUBLIC);
 
     /* Register Xocdr\Tui\Ext\Instance class with methods and custom object handlers */
     INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Instance", tui_instance_methods);

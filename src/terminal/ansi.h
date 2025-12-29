@@ -38,4 +38,18 @@ void tui_ansi_underline(char *buf, size_t *len);
 void tui_ansi_inverse(char *buf, size_t *len);
 void tui_ansi_strikethrough(char *buf, size_t *len);
 
+/* Additional cursor and screen operations */
+void tui_ansi_erase_line_start(char *buf, size_t *len);
+void tui_ansi_erase_line_end(char *buf, size_t *len);
+void tui_ansi_scroll_up(char *buf, size_t *len, int lines);
+void tui_ansi_scroll_down(char *buf, size_t *len, int lines);
+void tui_ansi_cursor_next_line(char *buf, size_t *len, int lines);
+void tui_ansi_cursor_prev_line(char *buf, size_t *len, int lines);
+void tui_ansi_cursor_column(char *buf, size_t *len, int col);
+void tui_ansi_erase_screen_end(char *buf, size_t *len);
+void tui_ansi_erase_screen_start(char *buf, size_t *len);
+
+/* Color conversion */
+int tui_rgb_to_ansi256(uint8_t r, uint8_t g, uint8_t b);
+
 #endif /* TUI_ANSI_H */
