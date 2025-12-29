@@ -41,6 +41,7 @@ typedef struct {
  */
 typedef struct {
     void *entries;              /* key_map_entry array */
+    size_t entry_size;          /* Size of each entry for proper clearing */
     int capacity;
     int in_use;
 } tui_key_map_pool;

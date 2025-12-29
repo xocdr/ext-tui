@@ -29,6 +29,7 @@ typedef struct {
     key_map_entry *entries;
     int count;
     int capacity;
+    int from_pool;  /* 1 if entries came from pool (and haven't been reallocated) */
 } key_map;
 
 static key_map* key_map_create(int initial_capacity)
@@ -37,10 +38,14 @@ static key_map* key_map_create(int initial_capacity)
     if (!map) return NULL;
 
     map->capacity = initial_capacity > 0 ? initial_capacity : KEY_MAP_INITIAL_SIZE;
+    map->from_pool = 0;
 
     /* Try to get entries from pool */
     if (TUI_G(pools)) {
         map->entries = tui_key_map_pool_acquire(TUI_G(pools), map->capacity, sizeof(key_map_entry));
+        if (map->entries) {
+            map->from_pool = 1;
+        }
     } else {
         map->entries = calloc(map->capacity, sizeof(key_map_entry));
     }
@@ -54,10 +59,11 @@ static key_map* key_map_create(int initial_capacity)
 static void key_map_destroy(key_map *map)
 {
     if (map) {
-        /* Release entries back to pool */
-        if (TUI_G(pools)) {
+        if (map->from_pool && TUI_G(pools)) {
+            /* Entries are from pool - release back to pool */
             tui_key_map_pool_release(TUI_G(pools));
         } else {
+            /* Entries were malloc'd (or reallocated from pool) - free them */
             free(map->entries);
         }
         free(map);
@@ -73,10 +79,24 @@ static int key_map_add(key_map *map, const char *key, tui_node *node, int index)
         /* Check for overflow before doubling */
         if (map->capacity > INT_MAX / 2) return 0;
         int new_capacity = map->capacity * 2;
-        key_map_entry *new_entries = realloc(map->entries,
-            new_capacity * sizeof(key_map_entry));
-        if (!new_entries) return 0;
-        map->entries = new_entries;
+
+        if (map->from_pool) {
+            /* Can't realloc pooled memory - allocate new and copy */
+            key_map_entry *new_entries = calloc(new_capacity, sizeof(key_map_entry));
+            if (!new_entries) return 0;
+            memcpy(new_entries, map->entries, map->count * sizeof(key_map_entry));
+            /* Release pool buffer */
+            if (TUI_G(pools)) {
+                tui_key_map_pool_release(TUI_G(pools));
+            }
+            map->entries = new_entries;
+            map->from_pool = 0;  /* Now using malloc'd memory */
+        } else {
+            key_map_entry *new_entries = realloc(map->entries,
+                new_capacity * sizeof(key_map_entry));
+            if (!new_entries) return 0;
+            map->entries = new_entries;
+        }
         map->capacity = new_capacity;
     }
 

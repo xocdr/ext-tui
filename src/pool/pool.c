@@ -18,12 +18,7 @@ int tui_pools_init(tui_pools *pools)
 
     memset(pools, 0, sizeof(tui_pools));
 
-    /* Children arrays are allocated on demand, nothing to init */
-
-    /* Key map allocated on demand */
-    pools->key_map.entries = NULL;
-    pools->key_map.capacity = 0;
-    pools->key_map.in_use = 0;
+    /* Children arrays and key map are allocated on demand, memset handles init */
 
     return 0;
 }
@@ -174,7 +169,10 @@ void* tui_key_map_pool_acquire(tui_pools *pools, int initial_capacity, size_t en
         return calloc(initial_capacity, entry_size);
     }
 
-    if (pools->key_map.entries && pools->key_map.capacity >= initial_capacity) {
+    /* Check if existing buffer is compatible (same entry_size and sufficient capacity) */
+    if (pools->key_map.entries &&
+        pools->key_map.entry_size == entry_size &&
+        pools->key_map.capacity >= initial_capacity) {
         /* Reuse existing */
         pools->key_map.in_use = 1;
         pools->key_map_reuses++;
@@ -182,10 +180,11 @@ void* tui_key_map_pool_acquire(tui_pools *pools, int initial_capacity, size_t en
         return pools->key_map.entries;
     }
 
-    /* Need larger or first allocation */
+    /* Need larger, different size, or first allocation */
     free(pools->key_map.entries);
     pools->key_map.entries = calloc(initial_capacity, entry_size);
     pools->key_map.capacity = initial_capacity;
+    pools->key_map.entry_size = entry_size;
     pools->key_map.in_use = 1;
     return pools->key_map.entries;
 }
