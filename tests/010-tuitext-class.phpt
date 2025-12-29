@@ -1,12 +1,14 @@
 --TEST--
-TuiText class exists with properties
+Xocdr\Tui\Ext\Text class exists with properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-$text = new TuiText("Hello World");
+use Xocdr\Tui\Ext\Text;
 
-var_dump($text instanceof TuiText);
+$text = new Text("Hello World");
+
+var_dump($text instanceof Text);
 var_dump($text->content);
 var_dump($text->bold);
 var_dump($text->italic);

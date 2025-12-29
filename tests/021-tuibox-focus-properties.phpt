@@ -1,21 +1,23 @@
 --TEST--
-TuiBox has focusable and focused properties
+Xocdr\Tui\Ext\Box has focusable and focused properties
 --SKIPIF--
 <?php if (!extension_loaded('tui')) die('skip tui extension not loaded'); ?>
 --FILE--
 <?php
-$box = new TuiBox();
+use Xocdr\Tui\Ext\Box;
+
+$box = new Box();
 var_dump(property_exists($box, 'focusable'));
 var_dump(property_exists($box, 'focused'));
 var_dump($box->focusable);
 var_dump($box->focused);
 
 // Test setting focusable
-$focusable = new TuiBox(['focusable' => true]);
+$focusable = new Box(['focusable' => true]);
 var_dump($focusable->focusable);
 
 // Test setting focused
-$focused = new TuiBox(['focusable' => true, 'focused' => true]);
+$focused = new Box(['focusable' => true, 'focused' => true]);
 var_dump($focused->focused);
 ?>
 --EXPECT--

@@ -227,9 +227,15 @@ void tui_node_insert_before(tui_node *parent, tui_node *child, tui_node *before)
     if (index >= 0) {
         /* Grow array if needed */
         if (parent->child_count >= parent->child_capacity) {
+            /* Check for overflow before doubling */
+            if (parent->child_capacity > INT_MAX / 2) return;
             int new_capacity = parent->child_capacity * 2;
+
+            /* Check for size_t overflow in allocation */
+            if ((size_t)new_capacity > SIZE_MAX / sizeof(tui_node*)) return;
+
             tui_node **new_children = realloc(parent->children,
-                new_capacity * sizeof(tui_node*));
+                (size_t)new_capacity * sizeof(tui_node*));
             if (!new_children) return;  /* Allocation failed */
             parent->children = new_children;
             parent->child_capacity = new_capacity;

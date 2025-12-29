@@ -1,13 +1,13 @@
 --TEST--
-TuiKey class exists with properties
+Xocdr\Tui\Ext\Key class exists with properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-var_dump(class_exists('TuiKey'));
+var_dump(class_exists('Xocdr\Tui\Ext\Key'));
 
 // Check properties exist via reflection
-$rc = new ReflectionClass('TuiKey');
+$rc = new ReflectionClass('Xocdr\Tui\Ext\Key');
 $props = $rc->getProperties();
 $propNames = array_map(fn($p) => $p->getName(), $props);
 

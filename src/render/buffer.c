@@ -284,8 +284,11 @@ char* tui_buffer_to_string(tui_buffer *buf)
 
     /* Reset style at end */
     size_t remaining = (size_t)(output + max_size - p);
-    snprintf(p, remaining, "\033[0m");
-    p[remaining - 1] = '\0';  /* Ensure null termination */
+    if (remaining > 5) {
+        snprintf(p, remaining, "\033[0m");
+    }
+    /* Ensure null termination */
+    output[max_size - 1] = '\0';
 
     return output;
 }

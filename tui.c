@@ -88,7 +88,6 @@ zend_class_entry *tui_text_ce;
 zend_class_entry *tui_instance_ce;
 zend_class_entry *tui_key_ce;
 zend_class_entry *tui_focus_event_ce;
-zend_class_entry *tui_app_ce;
 zend_class_entry *tui_focus_ce;
 zend_class_entry *tui_focus_manager_ce;
 zend_class_entry *tui_stdin_context_ce;
@@ -103,7 +102,6 @@ zend_class_entry *tui_static_ce;
 static zend_object_handlers tui_box_handlers;
 static zend_object_handlers tui_text_handlers;
 static zend_object_handlers tui_instance_handlers;
-static zend_object_handlers tui_app_handlers;
 static zend_object_handlers tui_focus_handlers;
 static zend_object_handlers tui_focus_manager_handlers;
 
@@ -146,42 +144,6 @@ static void tui_instance_free_object(zend_object *obj)
         intern->app = NULL;
     }
 
-    zend_object_std_dtor(&intern->std);
-}
-
-/* ------------------------------------------------------------------
- * TuiApp custom object structure (for hooks API)
- * ------------------------------------------------------------------ */
-typedef struct {
-    tui_app *app;
-    zend_object std;
-} tui_app_object;
-
-static inline tui_app_object *tui_app_from_obj(zend_object *obj) {
-    return (tui_app_object *)((char *)(obj) - XtOffsetOf(tui_app_object, std));
-}
-
-#define Z_TUI_APP_P(zv) tui_app_from_obj(Z_OBJ_P(zv))
-
-static zend_object *tui_app_create_object(zend_class_entry *ce)
-{
-    tui_app_object *intern = zend_object_alloc(sizeof(tui_app_object), ce);
-
-    intern->app = NULL;
-
-    zend_object_std_init(&intern->std, ce);
-    object_properties_init(&intern->std, ce);
-
-    intern->std.handlers = &tui_app_handlers;
-
-    return &intern->std;
-}
-
-static void tui_app_free_object(zend_object *obj)
-{
-    tui_app_object *intern = tui_app_from_obj(obj);
-    /* App is owned by TuiInstance, we don't free it here */
-    intern->app = NULL;
     zend_object_std_dtor(&intern->std);
 }
 
@@ -278,9 +240,13 @@ static int parse_color(zval *value, tui_color *color)
         zval *g = zend_hash_index_find(ht, 1);
         zval *b = zend_hash_index_find(ht, 2);
         if (r && g && b) {
-            color->r = (uint8_t)zval_get_long(r);
-            color->g = (uint8_t)zval_get_long(g);
-            color->b = (uint8_t)zval_get_long(b);
+            /* Clamp values to 0-255 range */
+            zend_long rv = zval_get_long(r);
+            zend_long gv = zval_get_long(g);
+            zend_long bv = zval_get_long(b);
+            color->r = (uint8_t)(rv < 0 ? 0 : (rv > 255 ? 255 : rv));
+            color->g = (uint8_t)(gv < 0 ? 0 : (gv > 255 ? 255 : gv));
+            color->b = (uint8_t)(bv < 0 ? 0 : (bv > 255 ? 255 : bv));
             color->is_set = 1;
             return 1;
         }
@@ -397,7 +363,7 @@ static tui_node* php_to_tui_node(zval *obj)
                 YGNodeStyleSetFlexBasisAuto(node->yoga_node);
             } else {
                 int pct;
-                if (sscanf(basis, "%d%%", &pct) == 1) {
+                if (sscanf(basis, "%d%%", &pct) == 1 && pct >= 0 && pct <= 100) {
                     YGNodeStyleSetFlexBasisPercent(node->yoga_node, pct);
                 }
             }
@@ -413,7 +379,7 @@ static tui_node* php_to_tui_node(zval *obj)
                 YGNodeStyleSetWidthPercent(node->yoga_node, 100);
             } else {
                 int pct;
-                if (sscanf(w, "%d%%", &pct) == 1) {
+                if (sscanf(w, "%d%%", &pct) == 1 && pct >= 0 && pct <= 100) {
                     YGNodeStyleSetWidthPercent(node->yoga_node, pct);
                 }
             }
@@ -429,7 +395,7 @@ static tui_node* php_to_tui_node(zval *obj)
                 YGNodeStyleSetHeightPercent(node->yoga_node, 100);
             } else {
                 int pct;
-                if (sscanf(h, "%d%%", &pct) == 1) {
+                if (sscanf(h, "%d%%", &pct) == 1 && pct >= 0 && pct <= 100) {
                     YGNodeStyleSetHeightPercent(node->yoga_node, pct);
                 }
             }
@@ -599,7 +565,7 @@ static tui_node* php_to_tui_node(zval *obj)
             YGNodeStyleSetMinWidth(node->yoga_node, (float)zval_get_double(prop));
         } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
             int pct;
-            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1) {
+            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1 && pct >= 0 && pct <= 100) {
                 YGNodeStyleSetMinWidthPercent(node->yoga_node, pct);
             }
         }
@@ -610,7 +576,7 @@ static tui_node* php_to_tui_node(zval *obj)
             YGNodeStyleSetMinHeight(node->yoga_node, (float)zval_get_double(prop));
         } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
             int pct;
-            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1) {
+            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1 && pct >= 0 && pct <= 100) {
                 YGNodeStyleSetMinHeightPercent(node->yoga_node, pct);
             }
         }
@@ -621,7 +587,7 @@ static tui_node* php_to_tui_node(zval *obj)
             YGNodeStyleSetMaxWidth(node->yoga_node, (float)zval_get_double(prop));
         } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
             int pct;
-            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1) {
+            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1 && pct >= 0 && pct <= 100) {
                 YGNodeStyleSetMaxWidthPercent(node->yoga_node, pct);
             }
         }
@@ -632,7 +598,7 @@ static tui_node* php_to_tui_node(zval *obj)
             YGNodeStyleSetMaxHeight(node->yoga_node, (float)zval_get_double(prop));
         } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
             int pct;
-            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1) {
+            if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1 && pct >= 0 && pct <= 100) {
                 YGNodeStyleSetMaxHeightPercent(node->yoga_node, pct);
             }
         }
@@ -1057,54 +1023,11 @@ PHP_METHOD(TuiInstance, exit)
 }
 /* }}} */
 
-/* TuiInstance arginfo */
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_rerender, 0, 0, IS_VOID, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_unmount, 0, 0, IS_VOID, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_waituntilexit, 0, 0, IS_VOID, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_exit, 0, 0, IS_VOID, 0)
-    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, code, IS_LONG, 0, "0")
-ZEND_END_ARG_INFO()
-
-static const zend_function_entry tui_instance_methods[] = {
-    PHP_ME(TuiInstance, rerender, arginfo_tuiinstance_rerender, ZEND_ACC_PUBLIC)
-    PHP_ME(TuiInstance, unmount, arginfo_tuiinstance_unmount, ZEND_ACC_PUBLIC)
-    PHP_ME(TuiInstance, waitUntilExit, arginfo_tuiinstance_waituntilexit, ZEND_ACC_PUBLIC)
-    PHP_ME(TuiInstance, exit, arginfo_tuiinstance_exit, ZEND_ACC_PUBLIC)
-    PHP_FE_END
-};
-
-/* ------------------------------------------------------------------
- * TuiApp class (hooks API)
- * ------------------------------------------------------------------ */
-
 /* Forward declaration for state setter */
 static void state_setter_call(tui_app *app, int index, zval *new_value);
 
-/* {{{ App::exit(?Throwable $error = null): void */
-PHP_METHOD(App, exit)
-{
-    zval *error = NULL;
-
-    ZEND_PARSE_PARAMETERS_START(0, 1)
-        Z_PARAM_OPTIONAL
-        Z_PARAM_OBJECT_OF_CLASS_OR_NULL(error, zend_ce_throwable)
-    ZEND_PARSE_PARAMETERS_END();
-
-    tui_app_object *intern = Z_TUI_APP_P(ZEND_THIS);
-    if (intern->app) {
-        tui_app_exit(intern->app, error ? 1 : 0);
-    }
-}
-/* }}} */
-
-/* {{{ App::useState(mixed $initial): array */
-PHP_METHOD(App, useState)
+/* {{{ TuiInstance::useState(mixed $initial): array */
+PHP_METHOD(TuiInstance, useState)
 {
     zval *initial;
 
@@ -1112,12 +1035,12 @@ PHP_METHOD(App, useState)
         Z_PARAM_ZVAL(initial)
     ZEND_PARSE_PARAMETERS_END();
 
-    tui_app_object *intern = Z_TUI_APP_P(ZEND_THIS);
-    if (!intern->app) {
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app) {
         RETURN_NULL();
     }
 
-    tui_app *app = intern->app;
+    tui_app *app = obj->app;
     int is_new = 0;
     int index = tui_app_get_or_create_state_slot(app, initial, &is_new);
 
@@ -1158,8 +1081,8 @@ PHP_METHOD(App, useState)
 }
 /* }}} */
 
-/* {{{ App::useInput(callable $handler, array $options = []): void */
-PHP_METHOD(App, useInput)
+/* {{{ TuiInstance::useInput(callable $handler, array $options = []): void */
+PHP_METHOD(TuiInstance, useInput)
 {
     zend_fcall_info fci;
     zend_fcall_info_cache fcc;
@@ -1171,8 +1094,8 @@ PHP_METHOD(App, useInput)
         Z_PARAM_ARRAY(options)
     ZEND_PARSE_PARAMETERS_END();
 
-    tui_app_object *intern = Z_TUI_APP_P(ZEND_THIS);
-    if (!intern->app) {
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app) {
         RETURN_NULL();
     }
 
@@ -1186,13 +1109,13 @@ PHP_METHOD(App, useInput)
     }
 
     if (is_active) {
-        tui_app_set_input_handler(intern->app, &fci, &fcc);
+        tui_app_set_input_handler(obj->app, &fci, &fcc);
     }
 }
 /* }}} */
 
-/* {{{ App::useFocus(array $options = []): Focus */
-PHP_METHOD(App, useFocus)
+/* {{{ TuiInstance::useFocus(array $options = []): Focus */
+PHP_METHOD(TuiInstance, useFocus)
 {
     zval *options = NULL;
 
@@ -1201,56 +1124,56 @@ PHP_METHOD(App, useFocus)
         Z_PARAM_ARRAY(options)
     ZEND_PARSE_PARAMETERS_END();
 
-    tui_app_object *intern = Z_TUI_APP_P(ZEND_THIS);
-    if (!intern->app) {
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app) {
         RETURN_NULL();
     }
 
     /* Create Focus object */
     object_init_ex(return_value, tui_focus_ce);
     tui_focus_object *focus_obj = Z_TUI_FOCUS_P(return_value);
-    focus_obj->app = intern->app;
+    focus_obj->app = obj->app;
 
     /* Check autoFocus option */
     if (options) {
         zval *auto_focus = zend_hash_str_find(Z_ARRVAL_P(options), "autoFocus", sizeof("autoFocus")-1);
         if (auto_focus && zend_is_true(auto_focus)) {
             /* Auto-focus the first focusable element */
-            tui_app_focus_next(intern->app);
+            tui_app_focus_next(obj->app);
         }
     }
 
     /* Set isFocused property based on current focus state */
-    zend_bool is_focused = intern->app->focused_node != NULL;
+    zend_bool is_focused = obj->app->focused_node != NULL;
     zend_update_property_bool(tui_focus_ce, Z_OBJ_P(return_value),
         "isFocused", sizeof("isFocused")-1, is_focused);
 }
 /* }}} */
 
-/* {{{ App::useFocusManager(): FocusManager */
-PHP_METHOD(App, useFocusManager)
+/* {{{ TuiInstance::useFocusManager(): FocusManager */
+PHP_METHOD(TuiInstance, useFocusManager)
 {
     ZEND_PARSE_PARAMETERS_NONE();
 
-    tui_app_object *intern = Z_TUI_APP_P(ZEND_THIS);
-    if (!intern->app) {
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app) {
         RETURN_NULL();
     }
 
     /* Create FocusManager object */
     object_init_ex(return_value, tui_focus_manager_ce);
     tui_focus_manager_object *fm_obj = Z_TUI_FOCUS_MANAGER_P(return_value);
-    fm_obj->app = intern->app;
+    fm_obj->app = obj->app;
 }
 /* }}} */
 
-/* {{{ App::useStdin(): StdinContext */
-PHP_METHOD(App, useStdin)
+/* {{{ TuiInstance::useStdin(): StdinContext */
+PHP_METHOD(TuiInstance, useStdin)
 {
     ZEND_PARSE_PARAMETERS_NONE();
 
-    tui_app_object *intern = Z_TUI_APP_P(ZEND_THIS);
-    if (!intern->app) {
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app) {
         RETURN_NULL();
     }
 
@@ -1263,13 +1186,13 @@ PHP_METHOD(App, useStdin)
 }
 /* }}} */
 
-/* {{{ App::useStdout(): StdoutContext */
-PHP_METHOD(App, useStdout)
+/* {{{ TuiInstance::useStdout(): StdoutContext */
+PHP_METHOD(TuiInstance, useStdout)
 {
     ZEND_PARSE_PARAMETERS_NONE();
 
-    tui_app_object *intern = Z_TUI_APP_P(ZEND_THIS);
-    if (!intern->app) {
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app) {
         RETURN_NULL();
     }
 
@@ -1278,21 +1201,21 @@ PHP_METHOD(App, useStdout)
 
     /* Set properties */
     zend_update_property_long(tui_stdout_context_ce, Z_OBJ_P(return_value),
-        "columns", sizeof("columns")-1, intern->app->width);
+        "columns", sizeof("columns")-1, obj->app->width);
     zend_update_property_long(tui_stdout_context_ce, Z_OBJ_P(return_value),
-        "rows", sizeof("rows")-1, intern->app->height);
+        "rows", sizeof("rows")-1, obj->app->height);
     zend_update_property_bool(tui_stdout_context_ce, Z_OBJ_P(return_value),
         "isTTY", sizeof("isTTY")-1, isatty(STDOUT_FILENO));
 }
 /* }}} */
 
-/* {{{ App::useStderr(): StderrContext */
-PHP_METHOD(App, useStderr)
+/* {{{ TuiInstance::useStderr(): StderrContext */
+PHP_METHOD(TuiInstance, useStderr)
 {
     ZEND_PARSE_PARAMETERS_NONE();
 
-    tui_app_object *intern = Z_TUI_APP_P(ZEND_THIS);
-    if (!intern->app) {
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app) {
         RETURN_NULL();
     }
 
@@ -1301,44 +1224,32 @@ PHP_METHOD(App, useStderr)
 
     /* Set properties */
     zend_update_property_long(tui_stderr_context_ce, Z_OBJ_P(return_value),
-        "columns", sizeof("columns")-1, intern->app->width);
+        "columns", sizeof("columns")-1, obj->app->width);
     zend_update_property_long(tui_stderr_context_ce, Z_OBJ_P(return_value),
-        "rows", sizeof("rows")-1, intern->app->height);
+        "rows", sizeof("rows")-1, obj->app->height);
     zend_update_property_bool(tui_stderr_context_ce, Z_OBJ_P(return_value),
         "isTTY", sizeof("isTTY")-1, isatty(STDERR_FILENO));
 }
 /* }}} */
 
-/* {{{ App::rerender(): void */
-PHP_METHOD(App, rerender)
+/* {{{ TuiInstance::getTerminalSize(): array */
+PHP_METHOD(TuiInstance, getTerminalSize)
 {
     ZEND_PARSE_PARAMETERS_NONE();
 
-    tui_app_object *intern = Z_TUI_APP_P(ZEND_THIS);
-    if (intern->app) {
-        intern->app->render_pending = 1;
-    }
-}
-/* }}} */
-
-/* {{{ App::getTerminalSize(): array */
-PHP_METHOD(App, getTerminalSize)
-{
-    ZEND_PARSE_PARAMETERS_NONE();
-
-    tui_app_object *intern = Z_TUI_APP_P(ZEND_THIS);
-    if (!intern->app) {
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app) {
         RETURN_NULL();
     }
 
     array_init(return_value);
-    add_assoc_long(return_value, "columns", intern->app->width);
-    add_assoc_long(return_value, "rows", intern->app->height);
+    add_assoc_long(return_value, "columns", obj->app->width);
+    add_assoc_long(return_value, "rows", obj->app->height);
 }
 /* }}} */
 
-/* {{{ App::setState(int $index, mixed $value): void - Internal for setter */
-PHP_METHOD(App, setState)
+/* {{{ TuiInstance::setState(int $index, mixed $value): void - Internal for setter */
+PHP_METHOD(TuiInstance, setState)
 {
     zend_long index;
     zval *value;
@@ -1348,73 +1259,267 @@ PHP_METHOD(App, setState)
         Z_PARAM_ZVAL(value)
     ZEND_PARSE_PARAMETERS_END();
 
-    tui_app_object *intern = Z_TUI_APP_P(ZEND_THIS);
-    if (!intern->app || index < 0 || index >= intern->app->state_count) {
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app || index < 0 || index >= obj->app->state_count) {
         RETURN_NULL();
     }
 
     /* Update state value */
-    zval_ptr_dtor(&intern->app->states[index].value);
-    ZVAL_COPY(&intern->app->states[index].value, value);
+    zval_ptr_dtor(&obj->app->states[index].value);
+    ZVAL_COPY(&obj->app->states[index].value, value);
 
     /* Trigger re-render */
-    intern->app->render_pending = 1;
+    obj->app->render_pending = 1;
 }
 /* }}} */
 
-/* App arginfo */
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_app_exit, 0, 0, IS_VOID, 0)
-    ZEND_ARG_OBJ_INFO_WITH_DEFAULT_VALUE(0, error, Throwable, 1, "null")
+/* {{{ TuiInstance::focusNext(): void */
+PHP_METHOD(TuiInstance, focusNext)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app) {
+        tui_app_focus_next(obj->app);
+    }
+}
+/* }}} */
+
+/* {{{ TuiInstance::focusPrev(): void */
+PHP_METHOD(TuiInstance, focusPrev)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app) {
+        tui_app_focus_prev(obj->app);
+    }
+}
+/* }}} */
+
+/* {{{ TuiInstance::setInputHandler(callable $handler): void */
+PHP_METHOD(TuiInstance, setInputHandler)
+{
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_FUNC(fci, fcc)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app) {
+        tui_app_set_input_handler(obj->app, &fci, &fcc);
+    }
+}
+/* }}} */
+
+/* {{{ TuiInstance::setFocusHandler(callable $handler): void */
+PHP_METHOD(TuiInstance, setFocusHandler)
+{
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_FUNC(fci, fcc)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app) {
+        tui_app_set_focus_handler(obj->app, &fci, &fcc);
+    }
+}
+/* }}} */
+
+/* {{{ TuiInstance::setResizeHandler(callable $handler): void */
+PHP_METHOD(TuiInstance, setResizeHandler)
+{
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_FUNC(fci, fcc)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app) {
+        tui_app_set_resize_handler(obj->app, &fci, &fcc);
+    }
+}
+/* }}} */
+
+/* {{{ TuiInstance::setTickHandler(callable $handler): void */
+PHP_METHOD(TuiInstance, setTickHandler)
+{
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_FUNC(fci, fcc)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app) {
+        tui_app_set_tick_handler(obj->app, &fci, &fcc);
+    }
+}
+/* }}} */
+
+/* {{{ TuiInstance::addTimer(int $intervalMs, callable $callback): int */
+PHP_METHOD(TuiInstance, addTimer)
+{
+    zend_long interval_ms;
+    zend_fcall_info fci;
+    zend_fcall_info_cache fcc;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_LONG(interval_ms)
+        Z_PARAM_FUNC(fci, fcc)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app) {
+        RETURN_LONG(-1);
+    }
+
+    int timer_id = tui_app_add_timer(obj->app, (int)interval_ms, &fci, &fcc);
+    RETURN_LONG(timer_id);
+}
+/* }}} */
+
+/* {{{ TuiInstance::removeTimer(int $timerId): void */
+PHP_METHOD(TuiInstance, removeTimer)
+{
+    zend_long timer_id;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_LONG(timer_id)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app) {
+        tui_app_remove_timer(obj->app, (int)timer_id);
+    }
+}
+/* }}} */
+
+/* {{{ TuiInstance::clear(): void */
+PHP_METHOD(TuiInstance, clear)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (obj->app && obj->app->buffer) {
+        tui_buffer_clear(obj->app->buffer);
+        tui_output_flush(obj->app->output);
+    }
+}
+/* }}} */
+
+/* TuiInstance arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_rerender, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_app_usestate, 0, 1, IS_ARRAY, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_unmount, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_waituntilexit, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_exit, 0, 0, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, code, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_usestate, 0, 1, IS_ARRAY, 0)
     ZEND_ARG_TYPE_INFO(0, initial, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_app_useinput, 0, 1, IS_VOID, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_useinput, 0, 1, IS_VOID, 0)
     ZEND_ARG_TYPE_INFO(0, handler, IS_CALLABLE, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "[]")
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_app_usefocus, 0, 0, 0)
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tuiinstance_usefocus, 0, 0, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, options, IS_ARRAY, 1, "[]")
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_app_usefocusmanager, 0, 0, 0)
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tuiinstance_usefocusmanager, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_app_usestdin, 0, 0, 0)
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tuiinstance_usestdin, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_app_usestdout, 0, 0, 0)
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tuiinstance_usestdout, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_INFO_EX(arginfo_app_usestderr, 0, 0, 0)
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tuiinstance_usestderr, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_app_rerender, 0, 0, IS_VOID, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_getterminalsize, 0, 0, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_app_getterminalsize, 0, 0, IS_ARRAY, 0)
-ZEND_END_ARG_INFO()
-
-ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_app_setstate, 0, 2, IS_VOID, 0)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_setstate, 0, 2, IS_VOID, 0)
     ZEND_ARG_TYPE_INFO(0, index, IS_LONG, 0)
     ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
 ZEND_END_ARG_INFO()
 
-static const zend_function_entry tui_app_methods[] = {
-    PHP_ME(App, exit, arginfo_app_exit, ZEND_ACC_PUBLIC)
-    PHP_ME(App, useState, arginfo_app_usestate, ZEND_ACC_PUBLIC)
-    PHP_ME(App, useInput, arginfo_app_useinput, ZEND_ACC_PUBLIC)
-    PHP_ME(App, useFocus, arginfo_app_usefocus, ZEND_ACC_PUBLIC)
-    PHP_ME(App, useFocusManager, arginfo_app_usefocusmanager, ZEND_ACC_PUBLIC)
-    PHP_ME(App, useStdin, arginfo_app_usestdin, ZEND_ACC_PUBLIC)
-    PHP_ME(App, useStdout, arginfo_app_usestdout, ZEND_ACC_PUBLIC)
-    PHP_ME(App, useStderr, arginfo_app_usestderr, ZEND_ACC_PUBLIC)
-    PHP_ME(App, rerender, arginfo_app_rerender, ZEND_ACC_PUBLIC)
-    PHP_ME(App, getTerminalSize, arginfo_app_getterminalsize, ZEND_ACC_PUBLIC)
-    PHP_ME(App, setState, arginfo_app_setstate, ZEND_ACC_PUBLIC)
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_focusnext, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_focusprev, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_setinputhandler, 0, 1, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, handler, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_setfocushandler, 0, 1, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, handler, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_setresizehandler, 0, 1, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, handler, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_settickhandler, 0, 1, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, handler, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_addtimer, 0, 2, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, intervalMs, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, callback, IS_CALLABLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_removetimer, 0, 1, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, timerId, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_clear, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+static const zend_function_entry tui_instance_methods[] = {
+    PHP_ME(TuiInstance, rerender, arginfo_tuiinstance_rerender, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, unmount, arginfo_tuiinstance_unmount, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, waitUntilExit, arginfo_tuiinstance_waituntilexit, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, exit, arginfo_tuiinstance_exit, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, useState, arginfo_tuiinstance_usestate, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, useInput, arginfo_tuiinstance_useinput, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, useFocus, arginfo_tuiinstance_usefocus, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, useFocusManager, arginfo_tuiinstance_usefocusmanager, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, useStdin, arginfo_tuiinstance_usestdin, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, useStdout, arginfo_tuiinstance_usestdout, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, useStderr, arginfo_tuiinstance_usestderr, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, getTerminalSize, arginfo_tuiinstance_getterminalsize, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, setState, arginfo_tuiinstance_setstate, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, focusNext, arginfo_tuiinstance_focusnext, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, focusPrev, arginfo_tuiinstance_focusprev, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, setInputHandler, arginfo_tuiinstance_setinputhandler, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, setFocusHandler, arginfo_tuiinstance_setfocushandler, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, setResizeHandler, arginfo_tuiinstance_setresizehandler, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, setTickHandler, arginfo_tuiinstance_settickhandler, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, addTimer, arginfo_tuiinstance_addtimer, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, removeTimer, arginfo_tuiinstance_removetimer, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, clear, arginfo_tuiinstance_clear, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -1719,22 +1824,16 @@ PHP_FUNCTION(tui_truncate)
 /* Render callback wrapper - calls PHP component and converts result to C nodes */
 static void render_component_callback(tui_app *app)
 {
-    if (!app) return;
+    if (!app || !app->instance_zval) return;
 
     zval retval;
-
-    /* Create App object to pass to callback */
-    zval app_obj;
-    object_init_ex(&app_obj, tui_app_ce);
-    tui_app_object *app_intern = Z_TUI_APP_P(&app_obj);
-    app_intern->app = app;
 
     /* Reset state index before each render (for useState hook ordering) */
     tui_app_reset_state_index(app);
 
-    /* Set up parameters - pass App as first argument */
+    /* Set up parameters - pass Instance as first argument */
     zval params[1];
-    ZVAL_COPY_VALUE(&params[0], &app_obj);
+    ZVAL_COPY(&params[0], app->instance_zval);
 
     /* Save original param count and set up for our call */
     zend_fcall_info fci_copy = app->component_fci;
@@ -1742,7 +1841,7 @@ static void render_component_callback(tui_app *app)
     fci_copy.params = params;
     fci_copy.retval = &retval;
 
-    /* Call the PHP component function with App parameter */
+    /* Call the PHP component function with Instance parameter */
     if (zend_call_function(&fci_copy, &app->component_fcc) == SUCCESS) {
         /* Convert PHP object tree to C node tree */
         if (Z_TYPE(retval) == IS_OBJECT) {
@@ -1758,8 +1857,8 @@ static void render_component_callback(tui_app *app)
         zval_ptr_dtor(&retval);
     }
 
-    /* Clean up App object (don't destroy app, it's owned by TuiInstance) */
-    zval_ptr_dtor(&app_obj);
+    /* Clean up the copied zval reference */
+    zval_ptr_dtor(&params[0]);
 }
 
 /* {{{ tui_render(callable $component, array $options = []): TuiInstance */
@@ -1796,21 +1895,23 @@ PHP_FUNCTION(tui_render)
     /* Set component callback */
     tui_app_set_component(app, &fci, &fcc);
 
-    /* Initial render - call component to get tree with App parameter */
-    zval retval;
+    /* Create Instance object FIRST - same object passed to callback and returned */
+    object_init_ex(return_value, tui_instance_ce);
+    tui_instance_object *instance_obj = Z_TUI_INSTANCE_P(return_value);
+    instance_obj->app = app;
 
-    /* Create App object to pass to callback */
-    zval app_obj;
-    object_init_ex(&app_obj, tui_app_ce);
-    tui_app_object *app_intern = Z_TUI_APP_P(&app_obj);
-    app_intern->app = app;
+    /* Store reference to Instance zval in app for render_component_callback */
+    app->instance_zval = return_value;
+
+    /* Initial render - call component to get tree with Instance parameter */
+    zval retval;
 
     /* Reset state index for initial render */
     tui_app_reset_state_index(app);
 
-    /* Set up parameters */
+    /* Set up parameters - pass the same Instance we're returning */
     zval params[1];
-    ZVAL_COPY_VALUE(&params[0], &app_obj);
+    ZVAL_COPY(&params[0], return_value);
 
     zend_fcall_info fci_copy = fci;
     fci_copy.param_count = 1;
@@ -1822,46 +1923,49 @@ PHP_FUNCTION(tui_render)
             if (!instanceof_function(Z_OBJCE(retval), tui_box_ce) &&
                 !instanceof_function(Z_OBJCE(retval), tui_text_ce)) {
                 zval_ptr_dtor(&retval);
-                zval_ptr_dtor(&app_obj);
+                zval_ptr_dtor(&params[0]);
+                app->instance_zval = NULL;
+                instance_obj->app = NULL;
                 tui_app_destroy(app);
                 zend_throw_exception(zend_ce_exception,
-                    "Component must return TuiBox or TuiText, got other object", 0);
+                    "Component must return Box or Text, got other object", 0);
                 RETURN_THROWS();
             }
             app->root_node = php_to_tui_node(&retval);
         } else if (Z_TYPE(retval) != IS_NULL) {
             zval_ptr_dtor(&retval);
-            zval_ptr_dtor(&app_obj);
+            zval_ptr_dtor(&params[0]);
+            app->instance_zval = NULL;
+            instance_obj->app = NULL;
             tui_app_destroy(app);
             zend_throw_exception(zend_ce_exception,
-                "Component must return TuiBox, TuiText, or null", 0);
+                "Component must return Box, Text, or null", 0);
             RETURN_THROWS();
         }
         zval_ptr_dtor(&retval);
     } else {
-        zval_ptr_dtor(&app_obj);
+        zval_ptr_dtor(&params[0]);
+        app->instance_zval = NULL;
+        instance_obj->app = NULL;
         tui_app_destroy(app);
         zend_throw_exception(zend_ce_exception,
             "Component callback failed to execute", 0);
         RETURN_THROWS();
     }
 
-    /* Clean up temporary App object */
-    zval_ptr_dtor(&app_obj);
+    /* Clean up the copied param reference */
+    zval_ptr_dtor(&params[0]);
 
     /* Start the app */
     if (tui_app_start(app) != 0) {
+        app->instance_zval = NULL;
+        instance_obj->app = NULL;
         tui_app_destroy(app);
         php_error_docref(NULL, E_ERROR, "Failed to start TUI application");
         RETURN_NULL();
     }
 
-    /* Create TuiInstance object to return */
-    object_init_ex(return_value, tui_instance_ce);
-
-    /* Store app pointer in custom object structure */
-    tui_instance_object *instance_obj = Z_TUI_INSTANCE_P(return_value);
-    instance_obj->app = app;
+    /* return_value already contains the Instance object */
 }
 /* }}} */
 
@@ -4257,8 +4361,8 @@ static PHP_MINIT_FUNCTION(tui)
     le_tui_sprite = zend_register_list_destructors_ex(tui_sprite_dtor, NULL, TUI_SPRITE_RES_NAME, module_number);
     le_tui_buffer = zend_register_list_destructors_ex(tui_buffer_dtor, NULL, TUI_BUFFER_RES_NAME, module_number);
 
-    /* Register Xocdr\Tui\Box class with methods */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Box", tui_box_methods);
+    /* Register Xocdr\Tui\Ext\Box class with methods */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Box", tui_box_methods);
     tui_box_ce = zend_register_internal_class(&ce);
 
     /* TuiBox properties */
@@ -4311,8 +4415,8 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_null(tui_box_ce, "borderBottomColor", sizeof("borderBottomColor")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "borderLeftColor", sizeof("borderLeftColor")-1, ZEND_ACC_PUBLIC);
 
-    /* Register Xocdr\Tui\Text class with methods */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Text", tui_text_methods);
+    /* Register Xocdr\Tui\Ext\Text class with methods */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Text", tui_text_methods);
     tui_text_ce = zend_register_internal_class(&ce);
 
     /* TuiText properties */
@@ -4327,8 +4431,8 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_bool(tui_text_ce, "strikethrough", sizeof("strikethrough")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_text_ce, "wrap", sizeof("wrap")-1, ZEND_ACC_PUBLIC);
 
-    /* Register Xocdr\Tui\Instance class with methods and custom object handlers */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Instance", tui_instance_methods);
+    /* Register Xocdr\Tui\Ext\Instance class with methods and custom object handlers */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Instance", tui_instance_methods);
     tui_instance_ce = zend_register_internal_class(&ce);
     tui_instance_ce->create_object = tui_instance_create_object;
 
@@ -4336,8 +4440,8 @@ static PHP_MINIT_FUNCTION(tui)
     tui_instance_handlers.offset = XtOffsetOf(tui_instance_object, std);
     tui_instance_handlers.free_obj = tui_instance_free_object;
 
-    /* Register Xocdr\Tui\Key class */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Key", NULL);
+    /* Register Xocdr\Tui\Ext\Key class */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Key", NULL);
     tui_key_ce = zend_register_internal_class(&ce);
 
     /* TuiKey properties */
@@ -4362,8 +4466,8 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_bool(tui_key_ce, "meta", sizeof("meta")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_bool(tui_key_ce, "shift", sizeof("shift")-1, 0, ZEND_ACC_PUBLIC);
 
-    /* Register Xocdr\Tui\FocusEvent class */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\FocusEvent", NULL);
+    /* Register Xocdr\Tui\Ext\FocusEvent class */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\FocusEvent", NULL);
     tui_focus_event_ce = zend_register_internal_class(&ce);
 
     /* TuiFocusEvent properties */
@@ -4371,17 +4475,8 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_null(tui_focus_event_ce, "current", sizeof("current")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_string(tui_focus_event_ce, "direction", sizeof("direction")-1, "", ZEND_ACC_PUBLIC);
 
-    /* Register Xocdr\Tui\App class with custom object handlers */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\App", tui_app_methods);
-    tui_app_ce = zend_register_internal_class(&ce);
-    tui_app_ce->create_object = tui_app_create_object;
-
-    memcpy(&tui_app_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
-    tui_app_handlers.offset = XtOffsetOf(tui_app_object, std);
-    tui_app_handlers.free_obj = tui_app_free_object;
-
-    /* Register Xocdr\Tui\Focus class with custom object handlers */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Focus", tui_focus_methods);
+    /* Register Xocdr\Tui\Ext\Focus class with custom object handlers */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Focus", tui_focus_methods);
     tui_focus_ce = zend_register_internal_class(&ce);
     tui_focus_ce->create_object = tui_focus_create_object;
 
@@ -4392,8 +4487,8 @@ static PHP_MINIT_FUNCTION(tui)
     /* Focus properties */
     zend_declare_property_bool(tui_focus_ce, "isFocused", sizeof("isFocused")-1, 0, ZEND_ACC_PUBLIC);
 
-    /* Register Xocdr\Tui\FocusManager class with custom object handlers */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\FocusManager", tui_focus_manager_methods);
+    /* Register Xocdr\Tui\Ext\FocusManager class with custom object handlers */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\FocusManager", tui_focus_manager_methods);
     tui_focus_manager_ce = zend_register_internal_class(&ce);
     tui_focus_manager_ce->create_object = tui_focus_manager_create_object;
 
@@ -4401,15 +4496,15 @@ static PHP_MINIT_FUNCTION(tui)
     tui_focus_manager_handlers.offset = XtOffsetOf(tui_focus_manager_object, std);
     tui_focus_manager_handlers.free_obj = tui_focus_manager_free_object;
 
-    /* Register Xocdr\Tui\StdinContext class */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\StdinContext", tui_stdin_context_methods);
+    /* Register Xocdr\Tui\Ext\StdinContext class */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\StdinContext", tui_stdin_context_methods);
     tui_stdin_context_ce = zend_register_internal_class(&ce);
 
     /* StdinContext properties */
     zend_declare_property_bool(tui_stdin_context_ce, "isRawModeSupported", sizeof("isRawModeSupported")-1, 1, ZEND_ACC_PUBLIC);
 
-    /* Register Xocdr\Tui\StdoutContext class */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\StdoutContext", tui_stdout_context_methods);
+    /* Register Xocdr\Tui\Ext\StdoutContext class */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\StdoutContext", tui_stdout_context_methods);
     tui_stdout_context_ce = zend_register_internal_class(&ce);
 
     /* StdoutContext properties */
@@ -4417,8 +4512,8 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_long(tui_stdout_context_ce, "rows", sizeof("rows")-1, 24, ZEND_ACC_PUBLIC);
     zend_declare_property_bool(tui_stdout_context_ce, "isTTY", sizeof("isTTY")-1, 1, ZEND_ACC_PUBLIC);
 
-    /* Register Xocdr\Tui\StderrContext class */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\StderrContext", tui_stderr_context_methods);
+    /* Register Xocdr\Tui\Ext\StderrContext class */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\StderrContext", tui_stderr_context_methods);
     tui_stderr_context_ce = zend_register_internal_class(&ce);
 
     /* StderrContext properties */
@@ -4426,36 +4521,31 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_long(tui_stderr_context_ce, "rows", sizeof("rows")-1, 24, ZEND_ACC_PUBLIC);
     zend_declare_property_bool(tui_stderr_context_ce, "isTTY", sizeof("isTTY")-1, 1, ZEND_ACC_PUBLIC);
 
-    /* Register Xocdr\Tui\Newline class (extends Box) */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Newline", NULL);
+    /* Register Xocdr\Tui\Ext\Newline class (extends Box) */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Newline", NULL);
     tui_newline_ce = zend_register_internal_class_ex(&ce, tui_box_ce);
 
     /* Newline properties */
     zend_declare_property_long(tui_newline_ce, "count", sizeof("count")-1, 1, ZEND_ACC_PUBLIC);
 
-    /* Register Xocdr\Tui\Spacer class (extends Box) */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Spacer", NULL);
+    /* Register Xocdr\Tui\Ext\Spacer class (extends Box) */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Spacer", NULL);
     tui_spacer_ce = zend_register_internal_class_ex(&ce, tui_box_ce);
 
-    /* Register Xocdr\Tui\Transform class (extends Box) */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Transform", NULL);
+    /* Register Xocdr\Tui\Ext\Transform class (extends Box) */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Transform", NULL);
     tui_transform_ce = zend_register_internal_class_ex(&ce, tui_box_ce);
 
     /* Transform properties */
     zend_declare_property_null(tui_transform_ce, "transform", sizeof("transform")-1, ZEND_ACC_PUBLIC);
 
-    /* Register Xocdr\Tui\StaticOutput class (extends Box) */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\StaticOutput", NULL);
+    /* Register Xocdr\Tui\Ext\StaticOutput class (extends Box) */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\StaticOutput", NULL);
     tui_static_ce = zend_register_internal_class_ex(&ce, tui_box_ce);
 
     /* StaticOutput properties */
     zend_declare_property_null(tui_static_ce, "items", sizeof("items")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_static_ce, "render", sizeof("render")-1, ZEND_ACC_PUBLIC);
-
-    /* Register deprecated aliases for backwards compatibility */
-    zend_register_class_alias("TuiInstance", tui_instance_ce);
-    zend_register_class_alias("TuiKey", tui_key_ce);
-    zend_register_class_alias("TuiFocusEvent", tui_focus_event_ce);
 
     return SUCCESS;
 }

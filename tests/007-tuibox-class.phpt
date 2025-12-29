@@ -1,13 +1,15 @@
 --TEST--
-TuiBox class exists with properties
+Xocdr\Tui\Ext\Box class exists with properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-$box = new TuiBox();
+use Xocdr\Tui\Ext\Box;
+
+$box = new Box();
 
 // Check class exists
-var_dump($box instanceof TuiBox);
+var_dump($box instanceof Box);
 
 // Check default properties
 var_dump($box->flexDirection);

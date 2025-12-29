@@ -1,10 +1,12 @@
 --TEST--
-TuiBox has all padding and margin properties
+Xocdr\Tui\Ext\Box has all padding and margin properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-$box = new TuiBox([
+use Xocdr\Tui\Ext\Box;
+
+$box = new Box([
     'padding' => 1,
     'paddingTop' => 2,
     'paddingX' => 3,

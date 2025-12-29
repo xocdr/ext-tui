@@ -1,10 +1,12 @@
 --TEST--
-TuiText has all style properties
+Xocdr\Tui\Ext\Text has all style properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-$text = new TuiText("Test", [
+use Xocdr\Tui\Ext\Text;
+
+$text = new Text("Test", [
     'bold' => true,
     'dim' => true,
     'italic' => true,

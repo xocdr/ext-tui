@@ -1,10 +1,12 @@
 --TEST--
-TuiText constructor accepts content and properties
+Xocdr\Tui\Ext\Text constructor accepts content and properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-$text = new TuiText("Hello", [
+use Xocdr\Tui\Ext\Text;
+
+$text = new Text("Hello", [
     'bold' => true,
     'color' => '#ff0000'
 ]);

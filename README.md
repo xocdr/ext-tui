@@ -162,7 +162,7 @@ Full documentation is available in the [`docs/`](docs/) folder:
 ### Specifications
 
 - [ext-tui Specification](docs/specs/ext-tui-specs.md) - Complete C extension specification
-- [xocdr/tui Specification](docs/specs/xocdr-tui-specs.md) - PHP library specification
+- [xocdr/tui Specification](https://github.com/xocdr/tui/blob/main/docs/specs/xocdr-tui-specs.md) - PHP library specification
 
 ## API Overview
 

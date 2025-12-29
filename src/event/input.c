@@ -203,10 +203,11 @@ int tui_input_parse(const char *buf, int len, tui_key_event *event)
 
         /* F5-F12: ESC [ <num> ~ */
         if (buf[1] == '[' && len >= 4 && buf[len-1] == '~') {
-            /* Parse the number between [ and ~ */
+            /* Parse the number between [ and ~ (with overflow protection) */
             int num = 0;
             for (int i = 2; i < len - 1; i++) {
                 if (buf[i] >= '0' && buf[i] <= '9') {
+                    if (num > 9999) break;  /* Prevent overflow - no valid key code is > 24 */
                     num = num * 10 + (buf[i] - '0');
                 }
             }

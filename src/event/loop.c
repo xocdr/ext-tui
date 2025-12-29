@@ -70,24 +70,28 @@ void tui_loop_destroy(tui_loop *loop)
 
 void tui_loop_on_input(tui_loop *loop, tui_input_callback cb, void *userdata)
 {
+    if (!loop) return;
     loop->input_cb = cb;
     loop->input_userdata = userdata;
 }
 
 void tui_loop_on_resize(tui_loop *loop, tui_resize_callback cb, void *userdata)
 {
+    if (!loop) return;
     loop->resize_cb = cb;
     loop->resize_userdata = userdata;
 }
 
 void tui_loop_on_tick(tui_loop *loop, tui_tick_callback cb, void *userdata)
 {
+    if (!loop) return;
     loop->tick_cb = cb;
     loop->tick_userdata = userdata;
 }
 
 int tui_loop_add_timer(tui_loop *loop, int interval_ms, tui_timer_callback cb, void *userdata)
 {
+    if (!loop) return -1;
     if (loop->timer_count >= MAX_TIMERS) {
         return -1;
     }
@@ -105,6 +109,7 @@ int tui_loop_add_timer(tui_loop *loop, int interval_ms, tui_timer_callback cb, v
 
 void tui_loop_remove_timer(tui_loop *loop, int timer_id)
 {
+    if (!loop) return;
     for (int i = 0; i < loop->timer_count; i++) {
         if (loop->timers[i].id == timer_id) {
             /* Shift remaining timers */
@@ -119,6 +124,8 @@ void tui_loop_remove_timer(tui_loop *loop, int timer_id)
 
 int tui_loop_run(tui_loop *loop)
 {
+    if (!loop) return -1;
+
     struct pollfd fds[1];
     char buf[64];
 
@@ -182,5 +189,6 @@ int tui_loop_run(tui_loop *loop)
 
 void tui_loop_stop(tui_loop *loop)
 {
+    if (!loop) return;
     loop->running = 0;
 }

@@ -78,11 +78,12 @@ typedef struct {
 
     /* Timer callbacks - store PHP callbacks for timers */
     #define TUI_MAX_TIMERS 32
-    struct {
+    struct tui_timer_callback {
         int id;
         zend_fcall_info fci;
         zend_fcall_info_cache fcc;
         int active;
+        struct tui_app *app;  /* Back-pointer for safe callback invocation */
     } timer_callbacks[TUI_MAX_TIMERS];
     int timer_callback_count;
 
@@ -96,6 +97,9 @@ typedef struct {
 
     /* Focus management */
     int focus_enabled;        /* Whether focus system is active */
+
+    /* PHP Instance object reference (for passing to render callback) */
+    zval *instance_zval;      /* Pointer to the Instance zval */
 } tui_app;
 
 /* Lifecycle */

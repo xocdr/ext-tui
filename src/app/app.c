@@ -617,18 +617,15 @@ void tui_app_exit(tui_app *app, int code)
 /* Timer callback wrapper - called from event loop, invokes PHP callback */
 static void timer_callback_wrapper(void *userdata)
 {
-    /* userdata is pointer to timer index packed with app pointer */
-    tui_app *app = (tui_app *)((uintptr_t)userdata & ~0xFFUL);
-    int index = (int)((uintptr_t)userdata & 0xFF);
+    /* userdata is a pointer to the timer_callback struct */
+    struct tui_timer_callback *timer = (struct tui_timer_callback *)userdata;
 
-    if (!app || index < 0 || index >= app->timer_callback_count) return;
-    if (!app->timer_callbacks[index].active) return;
+    if (!timer || !timer->app || !timer->active) return;
 
     zval retval;
-    app->timer_callbacks[index].fci.retval = &retval;
+    timer->fci.retval = &retval;
 
-    if (zend_call_function(&app->timer_callbacks[index].fci,
-                           &app->timer_callbacks[index].fcc) == SUCCESS) {
+    if (zend_call_function(&timer->fci, &timer->fcc) == SUCCESS) {
         zval_ptr_dtor(&retval);
     }
 }
@@ -640,10 +637,11 @@ int tui_app_add_timer(tui_app *app, int interval_ms, zend_fcall_info *fci, zend_
 
     int index = app->timer_callback_count++;
 
-    /* Store PHP callback */
+    /* Store PHP callback and back-pointer to app */
     app->timer_callbacks[index].fci = *fci;
     app->timer_callbacks[index].fcc = *fcc;
     app->timer_callbacks[index].active = 1;
+    app->timer_callbacks[index].app = app;
 
     /* Add reference to prevent garbage collection */
     Z_TRY_ADDREF(app->timer_callbacks[index].fci.function_name);
@@ -651,8 +649,8 @@ int tui_app_add_timer(tui_app *app, int interval_ms, zend_fcall_info *fci, zend_
         GC_ADDREF(app->timer_callbacks[index].fcc.object);
     }
 
-    /* Create userdata that encodes both app pointer and index */
-    void *userdata = (void *)((uintptr_t)app | (index & 0xFF));
+    /* Pass pointer to timer_callback struct as userdata (safe, no bit-packing) */
+    void *userdata = &app->timer_callbacks[index];
 
     /* Add to event loop */
     int timer_id = tui_loop_add_timer(app->loop, interval_ms, timer_callback_wrapper, userdata);

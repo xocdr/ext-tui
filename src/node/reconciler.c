@@ -17,6 +17,10 @@ static tui_diff_result* diff_result_create(void)
 
     result->capacity = INITIAL_DIFF_CAPACITY;
     result->ops = calloc(result->capacity, sizeof(tui_diff_op));
+    if (!result->ops) {
+        free(result);
+        return NULL;
+    }
     return result;
 }
 

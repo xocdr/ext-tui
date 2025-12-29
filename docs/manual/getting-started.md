@@ -217,7 +217,7 @@ $app = function () {
 Tui::render($app)->waitUntilExit();
 ```
 
-See the [xocdr/tui specification](../specs/xocdr-tui-specs.md) for complete documentation.
+See the [xocdr/tui specification](https://github.com/xocdr/tui/blob/main/docs/specs/xocdr-tui-specs.md) for complete documentation.
 
 ## Next Steps
 

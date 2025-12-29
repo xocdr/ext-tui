@@ -11,25 +11,28 @@ echo "extension=tui.so" >> /path/to/php.ini
 
 ## Core Concepts
 
-- **TuiBox**: Container with flexbox layout (like `<div>`)
-- **TuiText**: Text with styling (like `<span>`)
-- **tui_render()**: Starts TUI, returns TuiInstance
-- **TuiInstance**: Controls running TUI (rerender, exit)
-- **TuiKey**: Keyboard event with key info
+- **Xocdr\Tui\Ext\Box**: Container with flexbox layout (like `<div>`)
+- **Xocdr\Tui\Ext\Text**: Text with styling (like `<span>`)
+- **tui_render()**: Starts TUI, returns Instance
+- **Xocdr\Tui\Ext\Instance**: Controls running TUI (rerender, exit)
+- **Xocdr\Tui\Ext\Key**: Keyboard event with key info
 
 ## Minimal Example
 
 ```php
 <?php
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+
 $instance = tui_render(function() {
-    $box = new TuiBox(['padding' => 1]);
-    $box->addChild(new TuiText("Hello!", ['bold' => true]));
+    $box = new Box(['padding' => 1]);
+    $box->addChild(new Text("Hello!", ['bold' => true]));
     return $box;
 });
 $instance->waitUntilExit();
 ```
 
-## TuiBox Properties
+## Box Properties
 
 | Property | Values | Description |
 |----------|--------|-------------|
@@ -46,7 +49,7 @@ $instance->waitUntilExit();
 | `marginX/Y` | int | Horizontal/vertical margin |
 | `gap` | int | Child spacing |
 
-## TuiText Properties
+## Text Properties
 
 | Property | Values | Description |
 |----------|--------|-------------|
@@ -63,10 +66,10 @@ $instance->waitUntilExit();
 ## Functions
 
 ```php
-tui_render(callable $component, array $options = []): TuiInstance
-tui_rerender(TuiInstance $instance): void
-tui_unmount(TuiInstance $instance): void
-tui_wait_until_exit(TuiInstance $instance): void
+tui_render(callable $component, array $options = []): Xocdr\Tui\Ext\Instance
+tui_rerender(Xocdr\Tui\Ext\Instance $instance): void
+tui_unmount(Xocdr\Tui\Ext\Instance $instance): void
+tui_wait_until_exit(Xocdr\Tui\Ext\Instance $instance): void
 tui_get_terminal_size(): [int $width, int $height]
 tui_is_interactive(): bool
 tui_is_ci(): bool
@@ -75,7 +78,7 @@ tui_wrap_text(string $text, int $width): array
 tui_truncate(string $text, int $width, string $ellipsis = '...'): string
 ```
 
-## TuiInstance Methods
+## Instance Methods
 
 ```php
 $instance->rerender();         // Re-render
@@ -84,7 +87,7 @@ $instance->waitUntilExit();    // Block until exit
 $instance->exit(int $code = 0); // Request exit
 ```
 
-## TuiKey Properties
+## Key Properties
 
 ```php
 $key->key          // string: character pressed
@@ -107,7 +110,9 @@ $key->shift        // bool
 ### Centered Layout
 
 ```php
-new TuiBox([
+use Xocdr\Tui\Ext\Box;
+
+new Box([
     'width' => '100%',
     'height' => '100%',
     'alignItems' => 'center',
@@ -118,24 +123,30 @@ new TuiBox([
 ### Header + Content + Footer
 
 ```php
-$app = new TuiBox(['height' => '100%']);
-$app->addChild(new TuiBox(['height' => 3]));      // header
-$app->addChild(new TuiBox(['flexGrow' => 1]));    // content
-$app->addChild(new TuiBox(['height' => 1]));      // footer
+use Xocdr\Tui\Ext\Box;
+
+$app = new Box(['height' => '100%']);
+$app->addChild(new Box(['height' => 3]));      // header
+$app->addChild(new Box(['flexGrow' => 1]));    // content
+$app->addChild(new Box(['height' => 1]));      // footer
 ```
 
 ### Sidebar Layout
 
 ```php
-$row = new TuiBox(['flexDirection' => 'row', 'height' => '100%']);
-$row->addChild(new TuiBox(['width' => 20]));      // sidebar
-$row->addChild(new TuiBox(['flexGrow' => 1]));    // main
+use Xocdr\Tui\Ext\Box;
+
+$row = new Box(['flexDirection' => 'row', 'height' => '100%']);
+$row->addChild(new Box(['width' => 20]));      // sidebar
+$row->addChild(new Box(['flexGrow' => 1]));    // main
 ```
 
 ### Styled Text
 
 ```php
-new TuiText("Error!", [
+use Xocdr\Tui\Ext\Text;
+
+new Text("Error!", [
     'color' => '#ff0000',
     'bold' => true
 ])
@@ -144,10 +155,12 @@ new TuiText("Error!", [
 ### Equal Columns
 
 ```php
-$row = new TuiBox(['flexDirection' => 'row', 'gap' => 1]);
-$row->addChild(new TuiBox(['flexGrow' => 1]));
-$row->addChild(new TuiBox(['flexGrow' => 1]));
-$row->addChild(new TuiBox(['flexGrow' => 1]));
+use Xocdr\Tui\Ext\Box;
+
+$row = new Box(['flexDirection' => 'row', 'gap' => 1]);
+$row->addChild(new Box(['flexGrow' => 1]));
+$row->addChild(new Box(['flexGrow' => 1]));
+$row->addChild(new Box(['flexGrow' => 1]));
 ```
 
 ## Options for tui_render()
@@ -161,7 +174,7 @@ $row->addChild(new TuiBox(['flexGrow' => 1]));
 
 ## Notes
 
-- Returns TuiBox or TuiText from component callback
+- Returns Box or Text from component callback
 - Use `addChild()` to build tree
 - Call `rerender()` after state changes
 - `waitUntilExit()` blocks until Ctrl+C or `exit()`

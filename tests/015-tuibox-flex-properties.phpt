@@ -1,10 +1,12 @@
 --TEST--
-TuiBox has all flex layout properties
+Xocdr\Tui\Ext\Box has all flex layout properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-$box = new TuiBox([
+use Xocdr\Tui\Ext\Box;
+
+$box = new Box([
     'flexDirection' => 'row',
     'alignItems' => 'center',
     'justifyContent' => 'space-between',

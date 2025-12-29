@@ -36,7 +36,7 @@ Complete API documentation:
 | Document | Description |
 |----------|-------------|
 | [ext-tui-specs.md](specs/ext-tui-specs.md) | Complete C extension specification |
-| [xocdr-tui-specs.md](specs/xocdr-tui-specs.md) | PHP library specification (xocdr/tui) |
+| [xocdr/tui Specification](https://github.com/xocdr/tui/blob/main/docs/specs/xocdr-tui-specs.md) | PHP library specification (xocdr/tui) |
 
 ## Other
 

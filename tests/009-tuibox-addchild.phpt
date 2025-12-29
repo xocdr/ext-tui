@@ -1,11 +1,14 @@
 --TEST--
-TuiBox::addChild() adds children
+Xocdr\Tui\Ext\Box::addChild() adds children
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-$box = new TuiBox();
-$text = new TuiText("Hello");
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+
+$box = new Box();
+$text = new Text("Hello");
 
 $result = $box->addChild($text);
 
