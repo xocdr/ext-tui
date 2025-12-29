@@ -6,6 +6,8 @@
 
 #include "loop.h"
 #include "../terminal/terminal.h"
+#include "php.h"
+#include "php_tui.h"
 #include <stdlib.h>
 #include <poll.h>
 #include <unistd.h>
@@ -176,6 +178,9 @@ int tui_loop_run(tui_loop *loop)
     fds[0].fd = STDIN_FILENO;
     fds[0].events = POLLIN;
 
+    /* Track loop iteration */
+    TUI_METRIC_INC(loop_iterations);
+
     /* Single iteration - poll once and process events */
     /* Calculate shortest timer interval */
     int timeout = DEFAULT_POLL_TIMEOUT_MS;
@@ -201,6 +206,7 @@ int tui_loop_run(tui_loop *loop)
             /* Validate terminal size before using */
             if (width > 0 && width <= MAX_TERMINAL_DIMENSION &&
                 height > 0 && height <= MAX_TERMINAL_DIMENSION) {
+                TUI_METRIC_INC(resize_events);
                 loop->resize_cb(width, height, loop->resize_userdata);
             }
         }
@@ -210,6 +216,7 @@ int tui_loop_run(tui_loop *loop)
         int n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
         if (n > 0 && loop->input_cb) {
             buf[n] = '\0';
+            TUI_METRIC_INC(input_events);
             loop->input_cb(buf, n, loop->input_userdata);
         }
     }
@@ -220,6 +227,7 @@ int tui_loop_run(tui_loop *loop)
         if (loop->timers[i].elapsed_ms >= loop->timers[i].interval_ms) {
             loop->timers[i].elapsed_ms = 0;
             if (loop->timers[i].callback) {
+                TUI_METRIC_INC(timer_fires);
                 loop->timers[i].callback(loop->timers[i].userdata);
             }
         }
@@ -250,6 +258,7 @@ void tui_loop_tick_timers(tui_loop *loop, int ms)
         while (loop->timers[i].elapsed_ms >= loop->timers[i].interval_ms) {
             loop->timers[i].elapsed_ms -= loop->timers[i].interval_ms;
             if (loop->timers[i].callback) {
+                TUI_METRIC_INC(timer_fires);
                 loop->timers[i].callback(loop->timers[i].userdata);
             }
         }

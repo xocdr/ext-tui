@@ -4872,6 +4872,195 @@ PHP_FUNCTION(tui_test_get_by_text)
 }
 /* }}} */
 
+/* {{{ Metrics functions */
+
+/**
+ * tui_metrics_enable(): void
+ * Enable metrics collection
+ */
+PHP_FUNCTION(tui_metrics_enable)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    TUI_G(metrics_enabled) = 1;
+}
+
+/**
+ * tui_metrics_disable(): void
+ * Disable metrics collection
+ */
+PHP_FUNCTION(tui_metrics_disable)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    TUI_G(metrics_enabled) = 0;
+}
+
+/**
+ * tui_metrics_enabled(): bool
+ * Check if metrics collection is enabled
+ */
+PHP_FUNCTION(tui_metrics_enabled)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    RETURN_BOOL(TUI_G(metrics_enabled));
+}
+
+/**
+ * tui_metrics_reset(): void
+ * Reset all metrics counters to zero
+ */
+PHP_FUNCTION(tui_metrics_reset)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    memset(&TUI_G(metrics), 0, sizeof(tui_metrics));
+}
+
+/**
+ * tui_get_metrics(): array
+ * Get all metrics as an associative array
+ */
+PHP_FUNCTION(tui_get_metrics)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_metrics *m = &TUI_G(metrics);
+
+    array_init(return_value);
+
+    /* Node metrics */
+    add_assoc_long(return_value, "node_count", (zend_long)m->node_count);
+    add_assoc_long(return_value, "box_count", (zend_long)m->box_count);
+    add_assoc_long(return_value, "text_count", (zend_long)m->text_count);
+    add_assoc_long(return_value, "static_count", (zend_long)m->static_count);
+    add_assoc_long(return_value, "max_depth", (zend_long)m->max_depth);
+
+    /* Reconciler metrics */
+    add_assoc_long(return_value, "diff_runs", (zend_long)m->diff_runs);
+    add_assoc_long(return_value, "create_ops", (zend_long)m->create_ops);
+    add_assoc_long(return_value, "update_ops", (zend_long)m->update_ops);
+    add_assoc_long(return_value, "delete_ops", (zend_long)m->delete_ops);
+    add_assoc_long(return_value, "replace_ops", (zend_long)m->replace_ops);
+    add_assoc_long(return_value, "reorder_ops", (zend_long)m->reorder_ops);
+    add_assoc_long(return_value, "total_ops", (zend_long)(m->create_ops + m->update_ops +
+        m->delete_ops + m->replace_ops + m->reorder_ops));
+
+    /* Render timing (convert ns to ms) */
+    add_assoc_long(return_value, "render_count", (zend_long)m->render_count);
+    add_assoc_double(return_value, "layout_time_ms", (double)m->layout_time_ns / 1000000.0);
+    add_assoc_double(return_value, "buffer_time_ms", (double)m->buffer_time_ns / 1000000.0);
+    add_assoc_double(return_value, "output_time_ms", (double)m->output_time_ns / 1000000.0);
+    add_assoc_double(return_value, "total_render_time_ms",
+        (double)(m->layout_time_ns + m->buffer_time_ns + m->output_time_ns) / 1000000.0);
+    if (m->render_count > 0) {
+        add_assoc_double(return_value, "avg_render_ms",
+            (double)(m->layout_time_ns + m->buffer_time_ns + m->output_time_ns) /
+            (double)m->render_count / 1000000.0);
+    } else {
+        add_assoc_double(return_value, "avg_render_ms", 0.0);
+    }
+    add_assoc_double(return_value, "max_render_ms", (double)m->max_render_ns / 1000000.0);
+    add_assoc_double(return_value, "min_render_ms", (double)m->min_render_ns / 1000000.0);
+
+    /* Layout metrics */
+    add_assoc_long(return_value, "layout_runs", (zend_long)m->layout_runs);
+    add_assoc_long(return_value, "measure_calls", (zend_long)m->measure_calls);
+    add_assoc_long(return_value, "baseline_calls", (zend_long)m->baseline_calls);
+
+    /* Event loop metrics */
+    add_assoc_long(return_value, "loop_iterations", (zend_long)m->loop_iterations);
+    add_assoc_long(return_value, "input_events", (zend_long)m->input_events);
+    add_assoc_long(return_value, "resize_events", (zend_long)m->resize_events);
+    add_assoc_long(return_value, "timer_fires", (zend_long)m->timer_fires);
+}
+
+/**
+ * tui_get_node_metrics(): array
+ * Get only node-related metrics
+ */
+PHP_FUNCTION(tui_get_node_metrics)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_metrics *m = &TUI_G(metrics);
+
+    array_init(return_value);
+    add_assoc_long(return_value, "node_count", (zend_long)m->node_count);
+    add_assoc_long(return_value, "box_count", (zend_long)m->box_count);
+    add_assoc_long(return_value, "text_count", (zend_long)m->text_count);
+    add_assoc_long(return_value, "static_count", (zend_long)m->static_count);
+    add_assoc_long(return_value, "max_depth", (zend_long)m->max_depth);
+}
+
+/**
+ * tui_get_reconciler_metrics(): array
+ * Get only reconciler-related metrics
+ */
+PHP_FUNCTION(tui_get_reconciler_metrics)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_metrics *m = &TUI_G(metrics);
+    int64_t total = m->create_ops + m->update_ops + m->delete_ops +
+                    m->replace_ops + m->reorder_ops;
+
+    array_init(return_value);
+    add_assoc_long(return_value, "diff_runs", (zend_long)m->diff_runs);
+    add_assoc_long(return_value, "total_ops", (zend_long)total);
+    add_assoc_long(return_value, "creates", (zend_long)m->create_ops);
+    add_assoc_long(return_value, "updates", (zend_long)m->update_ops);
+    add_assoc_long(return_value, "deletes", (zend_long)m->delete_ops);
+    add_assoc_long(return_value, "replaces", (zend_long)m->replace_ops);
+    add_assoc_long(return_value, "reorders", (zend_long)m->reorder_ops);
+    if (m->diff_runs > 0) {
+        add_assoc_double(return_value, "avg_ops_per_diff", (double)total / (double)m->diff_runs);
+    } else {
+        add_assoc_double(return_value, "avg_ops_per_diff", 0.0);
+    }
+}
+
+/**
+ * tui_get_render_metrics(): array
+ * Get only render timing metrics
+ */
+PHP_FUNCTION(tui_get_render_metrics)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_metrics *m = &TUI_G(metrics);
+    int64_t total_ns = m->layout_time_ns + m->buffer_time_ns + m->output_time_ns;
+
+    array_init(return_value);
+    add_assoc_long(return_value, "render_count", (zend_long)m->render_count);
+    add_assoc_double(return_value, "layout_time_ms", (double)m->layout_time_ns / 1000000.0);
+    add_assoc_double(return_value, "buffer_time_ms", (double)m->buffer_time_ns / 1000000.0);
+    add_assoc_double(return_value, "output_time_ms", (double)m->output_time_ns / 1000000.0);
+    add_assoc_double(return_value, "total_render_time_ms", (double)total_ns / 1000000.0);
+    if (m->render_count > 0) {
+        add_assoc_double(return_value, "avg_render_ms", (double)total_ns / (double)m->render_count / 1000000.0);
+    } else {
+        add_assoc_double(return_value, "avg_render_ms", 0.0);
+    }
+    add_assoc_double(return_value, "max_render_ms", (double)m->max_render_ns / 1000000.0);
+    add_assoc_double(return_value, "min_render_ms", (double)m->min_render_ns / 1000000.0);
+}
+
+/**
+ * tui_get_loop_metrics(): array
+ * Get only event loop metrics
+ */
+PHP_FUNCTION(tui_get_loop_metrics)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_metrics *m = &TUI_G(metrics);
+
+    array_init(return_value);
+    add_assoc_long(return_value, "loop_iterations", (zend_long)m->loop_iterations);
+    add_assoc_long(return_value, "input_events", (zend_long)m->input_events);
+    add_assoc_long(return_value, "resize_events", (zend_long)m->resize_events);
+    add_assoc_long(return_value, "timer_fires", (zend_long)m->timer_fires);
+}
+/* }}} */
+
 /* {{{ arginfo */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_terminal_size, 0, 0, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
@@ -5370,6 +5559,34 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_test_get_by_text, 0, 2, IS_A
     ZEND_ARG_INFO(0, renderer)
     ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
 ZEND_END_ARG_INFO()
+
+/* Metrics functions arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_metrics_enable, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_metrics_disable, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_metrics_enabled, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_metrics_reset, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_metrics, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_node_metrics, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_reconciler_metrics, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_render_metrics, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_loop_metrics, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
 /* }}} */
 
 /* {{{ tui_functions[] */
@@ -5484,6 +5701,17 @@ static const zend_function_entry tui_functions[] = {
     PHP_FE(tui_test_get_by_id, arginfo_tui_test_get_by_id)
     PHP_FE(tui_test_get_by_text, arginfo_tui_test_get_by_text)
 
+    /* Metrics functions */
+    PHP_FE(tui_metrics_enable, arginfo_tui_metrics_enable)
+    PHP_FE(tui_metrics_disable, arginfo_tui_metrics_disable)
+    PHP_FE(tui_metrics_enabled, arginfo_tui_metrics_enabled)
+    PHP_FE(tui_metrics_reset, arginfo_tui_metrics_reset)
+    PHP_FE(tui_get_metrics, arginfo_tui_get_metrics)
+    PHP_FE(tui_get_node_metrics, arginfo_tui_get_node_metrics)
+    PHP_FE(tui_get_reconciler_metrics, arginfo_tui_get_reconciler_metrics)
+    PHP_FE(tui_get_render_metrics, arginfo_tui_get_render_metrics)
+    PHP_FE(tui_get_loop_metrics, arginfo_tui_get_loop_metrics)
+
     PHP_FE_END
 };
 /* }}} */
@@ -5498,6 +5726,8 @@ static PHP_GINIT_FUNCTION(tui)
     tui_globals->original_termios_saved = 0;
     tui_globals->terminal_width = 80;
     tui_globals->terminal_height = 24;
+    tui_globals->metrics_enabled = 0;
+    memset(&tui_globals->metrics, 0, sizeof(tui_metrics));
 }
 /* }}} */
 
@@ -5515,6 +5745,8 @@ PHP_INI_BEGIN()
                       OnUpdateLong, max_timers, zend_tui_globals, tui_globals)
     STD_PHP_INI_ENTRY("tui.min_render_interval", "16", PHP_INI_ALL,
                       OnUpdateLong, min_render_interval, zend_tui_globals, tui_globals)
+    STD_PHP_INI_ENTRY("tui.metrics_enabled", "0", PHP_INI_ALL,
+                      OnUpdateBool, metrics_enabled, zend_tui_globals, tui_globals)
 PHP_INI_END()
 /* }}} */
 

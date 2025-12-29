@@ -8,11 +8,14 @@
 #include "../terminal/terminal.h"
 #include "../terminal/ansi.h"
 #include "../event/input.h"
+#include "php.h"
+#include "php_tui.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <limits.h>
+#include <time.h>
 
 /* External class entries for event objects (defined in tui.c) */
 extern zend_class_entry *tui_key_ce;
@@ -538,6 +541,20 @@ int tui_app_start(tui_app *app)
     return 0;
 }
 
+/* Helper to get monotonic time in nanoseconds */
+static int64_t get_time_ns(void)
+{
+#ifdef __APPLE__
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+#endif
+}
+
 /**
  * Render the current node tree to the terminal buffer and output.
  * Does NOT call the component callback - use tui_app_render() for full render.
@@ -545,6 +562,12 @@ int tui_app_start(tui_app *app)
 void tui_app_render_tree(tui_app *app)
 {
     if (!app || !app->running) return;
+
+    int64_t start_ns = 0, layout_end_ns = 0, buffer_end_ns = 0, output_end_ns = 0;
+
+    if (TUI_G(metrics_enabled)) {
+        start_ns = get_time_ns();
+    }
 
     /* Clear the buffer */
     tui_buffer_clear(app->buffer);
@@ -554,12 +577,40 @@ void tui_app_render_tree(tui_app *app)
         /* Calculate layout */
         tui_node_calculate_layout(app->root_node, app->width, app->height);
 
+        if (TUI_G(metrics_enabled)) {
+            layout_end_ns = get_time_ns();
+        }
+
         /* Render to buffer */
         render_node_to_buffer(app, app->root_node, 0, 0);
+
+        if (TUI_G(metrics_enabled)) {
+            buffer_end_ns = get_time_ns();
+        }
+    } else if (TUI_G(metrics_enabled)) {
+        layout_end_ns = start_ns;
+        buffer_end_ns = start_ns;
     }
 
     /* Output to terminal */
     tui_output_render(app->output, app->buffer);
+
+    if (TUI_G(metrics_enabled)) {
+        output_end_ns = get_time_ns();
+
+        /* Update timing metrics */
+        int64_t layout_time = layout_end_ns - start_ns;
+        int64_t buffer_time = buffer_end_ns - layout_end_ns;
+        int64_t output_time = output_end_ns - buffer_end_ns;
+        int64_t total_time = output_end_ns - start_ns;
+
+        TUI_METRIC_ADD(layout_time_ns, layout_time);
+        TUI_METRIC_ADD(buffer_time_ns, buffer_time);
+        TUI_METRIC_ADD(output_time_ns, output_time);
+        TUI_METRIC_INC(render_count);
+        TUI_METRIC_MAX(max_render_ns, total_time);
+        TUI_METRIC_MIN(min_render_ns, total_time);
+    }
 
     app->render_pending = 0;
 }

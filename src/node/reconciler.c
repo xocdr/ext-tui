@@ -6,6 +6,8 @@
 */
 
 #include "reconciler.h"
+#include "php.h"
+#include "php_tui.h"
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
@@ -126,6 +128,14 @@ static int diff_result_add(tui_diff_result *result, tui_diff_type type,
     op->new_node = new_node;
     op->old_index = old_index;
     op->new_index = new_index;
+
+    /* Track metrics based on operation type */
+    if (type & TUI_DIFF_CREATE)  TUI_METRIC_INC(create_ops);
+    if (type & TUI_DIFF_UPDATE)  TUI_METRIC_INC(update_ops);
+    if (type & TUI_DIFF_DELETE)  TUI_METRIC_INC(delete_ops);
+    if (type & TUI_DIFF_REPLACE) TUI_METRIC_INC(replace_ops);
+    if (type & TUI_DIFF_REORDER) TUI_METRIC_INC(reorder_ops);
+
     return 0;
 }
 
@@ -349,6 +359,9 @@ static void diff_children(tui_diff_result *result, tui_node *old_node, tui_node 
 
 tui_diff_result* tui_reconciler_diff(tui_node *old_tree, tui_node *new_tree)
 {
+    /* Track diff run */
+    TUI_METRIC_INC(diff_runs);
+
     tui_diff_result *result = diff_result_create();
     if (!result) return NULL;
 

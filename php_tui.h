@@ -47,6 +47,46 @@ extern zend_module_entry tui_module_entry;
 #endif
 
 #include <yoga/Yoga.h>
+#include <stdint.h>
+
+/* Telemetry/Metrics structure */
+typedef struct {
+    int enabled;
+
+    /* Node metrics */
+    int64_t node_count;
+    int64_t box_count;
+    int64_t text_count;
+    int64_t static_count;
+    int64_t max_depth;
+
+    /* Reconciler metrics */
+    int64_t diff_runs;
+    int64_t create_ops;
+    int64_t update_ops;
+    int64_t delete_ops;
+    int64_t replace_ops;
+    int64_t reorder_ops;
+
+    /* Render timing (nanoseconds) */
+    int64_t render_count;
+    int64_t layout_time_ns;
+    int64_t buffer_time_ns;
+    int64_t output_time_ns;
+    int64_t max_render_ns;
+    int64_t min_render_ns;
+
+    /* Layout metrics */
+    int64_t layout_runs;
+    int64_t measure_calls;
+    int64_t baseline_calls;
+
+    /* Event loop metrics */
+    int64_t loop_iterations;
+    int64_t input_events;
+    int64_t resize_events;
+    int64_t timer_fires;
+} tui_metrics;
 
 /* Module globals */
 ZEND_BEGIN_MODULE_GLOBALS(tui)
@@ -63,13 +103,38 @@ ZEND_BEGIN_MODULE_GLOBALS(tui)
     zend_long max_states;
     zend_long max_timers;
     zend_long min_render_interval;
+
+    /* Telemetry */
+    zend_bool metrics_enabled;
+    tui_metrics metrics;
 ZEND_END_MODULE_GLOBALS(tui)
+
+ZEND_EXTERN_MODULE_GLOBALS(tui)
 
 #ifdef ZTS
 #define TUI_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(tui, v)
 #else
 #define TUI_G(v) (tui_globals.v)
 #endif
+
+/* Metrics collection macros - minimal overhead when disabled */
+#define TUI_METRIC_INC(field) \
+    do { if (TUI_G(metrics_enabled)) TUI_G(metrics).field++; } while(0)
+
+#define TUI_METRIC_DEC(field) \
+    do { if (TUI_G(metrics_enabled)) TUI_G(metrics).field--; } while(0)
+
+#define TUI_METRIC_ADD(field, val) \
+    do { if (TUI_G(metrics_enabled)) TUI_G(metrics).field += (val); } while(0)
+
+#define TUI_METRIC_MAX(field, val) \
+    do { if (TUI_G(metrics_enabled) && (val) > TUI_G(metrics).field) \
+        TUI_G(metrics).field = (val); } while(0)
+
+#define TUI_METRIC_MIN(field, val) \
+    do { if (TUI_G(metrics_enabled) && \
+        (TUI_G(metrics).field == 0 || (val) < TUI_G(metrics).field)) \
+        TUI_G(metrics).field = (val); } while(0)
 
 /* Class entries */
 extern zend_class_entry *tui_box_ce;

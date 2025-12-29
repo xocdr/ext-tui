@@ -6,6 +6,8 @@
 
 #include "node.h"
 #include "../text/measure.h"
+#include "php.h"
+#include "php_tui.h"
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
@@ -45,6 +47,10 @@ tui_node* tui_node_create_box(void)
     YGNodeSetContext(node->yoga_node, node);
     YGNodeSetDirtiedFunc(node->yoga_node, node_dirtied_func);
 
+    /* Track metrics */
+    TUI_METRIC_INC(node_count);
+    TUI_METRIC_INC(box_count);
+
     return node;
 }
 
@@ -74,6 +80,10 @@ tui_node* tui_node_create_text(const char *text)
     YGNodeSetBaselineFunc(node->yoga_node, text_baseline_func);
     YGNodeSetDirtiedFunc(node->yoga_node, node_dirtied_func);
 
+    /* Track metrics */
+    TUI_METRIC_INC(node_count);
+    TUI_METRIC_INC(text_count);
+
     return node;
 }
 
@@ -102,6 +112,10 @@ tui_node* tui_node_create_static(void)
     YGNodeSetContext(node->yoga_node, node);
     YGNodeSetDirtiedFunc(node->yoga_node, node_dirtied_func);
 
+    /* Track metrics */
+    TUI_METRIC_INC(node_count);
+    TUI_METRIC_INC(static_count);
+
     return node;
 }
 
@@ -126,6 +140,9 @@ tui_node* tui_node_create_newline(int count)
     YGNodeSetContext(node->yoga_node, node);
     YGNodeSetDirtiedFunc(node->yoga_node, node_dirtied_func);
 
+    /* Track metrics */
+    TUI_METRIC_INC(node_count);
+
     return node;
 }
 
@@ -149,6 +166,9 @@ tui_node* tui_node_create_spacer(void)
     YGNodeSetContext(node->yoga_node, node);
     YGNodeSetDirtiedFunc(node->yoga_node, node_dirtied_func);
 
+    /* Track metrics */
+    TUI_METRIC_INC(node_count);
+
     return node;
 }
 
@@ -169,6 +189,15 @@ int tui_node_set_id(tui_node *node, const char *id)
 void tui_node_destroy(tui_node *node)
 {
     if (!node) return;
+
+    /* Track metrics - decrement based on type */
+    TUI_METRIC_DEC(node_count);
+    switch (node->type) {
+        case TUI_NODE_BOX:    TUI_METRIC_DEC(box_count); break;
+        case TUI_NODE_TEXT:   TUI_METRIC_DEC(text_count); break;
+        case TUI_NODE_STATIC: TUI_METRIC_DEC(static_count); break;
+        default: break;
+    }
 
     /* Destroy children recursively (child_count is 0 if children is NULL) */
     if (node->children) {
@@ -389,6 +418,9 @@ void tui_node_calculate_layout(tui_node *root, float width, float height)
 {
     if (!root) return;
 
+    /* Track layout run */
+    TUI_METRIC_INC(layout_runs);
+
     /* Use direction from root node, defaulting to LTR if not set */
     YGDirection dir = YGNodeStyleGetDirection(root->yoga_node);
     if (dir == YGDirectionInherit) {
@@ -407,6 +439,9 @@ static YGSize text_measure_func(YGNodeConstRef yg_node, float width,
 {
     YGSize size = {0, 0};
     tui_node *node = (tui_node *)YGNodeGetContext(yg_node);
+
+    /* Track measure call */
+    TUI_METRIC_INC(measure_calls);
 
     if (!node || !node->text) {
         return size;
@@ -451,6 +486,9 @@ static YGSize text_measure_func(YGNodeConstRef yg_node, float width,
  */
 static float text_baseline_func(YGNodeConstRef yg_node, float width, float height)
 {
+    /* Track baseline call */
+    TUI_METRIC_INC(baseline_calls);
+
     tui_node *node = (tui_node *)YGNodeGetContext(yg_node);
     if (!node || !node->text) {
         return height;
