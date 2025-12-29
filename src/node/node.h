@@ -78,6 +78,7 @@ typedef struct tui_node {
     struct tui_node **children;
     int child_count;
     int child_capacity;
+    int children_from_pool;      /* 1 if children array is from pool */
 
     /* Computed layout (from Yoga) */
     float x, y, width, height;

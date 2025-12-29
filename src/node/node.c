@@ -23,6 +23,54 @@ static YGSize text_measure_func(YGNodeConstRef yg_node, float width,
 static float text_baseline_func(YGNodeConstRef yg_node, float width, float height);
 static void node_dirtied_func(YGNodeConstRef yg_node);
 
+/*
+ * Helper to grow a node's children array when needed.
+ * Returns 0 on success, -1 on failure.
+ */
+static int ensure_children_capacity(tui_node *parent)
+{
+    if (parent->child_count < parent->child_capacity) {
+        return 0;  /* Already have room */
+    }
+
+    /* Check for overflow before doubling */
+    if (parent->child_capacity > INT_MAX / 2) return -1;
+    int new_capacity = parent->child_capacity * 2;
+
+    /* Check for size_t overflow in allocation */
+    if ((size_t)new_capacity > SIZE_MAX / sizeof(tui_node*)) return -1;
+
+    tui_node **new_children;
+    int actual_capacity;
+
+    if (parent->children_from_pool && TUI_G(pools)) {
+        /* Get new array from pool, copy, release old */
+        new_children = tui_children_pool_alloc(TUI_G(pools), new_capacity, &actual_capacity);
+        if (!new_children) return -1;
+        memcpy(new_children, parent->children, parent->child_count * sizeof(tui_node*));
+        tui_children_pool_free(TUI_G(pools), parent->children, parent->child_capacity);
+        new_capacity = actual_capacity;
+        /* New array is also from pool */
+    } else if (TUI_G(pools)) {
+        /* Old array was malloc'd but pools now available - get from pool */
+        new_children = tui_children_pool_alloc(TUI_G(pools), new_capacity, &actual_capacity);
+        if (!new_children) return -1;
+        memcpy(new_children, parent->children, parent->child_count * sizeof(tui_node*));
+        free(parent->children);
+        new_capacity = actual_capacity;
+        parent->children_from_pool = 1;
+    } else {
+        /* No pools - use realloc */
+        new_children = realloc(parent->children, (size_t)new_capacity * sizeof(tui_node*));
+        if (!new_children) return -1;
+        parent->children_from_pool = 0;
+    }
+
+    parent->children = new_children;
+    parent->child_capacity = new_capacity;
+    return 0;
+}
+
 tui_node* tui_node_create_box(void)
 {
     tui_node *node = calloc(1, sizeof(tui_node));
@@ -40,8 +88,10 @@ tui_node* tui_node_create_box(void)
     int actual_capacity = INITIAL_CHILDREN_CAPACITY;
     if (TUI_G(pools)) {
         node->children = tui_children_pool_alloc(TUI_G(pools), INITIAL_CHILDREN_CAPACITY, &actual_capacity);
+        node->children_from_pool = (node->children != NULL);
     } else {
         node->children = calloc(INITIAL_CHILDREN_CAPACITY, sizeof(tui_node*));
+        node->children_from_pool = 0;
     }
     if (!node->children) {
         YGNodeFree(node->yoga_node);
@@ -111,8 +161,10 @@ tui_node* tui_node_create_static(void)
     int actual_capacity = INITIAL_CHILDREN_CAPACITY;
     if (TUI_G(pools)) {
         node->children = tui_children_pool_alloc(TUI_G(pools), INITIAL_CHILDREN_CAPACITY, &actual_capacity);
+        node->children_from_pool = (node->children != NULL);
     } else {
         node->children = calloc(INITIAL_CHILDREN_CAPACITY, sizeof(tui_node*));
+        node->children_from_pool = 0;
     }
     if (!node->children) {
         YGNodeFree(node->yoga_node);
@@ -223,9 +275,9 @@ void tui_node_destroy(tui_node *node)
     if (node->yoga_node) {
         YGNodeFree(node->yoga_node);
     }
-    /* Return children array to pool if available */
+    /* Return children array to pool or free based on origin */
     if (node->children) {
-        if (TUI_G(pools)) {
+        if (node->children_from_pool && TUI_G(pools)) {
             tui_children_pool_free(TUI_G(pools), node->children, node->child_capacity);
         } else {
             free(node->children);
@@ -241,38 +293,8 @@ int tui_node_append_child(tui_node *parent, tui_node *child)
 {
     if (!parent || !child) return -1;
 
-    /* Grow array if needed */
-    if (parent->child_count >= parent->child_capacity) {
-        /* Check for overflow before doubling */
-        if (parent->child_capacity > INT_MAX / 2) return -1;
-        int new_capacity = parent->child_capacity * 2;
-
-        /* Check for size_t overflow in allocation */
-        if ((size_t)new_capacity > SIZE_MAX / sizeof(tui_node*)) return -1;
-
-        tui_node **new_children;
-        int actual_capacity;
-
-        /* Try to get new array from pool */
-        if (TUI_G(pools)) {
-            new_children = tui_children_pool_alloc(TUI_G(pools), new_capacity, &actual_capacity);
-            if (new_children) {
-                /* Copy existing children */
-                memcpy(new_children, parent->children, parent->child_count * sizeof(tui_node*));
-                /* Return old array to pool */
-                tui_children_pool_free(TUI_G(pools), parent->children, parent->child_capacity);
-                new_capacity = actual_capacity;
-            } else {
-                return -1;  /* Allocation failed */
-            }
-        } else {
-            new_children = realloc(parent->children,
-                (size_t)new_capacity * sizeof(tui_node*));
-            if (!new_children) return -1;  /* Allocation failed */
-        }
-
-        parent->children = new_children;
-        parent->child_capacity = new_capacity;
+    if (ensure_children_capacity(parent) != 0) {
+        return -1;
     }
 
     parent->children[parent->child_count++] = child;
@@ -326,38 +348,8 @@ void tui_node_insert_before(tui_node *parent, tui_node *child, tui_node *before)
     }
 
     if (index >= 0) {
-        /* Grow array if needed */
-        if (parent->child_count >= parent->child_capacity) {
-            /* Check for overflow before doubling */
-            if (parent->child_capacity > INT_MAX / 2) return;
-            int new_capacity = parent->child_capacity * 2;
-
-            /* Check for size_t overflow in allocation */
-            if ((size_t)new_capacity > SIZE_MAX / sizeof(tui_node*)) return;
-
-            tui_node **new_children;
-            int actual_capacity;
-
-            /* Try to get new array from pool */
-            if (TUI_G(pools)) {
-                new_children = tui_children_pool_alloc(TUI_G(pools), new_capacity, &actual_capacity);
-                if (new_children) {
-                    /* Copy existing children */
-                    memcpy(new_children, parent->children, parent->child_count * sizeof(tui_node*));
-                    /* Return old array to pool */
-                    tui_children_pool_free(TUI_G(pools), parent->children, parent->child_capacity);
-                    new_capacity = actual_capacity;
-                } else {
-                    return;  /* Allocation failed */
-                }
-            } else {
-                new_children = realloc(parent->children,
-                    (size_t)new_capacity * sizeof(tui_node*));
-                if (!new_children) return;  /* Allocation failed */
-            }
-
-            parent->children = new_children;
-            parent->child_capacity = new_capacity;
+        if (ensure_children_capacity(parent) != 0) {
+            return;
         }
 
         /* Shift children to make room */

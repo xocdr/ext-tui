@@ -103,6 +103,12 @@ Returns all metrics in a single associative array:
     'input_events' => int,     // Keyboard input events
     'resize_events' => int,    // Terminal resize events
     'timer_fires' => int,      // Timer callback executions
+
+    // Pool metrics (also available via tui_get_pool_metrics with different keys)
+    'pool_children_hits' => int,     // Pool allocations (hits)
+    'pool_children_misses' => int,   // Malloc fallbacks (misses)
+    'pool_children_returns' => int,  // Arrays returned to pool
+    'pool_keymap_reuses' => int,     // Key map reuses
 ]
 ```
 
@@ -193,17 +199,20 @@ Returns only event loop metrics:
 tui_get_pool_metrics(): array
 ```
 
-Returns object pool metrics:
+Returns object pool metrics with user-friendly key names:
 
 ```php
 [
-    'children_allocs' => int,      // Successful pool allocations
-    'children_fallbacks' => int,   // Allocations that fell back to malloc
-    'children_reuses' => int,      // Arrays returned to pool
+    'children_allocs' => int,      // Successful pool allocations (internal: children_hits)
+    'children_fallbacks' => int,   // Allocations that fell back to malloc (internal: children_misses)
+    'children_reuses' => int,      // Arrays returned to pool (internal: children_returns)
     'keymap_reuses' => int,        // Key map reuses
-    'children_hit_rate' => float,  // Pool hit rate percentage
+    'children_hit_rate' => float,  // Pool hit rate percentage (allocs / (allocs + fallbacks))
 ]
 ```
+
+> **Note:** The same metrics are also included in `tui_get_metrics()` with `pool_` prefix and internal naming:
+> `pool_children_hits`, `pool_children_misses`, `pool_children_returns`, `pool_keymap_reuses`.
 
 ---
 
