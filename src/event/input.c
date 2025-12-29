@@ -5,65 +5,8 @@
 */
 
 #include "input.h"
+#include "../text/measure.h"  /* For tui_utf8_decode_n() */
 #include <string.h>
-
-/**
- * Validate UTF-8 byte sequence
- * Returns the number of bytes in the character, or 0 if invalid
- */
-static int validate_utf8_sequence(const unsigned char *buf, int len)
-{
-    if (len < 1) return 0;
-
-    unsigned char c = buf[0];
-    int bytes = 0;
-
-    /* Determine expected length from first byte */
-    if ((c & 0x80) == 0x00) {
-        /* ASCII (0xxxxxxx) - single byte */
-        return 1;
-    } else if ((c & 0xE0) == 0xC0) {
-        /* 2-byte sequence (110xxxxx) */
-        bytes = 2;
-        /* Overlong check: must be >= 0x80 */
-        if (c < 0xC2) return 0;
-    } else if ((c & 0xF0) == 0xE0) {
-        /* 3-byte sequence (1110xxxx) */
-        bytes = 3;
-    } else if ((c & 0xF8) == 0xF0) {
-        /* 4-byte sequence (11110xxx) */
-        bytes = 4;
-        /* Must be <= 0xF4 for valid Unicode */
-        if (c > 0xF4) return 0;
-    } else {
-        /* Invalid start byte (10xxxxxx or 11111xxx) */
-        return 0;
-    }
-
-    /* Check we have enough bytes */
-    if (bytes > len) return 0;
-
-    /* Validate continuation bytes (must be 10xxxxxx) */
-    for (int i = 1; i < bytes; i++) {
-        if ((buf[i] & 0xC0) != 0x80) {
-            return 0;
-        }
-    }
-
-    /* Additional overlong checks */
-    if (bytes == 3) {
-        /* 3-byte: first continuation must not create overlong */
-        if (c == 0xE0 && buf[1] < 0xA0) return 0;
-        /* Surrogate pairs are invalid in UTF-8 */
-        if (c == 0xED && buf[1] >= 0xA0) return 0;
-    } else if (bytes == 4) {
-        /* 4-byte: check for overlong and out-of-range */
-        if (c == 0xF0 && buf[1] < 0x90) return 0;
-        if (c == 0xF4 && buf[1] > 0x8F) return 0;
-    }
-
-    return bytes;
-}
 
 int tui_input_parse(const char *buf, int len, tui_key_event *event)
 {
@@ -224,17 +167,18 @@ int tui_input_parse(const char *buf, int len, tui_key_event *event)
         }
     }
 
-    /* UTF-8 multi-byte character - use proper validation */
+    /* UTF-8 multi-byte character - use shared UTF-8 decoder from measure.h */
     if ((unsigned char)buf[0] >= 0x80) {
-        int bytes = validate_utf8_sequence((const unsigned char *)buf, len);
+        uint32_t codepoint;
+        int bytes = tui_utf8_decode_n(buf, len, &codepoint);
 
-        /* If valid UTF-8 and fits in key buffer */
-        if (bytes > 0 && bytes < (int)sizeof(event->key)) {
+        /* If valid UTF-8 and fits in key buffer (leave room for null terminator) */
+        if (bytes > 0 && bytes <= (int)sizeof(event->key) - 1) {
             memcpy(event->key, buf, bytes);
             event->key[bytes] = '\0';
             return 0;
         }
-        /* Invalid UTF-8: fall through to raw copy */
+        /* Invalid UTF-8 or too long: fall through to raw copy */
     }
 
     /* Unknown sequence, copy raw with bounds check */

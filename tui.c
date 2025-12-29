@@ -861,7 +861,10 @@ static tui_node* php_to_tui_node(zval *obj)
             ZEND_HASH_FOREACH_VAL(ht, child) {
                 tui_node *child_node = php_to_tui_node(child);
                 if (child_node) {
-                    tui_node_append_child(node, child_node);
+                    if (tui_node_append_child(node, child_node) < 0) {
+                        /* Failed to append - destroy the orphan child to prevent leak */
+                        tui_node_destroy(child_node);
+                    }
                 }
             } ZEND_HASH_FOREACH_END();
         }
@@ -1940,21 +1943,27 @@ static const zend_function_entry tui_stderr_context_methods[] = {
 PHP_FUNCTION(tui_get_terminal_size)
 {
     struct winsize ws;
+    int width = 80;   /* Default fallback */
+    int height = 24;
 
     ZEND_PARSE_PARAMETERS_NONE();
 
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
-        /* Fallback to defaults */
-        ws.ws_col = 80;
-        ws.ws_row = 24;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0) {
+        /* Validate returned values before using */
+        if (ws.ws_col > 0 && ws.ws_col <= 1000) {
+            width = ws.ws_col;
+        }
+        if (ws.ws_row > 0 && ws.ws_row <= 1000) {
+            height = ws.ws_row;
+        }
     }
 
-    TUI_G(terminal_width) = ws.ws_col;
-    TUI_G(terminal_height) = ws.ws_row;
+    TUI_G(terminal_width) = width;
+    TUI_G(terminal_height) = height;
 
     array_init(return_value);
-    add_next_index_long(return_value, ws.ws_col);
-    add_next_index_long(return_value, ws.ws_row);
+    add_next_index_long(return_value, width);
+    add_next_index_long(return_value, height);
 }
 /* }}} */
 
@@ -2597,14 +2606,27 @@ PHP_FUNCTION(tui_pad)
         Z_PARAM_STR(pad_char)
     ZEND_PARSE_PARAMETERS_END();
 
+    /* Validate width to prevent excessive allocation */
+    if (width < 0) width = 0;
+    if (width > 10000) {
+        php_error_docref(NULL, E_WARNING, "Width exceeds maximum of 10000");
+        RETURN_FALSE;
+    }
+
     char align_ch = align && ZSTR_LEN(align) > 0 ? ZSTR_VAL(align)[0] : 'l';
     char pad_ch = pad_char && ZSTR_LEN(pad_char) > 0 ? ZSTR_VAL(pad_char)[0] : ' ';
 
-    /* Allocate output buffer (width + original text length + null) */
+    /* Allocate output buffer (width + original text length + null)
+     * This is sufficient because padding can only ADD (width - text_display_width) chars */
     size_t buf_size = (size_t)width + ZSTR_LEN(text) + 1;
     char *output = emalloc(buf_size);
 
-    int result_len = tui_pad(ZSTR_VAL(text), (int)width, align_ch, pad_ch, output);
+    /* Use tui_pad_n for bounds-checked operation */
+    int result_len = tui_pad_n(ZSTR_VAL(text), (int)width, align_ch, pad_ch, output, buf_size);
+    if (result_len < 0) {
+        efree(output);
+        RETURN_FALSE;
+    }
 
     RETVAL_STRINGL(output, result_len);
     efree(output);
@@ -4714,10 +4736,29 @@ static PHP_GINIT_FUNCTION(tui)
 }
 /* }}} */
 
+/* {{{ INI settings */
+PHP_INI_BEGIN()
+    STD_PHP_INI_ENTRY("tui.max_buffer_width", "500", PHP_INI_ALL,
+                      OnUpdateLong, max_buffer_width, zend_tui_globals, tui_globals)
+    STD_PHP_INI_ENTRY("tui.max_buffer_height", "500", PHP_INI_ALL,
+                      OnUpdateLong, max_buffer_height, zend_tui_globals, tui_globals)
+    STD_PHP_INI_ENTRY("tui.max_tree_depth", "100", PHP_INI_ALL,
+                      OnUpdateLong, max_tree_depth, zend_tui_globals, tui_globals)
+    STD_PHP_INI_ENTRY("tui.max_states", "64", PHP_INI_ALL,
+                      OnUpdateLong, max_states, zend_tui_globals, tui_globals)
+    STD_PHP_INI_ENTRY("tui.max_timers", "32", PHP_INI_ALL,
+                      OnUpdateLong, max_timers, zend_tui_globals, tui_globals)
+    STD_PHP_INI_ENTRY("tui.min_render_interval", "16", PHP_INI_ALL,
+                      OnUpdateLong, min_render_interval, zend_tui_globals, tui_globals)
+PHP_INI_END()
+/* }}} */
+
 /* {{{ PHP_MINIT_FUNCTION */
 static PHP_MINIT_FUNCTION(tui)
 {
     zend_class_entry ce;
+
+    REGISTER_INI_ENTRIES();
 
     /* Initialize shared Yoga configuration */
     TUI_G(yoga_config) = YGConfigNew();
@@ -4929,6 +4970,8 @@ static PHP_MINIT_FUNCTION(tui)
 /* {{{ PHP_MSHUTDOWN_FUNCTION */
 static PHP_MSHUTDOWN_FUNCTION(tui)
 {
+    UNREGISTER_INI_ENTRIES();
+
     /* Free shared Yoga configuration */
     if (TUI_G(yoga_config)) {
         YGConfigFree(TUI_G(yoga_config));
@@ -4945,6 +4988,8 @@ static PHP_MINFO_FUNCTION(tui)
     php_info_print_table_header(2, "tui support", "enabled");
     php_info_print_table_row(2, "Version", PHP_TUI_VERSION);
     php_info_print_table_end();
+
+    DISPLAY_INI_ENTRIES();
 }
 /* }}} */
 

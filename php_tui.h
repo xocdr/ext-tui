@@ -38,6 +38,14 @@ ZEND_BEGIN_MODULE_GLOBALS(tui)
     int terminal_width;
     int terminal_height;
     YGConfigRef yoga_config;
+
+    /* Configurable limits (from INI) */
+    zend_long max_buffer_width;
+    zend_long max_buffer_height;
+    zend_long max_tree_depth;
+    zend_long max_states;
+    zend_long max_timers;
+    zend_long min_render_interval;
 ZEND_END_MODULE_GLOBALS(tui)
 
 #ifdef ZTS

@@ -186,22 +186,22 @@ void tui_node_destroy(tui_node *node)
     free(node);
 }
 
-void tui_node_append_child(tui_node *parent, tui_node *child)
+int tui_node_append_child(tui_node *parent, tui_node *child)
 {
-    if (!parent || !child) return;
+    if (!parent || !child) return -1;
 
     /* Grow array if needed */
     if (parent->child_count >= parent->child_capacity) {
         /* Check for overflow before doubling */
-        if (parent->child_capacity > INT_MAX / 2) return;
+        if (parent->child_capacity > INT_MAX / 2) return -1;
         int new_capacity = parent->child_capacity * 2;
 
         /* Check for size_t overflow in allocation */
-        if ((size_t)new_capacity > SIZE_MAX / sizeof(tui_node*)) return;
+        if ((size_t)new_capacity > SIZE_MAX / sizeof(tui_node*)) return -1;
 
         tui_node **new_children = realloc(parent->children,
             (size_t)new_capacity * sizeof(tui_node*));
-        if (!new_children) return;  /* Allocation failed */
+        if (!new_children) return -1;  /* Allocation failed */
         parent->children = new_children;
         parent->child_capacity = new_capacity;
     }
@@ -211,6 +211,7 @@ void tui_node_append_child(tui_node *parent, tui_node *child)
 
     /* Update Yoga tree */
     YGNodeInsertChild(parent->yoga_node, child->yoga_node, parent->child_count - 1);
+    return 0;
 }
 
 void tui_node_remove_child(tui_node *parent, tui_node *child)

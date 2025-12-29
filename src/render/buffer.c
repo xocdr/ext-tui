@@ -10,11 +10,15 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Configuration constants */
+#define MAX_BUFFER_DIMENSION 500   /* Max 500x500 = 250K cells = ~4MB */
+#define ANSI_MAX_PER_CELL 64       /* Max ANSI bytes per cell for output */
+
 tui_buffer* tui_buffer_create(int width, int height)
 {
     /* Validate dimensions */
     if (width <= 0 || height <= 0) return NULL;
-    if (width > 10000 || height > 10000) return NULL;
+    if (width > MAX_BUFFER_DIMENSION || height > MAX_BUFFER_DIMENSION) return NULL;
 
     /* Check for integer overflow before allocation */
     size_t cell_count = (size_t)width * (size_t)height;
@@ -53,7 +57,7 @@ int tui_buffer_resize(tui_buffer *buf, int width, int height)
 {
     if (!buf) return -1;
     if (width <= 0 || height <= 0) return -1;
-    if (width > 10000 || height > 10000) return -1;
+    if (width > MAX_BUFFER_DIMENSION || height > MAX_BUFFER_DIMENSION) return -1;
 
     /* Check for integer overflow before allocation */
     size_t cell_count = (size_t)width * (size_t)height;
@@ -110,26 +114,56 @@ void tui_buffer_set_cell(tui_buffer *buf, int x, int y, uint32_t ch, const tui_s
     cell->dirty = 1;
 }
 
+/**
+ * Write text to buffer at specified position.
+ *
+ * Handles UTF-8 encoding, wide characters, and newlines:
+ * - Newlines advance y and reset x to the starting position
+ * - Wide characters (CJK, emoji) mark the next cell as continuation
+ * - Text is clipped at buffer boundaries
+ *
+ * @param buf Buffer to write to
+ * @param x Starting x position
+ * @param y Starting y position
+ * @param text UTF-8 text to write
+ * @param style Style to apply (may be NULL for default)
+ */
 void tui_buffer_write_text(tui_buffer *buf, int x, int y, const char *text, const tui_style *style)
 {
     if (!buf || !text) return;
 
     const char *p = text;
     int cx = x;
+    int cy = y;
 
-    while (*p && cx < buf->width) {
+    while (*p && cy < buf->height) {
         uint32_t codepoint;
         int bytes = tui_utf8_decode(p, &codepoint);
+
+        /* Handle newlines: advance to next row, reset x */
+        if (codepoint == '\n') {
+            cy++;
+            cx = x;
+            p += bytes;
+            continue;
+        }
+
+        /* Skip if past right edge */
+        if (cx >= buf->width) {
+            p += bytes;
+            continue;
+        }
+
         int char_width = tui_char_width(codepoint);
 
         if (char_width > 0) {
             /* Set the main cell */
-            tui_buffer_set_cell(buf, cx, y, codepoint, style);
+            tui_buffer_set_cell(buf, cx, cy, codepoint, style);
 
             /* For wide characters (CJK, emoji), mark the next cell as a continuation
              * Use NULL style so it doesn't inherit colors that could bleed */
             if (char_width == 2 && cx + 1 < buf->width) {
-                tui_buffer_set_cell(buf, cx + 1, y, 0, NULL);  /* 0 = continuation, no style */
+                tui_buffer_set_cell(buf, cx + 1, cy, 0, NULL);  /* 0 = continuation, no style */
             }
 
             cx += char_width;

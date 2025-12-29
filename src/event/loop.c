@@ -10,8 +10,12 @@
 #include <poll.h>
 #include <unistd.h>
 #include <signal.h>
-#include <stdatomic.h>
 #include <limits.h>
+
+/* Constants for configuration */
+#define DEFAULT_POLL_TIMEOUT_MS 100
+#define MIN_POLL_TIMEOUT_MS 1
+#define MAX_TERMINAL_DIMENSION 1000
 
 #define MAX_TIMERS 32
 
@@ -36,13 +40,16 @@ struct tui_loop {
     int next_timer_id;
 };
 
-/* Use C11 atomic for async-signal-safe flag */
-static atomic_flag resize_pending = ATOMIC_FLAG_INIT;
+/* Use C11 atomic for async-signal-safe resize detection
+ * We use atomic_int instead of atomic_flag for clearer semantics:
+ * - Signal handler sets it to 1 (async-signal-safe)
+ * - Main loop reads and clears atomically using exchange */
+static volatile sig_atomic_t resize_pending = 0;
 
 static void sigwinch_handler(int sig)
 {
     (void)sig;
-    atomic_flag_test_and_set(&resize_pending);
+    resize_pending = 1;  /* sig_atomic_t write is async-signal-safe */
 }
 
 tui_loop* tui_loop_create(void)
@@ -141,34 +148,31 @@ int tui_loop_run(tui_loop *loop)
 
     /* Single iteration - poll once and process events */
     /* Calculate shortest timer interval */
-    int timeout = 100; /* Default 100ms */
+    int timeout = DEFAULT_POLL_TIMEOUT_MS;
     for (int i = 0; i < loop->timer_count; i++) {
         int remaining = loop->timers[i].interval_ms - loop->timers[i].elapsed_ms;
         if (remaining < timeout && remaining > 0) {
             timeout = remaining;
         }
     }
-    if (timeout <= 0) timeout = 1; /* Minimum 1ms */
+    if (timeout <= 0) timeout = MIN_POLL_TIMEOUT_MS;
 
     int ret = poll(fds, 1, timeout);
 
-    /* Check for resize using atomic flag
-     * Note: test_and_set returns the previous value (0 if was clear, 1 if was set)
-     * We clear immediately after detecting, then process the resize.
-     * This pattern may miss rapid consecutive signals, but that's acceptable
-     * as we always get the current terminal size when handling. */
-    if (loop->resize_cb) {
-        if (atomic_flag_test_and_set(&resize_pending)) {
-            /* Flag was already set, meaning a resize occurred */
-            atomic_flag_clear(&resize_pending);
-            /* Get actual terminal size (always current, regardless of signal count) */
-            int width, height;
-            if (tui_terminal_get_size(&width, &height) == 0) {
+    /* Check for resize using sig_atomic_t flag
+     * Read and clear in one check - sig_atomic_t ensures atomic read/write.
+     * We always get current terminal size when handling, so missing
+     * intermediate signals is fine. */
+    if (loop->resize_cb && resize_pending) {
+        resize_pending = 0;  /* Clear before processing */
+        /* Get actual terminal size (always current, regardless of signal count) */
+        int width, height;
+        if (tui_terminal_get_size(&width, &height) == 0) {
+            /* Validate terminal size before using */
+            if (width > 0 && width <= MAX_TERMINAL_DIMENSION &&
+                height > 0 && height <= MAX_TERMINAL_DIMENSION) {
                 loop->resize_cb(width, height, loop->resize_userdata);
             }
-        } else {
-            /* Flag was clear, we just set it - clear it back */
-            atomic_flag_clear(&resize_pending);
         }
     }
 

@@ -12,6 +12,7 @@
 
 #define INITIAL_DIFF_CAPACITY 16
 #define KEY_MAP_INITIAL_SIZE 32
+#define MAX_RECONCILE_DEPTH 100  /* Prevent stack overflow on deep trees */
 
 /* Simple hash map for key -> node lookups */
 typedef struct {
@@ -142,6 +143,10 @@ static int has_any_keys(tui_node **children, int count)
     return 0;
 }
 
+/* Forward declaration for mutual recursion with depth tracking */
+static void diff_children_with_depth(tui_diff_result *result, tui_node *old_node,
+                                      tui_node *new_node, int depth);
+
 /*
  * Key-based reconciliation algorithm with React's lastPlacedIndex optimization:
  *
@@ -165,9 +170,13 @@ static int has_any_keys(tui_node **children, int count)
  * - D: matched at 3, 3 > lastPlacedIndex(2), lastPlacedIndex=3, no move
  * - B: matched at 1, 1 < lastPlacedIndex(3), NEEDS MOVE (only B moves!)
  */
-static void diff_children_keyed(tui_diff_result *result,
-                                 tui_node *old_node, tui_node *new_node)
+static void diff_children_keyed_with_depth(tui_diff_result *result,
+                                            tui_node *old_node, tui_node *new_node,
+                                            int depth)
 {
+    /* Prevent stack overflow on very deep trees */
+    if (depth >= MAX_RECONCILE_DEPTH) return;
+
     int old_count = old_node ? old_node->child_count : 0;
     int new_count = new_node ? new_node->child_count : 0;
 
@@ -247,8 +256,8 @@ static void diff_children_keyed(tui_diff_result *result,
                 diff_result_add(result, flags, matched_old, new_child,
                                matched_old_idx, new_idx);
 
-                /* Recurse into children */
-                diff_children_keyed(result, matched_old, new_child);
+                /* Recurse into children with increased depth */
+                diff_children_with_depth(result, matched_old, new_child, depth + 1);
             }
         } else {
             /* No match: create new */
@@ -271,9 +280,13 @@ static void diff_children_keyed(tui_diff_result *result,
  * Simple index-based reconciliation for when no keys are present.
  * Faster than key-based when keys aren't used.
  */
-static void diff_children_indexed(tui_diff_result *result,
-                                   tui_node *old_node, tui_node *new_node)
+static void diff_children_indexed_with_depth(tui_diff_result *result,
+                                              tui_node *old_node, tui_node *new_node,
+                                              int depth)
 {
+    /* Prevent stack overflow on very deep trees */
+    if (depth >= MAX_RECONCILE_DEPTH) return;
+
     int old_count = old_node ? old_node->child_count : 0;
     int new_count = new_node ? new_node->child_count : 0;
     int max_count = old_count > new_count ? old_count : new_count;
@@ -295,8 +308,8 @@ static void diff_children_indexed(tui_diff_result *result,
             /* Same type: update */
             diff_result_add(result, TUI_DIFF_UPDATE, old_child, new_child, i, i);
 
-            /* Recurse into children */
-            diff_children_indexed(result, old_child, new_child);
+            /* Recurse into children with increased depth */
+            diff_children_with_depth(result, old_child, new_child, depth + 1);
         }
     }
 }
@@ -304,7 +317,8 @@ static void diff_children_indexed(tui_diff_result *result,
 /*
  * Choose reconciliation strategy based on whether keys are present.
  */
-static void diff_children(tui_diff_result *result, tui_node *old_node, tui_node *new_node)
+static void diff_children_with_depth(tui_diff_result *result, tui_node *old_node,
+                                      tui_node *new_node, int depth)
 {
     int old_count = old_node ? old_node->child_count : 0;
     int new_count = new_node ? new_node->child_count : 0;
@@ -319,10 +333,16 @@ static void diff_children(tui_diff_result *result, tui_node *old_node, tui_node 
     }
 
     if (use_keyed) {
-        diff_children_keyed(result, old_node, new_node);
+        diff_children_keyed_with_depth(result, old_node, new_node, depth);
     } else {
-        diff_children_indexed(result, old_node, new_node);
+        diff_children_indexed_with_depth(result, old_node, new_node, depth);
     }
+}
+
+/* Wrapper for entry point with depth=0 */
+static void diff_children(tui_diff_result *result, tui_node *old_node, tui_node *new_node)
+{
+    diff_children_with_depth(result, old_node, new_node, 0);
 }
 
 tui_diff_result* tui_reconciler_diff(tui_node *old_tree, tui_node *new_tree)
