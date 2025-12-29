@@ -4975,10 +4975,10 @@ PHP_FUNCTION(tui_get_metrics)
     /* Pool metrics */
     if (TUI_G(pools)) {
         tui_pools *p = TUI_G(pools);
-        add_assoc_long(return_value, "pool_children_allocs", (zend_long)p->children_allocated);
-        add_assoc_long(return_value, "pool_children_fallbacks", (zend_long)p->children_fallback);
-        add_assoc_long(return_value, "pool_children_reuses", (zend_long)p->children_reused);
-        add_assoc_long(return_value, "pool_keymap_reuses", (zend_long)p->key_map_reused);
+        add_assoc_long(return_value, "pool_children_hits", (zend_long)p->children_hits);
+        add_assoc_long(return_value, "pool_children_misses", (zend_long)p->children_misses);
+        add_assoc_long(return_value, "pool_children_returns", (zend_long)p->children_returns);
+        add_assoc_long(return_value, "pool_keymap_reuses", (zend_long)p->key_map_reuses);
     }
 }
 
@@ -5082,16 +5082,16 @@ PHP_FUNCTION(tui_get_pool_metrics)
 
     if (TUI_G(pools)) {
         tui_pools *p = TUI_G(pools);
-        add_assoc_long(return_value, "children_allocs", (zend_long)p->children_allocated);
-        add_assoc_long(return_value, "children_fallbacks", (zend_long)p->children_fallback);
-        add_assoc_long(return_value, "children_reuses", (zend_long)p->children_reused);
-        add_assoc_long(return_value, "keymap_reuses", (zend_long)p->key_map_reused);
+        add_assoc_long(return_value, "children_allocs", (zend_long)p->children_hits);
+        add_assoc_long(return_value, "children_fallbacks", (zend_long)p->children_misses);
+        add_assoc_long(return_value, "children_reuses", (zend_long)p->children_returns);
+        add_assoc_long(return_value, "keymap_reuses", (zend_long)p->key_map_reuses);
 
         /* Pool efficiency percentages */
-        int64_t total_children = p->children_allocated + p->children_fallback;
+        int64_t total_children = p->children_hits + p->children_misses;
         if (total_children > 0) {
             add_assoc_double(return_value, "children_hit_rate",
-                (double)p->children_allocated / (double)total_children * 100.0);
+                (double)p->children_hits / (double)total_children * 100.0);
         } else {
             add_assoc_double(return_value, "children_hit_rate", 0.0);
         }
@@ -6054,6 +6054,17 @@ static PHP_MINIT_FUNCTION(tui)
 }
 /* }}} */
 
+/* {{{ PHP_RINIT_FUNCTION */
+static PHP_RINIT_FUNCTION(tui)
+{
+    /* Reset object pools between requests */
+    if (TUI_G(pools)) {
+        tui_pools_reset(TUI_G(pools));
+    }
+    return SUCCESS;
+}
+/* }}} */
+
 /* {{{ PHP_MSHUTDOWN_FUNCTION */
 static PHP_MSHUTDOWN_FUNCTION(tui)
 {
@@ -6094,7 +6105,7 @@ zend_module_entry tui_module_entry = {
     tui_functions,
     PHP_MINIT(tui),
     PHP_MSHUTDOWN(tui),
-    NULL,  /* RINIT */
+    PHP_RINIT(tui),
     NULL,  /* RSHUTDOWN */
     PHP_MINFO(tui),
     PHP_TUI_VERSION,

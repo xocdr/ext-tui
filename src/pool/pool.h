@@ -14,22 +14,6 @@
 
 /* Forward declarations */
 struct tui_node;
-struct tui_diff_op;
-typedef struct tui_diff_op tui_diff_op;
-
-/*
- * Diff Operation Pool
- * Pre-allocates a slab of diff operations to avoid malloc per operation.
- */
-#define DIFF_OP_POOL_SIZE 256
-
-typedef struct {
-    tui_diff_op *ops;           /* Slab of operations */
-    uint8_t *in_use;            /* Bitmap of which slots are in use */
-    int capacity;               /* Total slots (DIFF_OP_POOL_SIZE) */
-    int free_count;             /* Number of free slots */
-    int next_free_hint;         /* Hint for O(1) allocation */
-} tui_diff_op_pool;
 
 /*
  * Children Array Pool
@@ -64,19 +48,15 @@ typedef struct {
 /*
  * Combined pool structure for module globals
  */
-typedef struct {
-    tui_diff_op_pool diff_ops;
+typedef struct tui_pools {
     tui_children_pool children;
     tui_key_map_pool key_map;
 
-    /* Pool metrics (only collected when metrics enabled) */
-    int64_t diff_ops_allocated;     /* Total allocations from pool */
-    int64_t diff_ops_fallback;      /* Allocations that fell back to malloc */
-    int64_t diff_ops_reused;        /* Times an op was returned to pool */
-    int64_t children_allocated;     /* Total children array allocations */
-    int64_t children_fallback;      /* Children arrays from malloc */
-    int64_t children_reused;        /* Children arrays returned to pool */
-    int64_t key_map_reused;         /* Key map reuses */
+    /* Pool metrics */
+    int64_t children_hits;          /* Successful pool allocations */
+    int64_t children_misses;        /* Allocations that missed pool (new alloc or too large) */
+    int64_t children_returns;       /* Arrays returned to pool */
+    int64_t key_map_reuses;         /* Key map reuses */
 } tui_pools;
 
 /* Pool lifecycle (called from MINIT/MSHUTDOWN) */
@@ -85,19 +65,6 @@ void tui_pools_shutdown(tui_pools *pools);
 
 /* Reset pools between requests (called from RINIT) */
 void tui_pools_reset(tui_pools *pools);
-
-/*
- * Diff operation pool API
- */
-
-/* Allocate a diff operation (from pool or malloc if exhausted) */
-tui_diff_op* tui_diff_op_pool_alloc(tui_pools *pools);
-
-/* Return a diff operation to the pool */
-void tui_diff_op_pool_free(tui_pools *pools, tui_diff_op *op);
-
-/* Bulk free all operations in a diff result */
-void tui_diff_op_pool_free_all(tui_pools *pools, tui_diff_op *ops, int count);
 
 /*
  * Children array pool API

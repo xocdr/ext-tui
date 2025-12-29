@@ -250,9 +250,27 @@ int tui_node_append_child(tui_node *parent, tui_node *child)
         /* Check for size_t overflow in allocation */
         if ((size_t)new_capacity > SIZE_MAX / sizeof(tui_node*)) return -1;
 
-        tui_node **new_children = realloc(parent->children,
-            (size_t)new_capacity * sizeof(tui_node*));
-        if (!new_children) return -1;  /* Allocation failed */
+        tui_node **new_children;
+        int actual_capacity;
+
+        /* Try to get new array from pool */
+        if (TUI_G(pools)) {
+            new_children = tui_children_pool_alloc(TUI_G(pools), new_capacity, &actual_capacity);
+            if (new_children) {
+                /* Copy existing children */
+                memcpy(new_children, parent->children, parent->child_count * sizeof(tui_node*));
+                /* Return old array to pool */
+                tui_children_pool_free(TUI_G(pools), parent->children, parent->child_capacity);
+                new_capacity = actual_capacity;
+            } else {
+                return -1;  /* Allocation failed */
+            }
+        } else {
+            new_children = realloc(parent->children,
+                (size_t)new_capacity * sizeof(tui_node*));
+            if (!new_children) return -1;  /* Allocation failed */
+        }
+
         parent->children = new_children;
         parent->child_capacity = new_capacity;
     }
@@ -317,9 +335,27 @@ void tui_node_insert_before(tui_node *parent, tui_node *child, tui_node *before)
             /* Check for size_t overflow in allocation */
             if ((size_t)new_capacity > SIZE_MAX / sizeof(tui_node*)) return;
 
-            tui_node **new_children = realloc(parent->children,
-                (size_t)new_capacity * sizeof(tui_node*));
-            if (!new_children) return;  /* Allocation failed */
+            tui_node **new_children;
+            int actual_capacity;
+
+            /* Try to get new array from pool */
+            if (TUI_G(pools)) {
+                new_children = tui_children_pool_alloc(TUI_G(pools), new_capacity, &actual_capacity);
+                if (new_children) {
+                    /* Copy existing children */
+                    memcpy(new_children, parent->children, parent->child_count * sizeof(tui_node*));
+                    /* Return old array to pool */
+                    tui_children_pool_free(TUI_G(pools), parent->children, parent->child_capacity);
+                    new_capacity = actual_capacity;
+                } else {
+                    return;  /* Allocation failed */
+                }
+            } else {
+                new_children = realloc(parent->children,
+                    (size_t)new_capacity * sizeof(tui_node*));
+                if (!new_children) return;  /* Allocation failed */
+            }
+
             parent->children = new_children;
             parent->child_capacity = new_capacity;
         }
