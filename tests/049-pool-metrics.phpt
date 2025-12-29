@@ -17,7 +17,9 @@ var_dump(array_key_exists('children_allocs', $m));
 var_dump(array_key_exists('children_fallbacks', $m));
 var_dump(array_key_exists('children_reuses', $m));
 var_dump(array_key_exists('keymap_reuses', $m));
+var_dump(array_key_exists('keymap_fallbacks', $m));
 var_dump(array_key_exists('children_hit_rate', $m));
+var_dump(array_key_exists('keymap_hit_rate', $m));
 
 // Create a test renderer and some nodes to trigger pool usage
 $renderer = tui_test_create(80, 24);
@@ -40,6 +42,8 @@ tui_test_destroy($renderer);
 echo "Done\n";
 ?>
 --EXPECT--
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)

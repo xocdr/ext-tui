@@ -42,12 +42,10 @@ static key_map* key_map_create(int initial_capacity)
 
     /* Try to get entries from pool */
     if (TUI_G(pools)) {
-        map->entries = tui_key_map_pool_acquire(TUI_G(pools), map->capacity, sizeof(key_map_entry));
-        if (map->entries) {
-            map->from_pool = 1;
-        }
+        map->entries = tui_key_map_pool_acquire(TUI_G(pools), map->capacity, sizeof(key_map_entry), &map->from_pool);
     } else {
         map->entries = calloc(map->capacity, sizeof(key_map_entry));
+        map->from_pool = 0;
     }
     if (!map->entries) {
         free(map);

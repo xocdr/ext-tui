@@ -4979,6 +4979,7 @@ PHP_FUNCTION(tui_get_metrics)
         add_assoc_long(return_value, "pool_children_misses", (zend_long)p->children_misses);
         add_assoc_long(return_value, "pool_children_returns", (zend_long)p->children_returns);
         add_assoc_long(return_value, "pool_keymap_reuses", (zend_long)p->key_map_reuses);
+        add_assoc_long(return_value, "pool_keymap_misses", (zend_long)p->key_map_misses);
     }
 }
 
@@ -5086,6 +5087,7 @@ PHP_FUNCTION(tui_get_pool_metrics)
         add_assoc_long(return_value, "children_fallbacks", (zend_long)p->children_misses);
         add_assoc_long(return_value, "children_reuses", (zend_long)p->children_returns);
         add_assoc_long(return_value, "keymap_reuses", (zend_long)p->key_map_reuses);
+        add_assoc_long(return_value, "keymap_fallbacks", (zend_long)p->key_map_misses);
 
         /* Pool efficiency percentages */
         int64_t total_children = p->children_hits + p->children_misses;
@@ -5094,6 +5096,14 @@ PHP_FUNCTION(tui_get_pool_metrics)
                 (double)p->children_hits / (double)total_children * 100.0);
         } else {
             add_assoc_double(return_value, "children_hit_rate", 0.0);
+        }
+
+        int64_t total_keymap = p->key_map_reuses + p->key_map_misses;
+        if (total_keymap > 0) {
+            add_assoc_double(return_value, "keymap_hit_rate",
+                (double)p->key_map_reuses / (double)total_keymap * 100.0);
+        } else {
+            add_assoc_double(return_value, "keymap_hit_rate", 0.0);
         }
     }
 }

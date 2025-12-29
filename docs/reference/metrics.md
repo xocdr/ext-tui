@@ -109,6 +109,7 @@ Returns all metrics in a single associative array:
     'pool_children_misses' => int,   // Malloc fallbacks (misses)
     'pool_children_returns' => int,  // Arrays returned to pool
     'pool_keymap_reuses' => int,     // Key map reuses
+    'pool_keymap_misses' => int,     // Key map malloc fallbacks
 ]
 ```
 
@@ -207,12 +208,14 @@ Returns object pool metrics with user-friendly key names:
     'children_fallbacks' => int,   // Allocations that fell back to malloc (internal: children_misses)
     'children_reuses' => int,      // Arrays returned to pool (internal: children_returns)
     'keymap_reuses' => int,        // Key map reuses
+    'keymap_fallbacks' => int,     // Key map malloc fallbacks (internal: key_map_misses)
     'children_hit_rate' => float,  // Pool hit rate percentage (allocs / (allocs + fallbacks))
+    'keymap_hit_rate' => float,    // Key map hit rate percentage
 ]
 ```
 
 > **Note:** The same metrics are also included in `tui_get_metrics()` with `pool_` prefix and internal naming:
-> `pool_children_hits`, `pool_children_misses`, `pool_children_returns`, `pool_keymap_reuses`.
+> `pool_children_hits`, `pool_children_misses`, `pool_children_returns`, `pool_keymap_reuses`, `pool_keymap_misses`.
 
 ---
 

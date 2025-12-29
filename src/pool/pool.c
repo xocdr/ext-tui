@@ -158,14 +158,17 @@ void tui_children_pool_free(tui_pools *pools, struct tui_node **array, int capac
  * The entry_size is passed in by the caller to handle proper alignment.
  */
 
-void* tui_key_map_pool_acquire(tui_pools *pools, int initial_capacity, size_t entry_size)
+void* tui_key_map_pool_acquire(tui_pools *pools, int initial_capacity, size_t entry_size, int *from_pool)
 {
     if (!pools) {
+        *from_pool = 0;
         return calloc(initial_capacity, entry_size);
     }
 
     if (pools->key_map.in_use) {
-        /* Already in use, allocate new one */
+        /* Already in use (nested reconciliation), allocate new one */
+        pools->key_map_misses++;
+        *from_pool = 0;
         return calloc(initial_capacity, entry_size);
     }
 
@@ -176,16 +179,19 @@ void* tui_key_map_pool_acquire(tui_pools *pools, int initial_capacity, size_t en
         /* Reuse existing */
         pools->key_map.in_use = 1;
         pools->key_map_reuses++;
+        *from_pool = 1;
         memset(pools->key_map.entries, 0, pools->key_map.capacity * entry_size);
         return pools->key_map.entries;
     }
 
-    /* Need larger, different size, or first allocation */
+    /* Need larger, different size, or first allocation - store in pool for future reuse */
     free(pools->key_map.entries);
     pools->key_map.entries = calloc(initial_capacity, entry_size);
     pools->key_map.capacity = initial_capacity;
     pools->key_map.entry_size = entry_size;
     pools->key_map.in_use = 1;
+    pools->key_map_misses++;
+    *from_pool = 1;  /* This IS the pool buffer, just newly allocated */
     return pools->key_map.entries;
 }
 

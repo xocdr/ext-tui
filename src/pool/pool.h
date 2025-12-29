@@ -57,7 +57,8 @@ typedef struct tui_pools {
     int64_t children_hits;          /* Successful pool allocations */
     int64_t children_misses;        /* Allocations that missed pool (new alloc or too large) */
     int64_t children_returns;       /* Arrays returned to pool */
-    int64_t key_map_reuses;         /* Key map reuses */
+    int64_t key_map_reuses;         /* Key map reuses (pool hits) */
+    int64_t key_map_misses;         /* Key map fallbacks to malloc */
 } tui_pools;
 
 /* Pool lifecycle (called from MINIT/MSHUTDOWN) */
@@ -81,8 +82,9 @@ void tui_children_pool_free(tui_pools *pools, struct tui_node **array, int capac
  * Key map pool API
  */
 
-/* Acquire the shared key map (cleared, ready for use) */
-void* tui_key_map_pool_acquire(tui_pools *pools, int initial_capacity, size_t entry_size);
+/* Acquire the shared key map (cleared, ready for use)
+ * Sets *from_pool to 1 if buffer came from pool, 0 if malloc'd fallback */
+void* tui_key_map_pool_acquire(tui_pools *pools, int initial_capacity, size_t entry_size, int *from_pool);
 
 /* Release the key map back to pool */
 void tui_key_map_pool_release(tui_pools *pools);
