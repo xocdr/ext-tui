@@ -17,6 +17,8 @@
 static int copy_layout_recursive(tui_node *node);
 static YGSize text_measure_func(YGNodeConstRef yg_node, float width,
     YGMeasureMode widthMode, float height, YGMeasureMode heightMode);
+static float text_baseline_func(YGNodeConstRef yg_node, float width, float height);
+static void node_dirtied_func(YGNodeConstRef yg_node);
 
 tui_node* tui_node_create_box(void)
 {
@@ -24,7 +26,8 @@ tui_node* tui_node_create_box(void)
     if (!node) return NULL;
 
     node->type = TUI_NODE_BOX;
-    node->yoga_node = YGNodeNew();
+    YGConfigRef config = tui_get_yoga_config();
+    node->yoga_node = config ? YGNodeNewWithConfig(config) : YGNodeNew();
     if (!node->yoga_node) {
         free(node);
         return NULL;
@@ -38,6 +41,10 @@ tui_node* tui_node_create_box(void)
         return NULL;
     }
 
+    /* Set up context and dirtied callback for incremental layout */
+    YGNodeSetContext(node->yoga_node, node);
+    YGNodeSetDirtiedFunc(node->yoga_node, node_dirtied_func);
+
     return node;
 }
 
@@ -47,7 +54,8 @@ tui_node* tui_node_create_text(const char *text)
     if (!node) return NULL;
 
     node->type = TUI_NODE_TEXT;
-    node->yoga_node = YGNodeNew();
+    YGConfigRef config = tui_get_yoga_config();
+    node->yoga_node = config ? YGNodeNewWithConfig(config) : YGNodeNew();
     if (!node->yoga_node) {
         free(node);
         return NULL;
@@ -60,9 +68,11 @@ tui_node* tui_node_create_text(const char *text)
         return NULL;
     }
 
-    /* Set up text measurement for Yoga */
+    /* Set up text measurement, baseline, and dirtied callback for Yoga */
     YGNodeSetContext(node->yoga_node, node);
     YGNodeSetMeasureFunc(node->yoga_node, text_measure_func);
+    YGNodeSetBaselineFunc(node->yoga_node, text_baseline_func);
+    YGNodeSetDirtiedFunc(node->yoga_node, node_dirtied_func);
 
     return node;
 }
@@ -73,7 +83,8 @@ tui_node* tui_node_create_static(void)
     if (!node) return NULL;
 
     node->type = TUI_NODE_STATIC;
-    node->yoga_node = YGNodeNew();
+    YGConfigRef config = tui_get_yoga_config();
+    node->yoga_node = config ? YGNodeNewWithConfig(config) : YGNodeNew();
     if (!node->yoga_node) {
         free(node);
         return NULL;
@@ -87,6 +98,10 @@ tui_node* tui_node_create_static(void)
         return NULL;
     }
 
+    /* Set up context and dirtied callback */
+    YGNodeSetContext(node->yoga_node, node);
+    YGNodeSetDirtiedFunc(node->yoga_node, node_dirtied_func);
+
     return node;
 }
 
@@ -97,7 +112,8 @@ tui_node* tui_node_create_newline(int count)
 
     node->type = TUI_NODE_NEWLINE;
     node->newline_count = count > 0 ? count : 1;
-    node->yoga_node = YGNodeNew();
+    YGConfigRef config = tui_get_yoga_config();
+    node->yoga_node = config ? YGNodeNewWithConfig(config) : YGNodeNew();
     if (!node->yoga_node) {
         free(node);
         return NULL;
@@ -105,6 +121,10 @@ tui_node* tui_node_create_newline(int count)
 
     /* Set height to number of lines */
     YGNodeStyleSetHeight(node->yoga_node, (float)node->newline_count);
+
+    /* Set up context and dirtied callback */
+    YGNodeSetContext(node->yoga_node, node);
+    YGNodeSetDirtiedFunc(node->yoga_node, node_dirtied_func);
 
     return node;
 }
@@ -115,7 +135,8 @@ tui_node* tui_node_create_spacer(void)
     if (!node) return NULL;
 
     node->type = TUI_NODE_SPACER;
-    node->yoga_node = YGNodeNew();
+    YGConfigRef config = tui_get_yoga_config();
+    node->yoga_node = config ? YGNodeNewWithConfig(config) : YGNodeNew();
     if (!node->yoga_node) {
         free(node);
         return NULL;
@@ -123,6 +144,10 @@ tui_node* tui_node_create_spacer(void)
 
     /* Spacer has flexGrow: 1 by default */
     YGNodeStyleSetFlexGrow(node->yoga_node, 1.0f);
+
+    /* Set up context and dirtied callback */
+    YGNodeSetContext(node->yoga_node, node);
+    YGNodeSetDirtiedFunc(node->yoga_node, node_dirtied_func);
 
     return node;
 }
@@ -361,7 +386,13 @@ void tui_node_calculate_layout(tui_node *root, float width, float height)
 {
     if (!root) return;
 
-    YGNodeCalculateLayout(root->yoga_node, width, height, YGDirectionLTR);
+    /* Use direction from root node, defaulting to LTR if not set */
+    YGDirection dir = YGNodeStyleGetDirection(root->yoga_node);
+    if (dir == YGDirectionInherit) {
+        dir = YGDirectionLTR;
+    }
+
+    YGNodeCalculateLayout(root->yoga_node, width, height, dir);
 
     /* Copy layout results to nodes */
     copy_layout_recursive(root);
@@ -408,6 +439,40 @@ static YGSize text_measure_func(YGNodeConstRef yg_node, float width,
     }
 
     return size;
+}
+
+/*
+ * Baseline function for text nodes.
+ * Returns the baseline position (distance from top to text baseline).
+ * For terminal text, baseline is at the bottom of the first line.
+ */
+static float text_baseline_func(YGNodeConstRef yg_node, float width, float height)
+{
+    tui_node *node = (tui_node *)YGNodeGetContext(yg_node);
+    if (!node || !node->text) {
+        return height;
+    }
+
+    /* For multi-line text, baseline is at the bottom of the first line (1 char tall) */
+    const char *nl = strchr(node->text, '\n');
+    if (nl) {
+        return 1.0f;
+    }
+
+    /* For single-line text, baseline is at the bottom */
+    return height;
+}
+
+/*
+ * Dirtied callback - called when a node's layout needs recalculation.
+ * This enables incremental layout updates by tracking which nodes changed.
+ */
+static void node_dirtied_func(YGNodeConstRef yg_node)
+{
+    tui_node *node = (tui_node *)YGNodeGetContext(yg_node);
+    if (node) {
+        node->layout_dirty = 1;
+    }
 }
 
 /*

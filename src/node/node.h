@@ -82,6 +82,9 @@ typedef struct tui_node {
     /* Computed layout (from Yoga) */
     float x, y, width, height;
 
+    /* Layout dirty flag - set by dirtied callback for incremental updates */
+    int layout_dirty;
+
     /* For STATIC nodes: track seen items */
     int static_items_rendered;
 
@@ -143,5 +146,8 @@ void tui_node_set_yoga_style(tui_node *node, tui_yoga_property property, float v
 
 /* Layout */
 void tui_node_calculate_layout(tui_node *root, float width, float height);
+
+/* Yoga configuration */
+YGConfigRef tui_get_yoga_config(void);
 
 #endif /* TUI_NODE_H */

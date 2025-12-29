@@ -81,17 +81,17 @@ The code review identified issues across 4 severity levels:
 - gap setter
 - overflow, display, positionType
 
-### Not Currently Used (Significant Features)
+### ~~Not Currently Used (Significant Features)~~ - ✅ ALL NOW IMPLEMENTED
 
-| Feature | Use Case | Priority |
-|---------|----------|----------|
-| **Custom Measure Functions** | Text measurement, dynamic sizing | HIGH |
-| **Dirtied Callbacks** | Incremental updates, avoid full recalc | HIGH |
-| **Aspect Ratio** | Maintain width/height proportions | MEDIUM |
-| **Baseline Functions** | Text baseline alignment | MEDIUM |
-| **Node Context** | Store metadata on layout nodes | LOW |
-| **RTL Support** | Right-to-left layouts | LOW |
-| **Configuration Sharing** | Global config, errata modes | LOW |
+| Feature | Use Case | Priority | Status |
+|---------|----------|----------|--------|
+| ~~**Custom Measure Functions**~~ | Text measurement, dynamic sizing | HIGH | **ALREADY IMPLEMENTED** (text nodes use `text_measure_func`) |
+| ~~**Dirtied Callbacks**~~ | Incremental updates, avoid full recalc | HIGH | **FIXED:** Added `node_dirtied_func` callback |
+| ~~**Aspect Ratio**~~ | Maintain width/height proportions | MEDIUM | **FIXED:** Added `aspectRatio` property to Box |
+| ~~**Baseline Functions**~~ | Text baseline alignment | MEDIUM | **FIXED:** Added `text_baseline_func`, `alignItems: baseline` |
+| ~~**Node Context**~~ | Store metadata on layout nodes | LOW | **ALREADY IMPLEMENTED** (`YGNodeSetContext` used) |
+| ~~**RTL Support**~~ | Right-to-left layouts | LOW | **FIXED:** Added `direction` property (ltr/rtl) |
+| ~~**Configuration Sharing**~~ | Global config, errata modes | LOW | **FIXED:** Added shared `YGConfig` via `tui_get_yoga_config()` |
 
 ---
 

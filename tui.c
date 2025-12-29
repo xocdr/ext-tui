@@ -82,6 +82,12 @@ static void tui_buffer_dtor(zend_resource *res)
     }
 }
 
+/* Get shared Yoga configuration - used by node.c */
+YGConfigRef tui_get_yoga_config(void)
+{
+    return TUI_G(yoga_config);
+}
+
 /* Class entries */
 zend_class_entry *tui_box_ce;
 zend_class_entry *tui_text_ce;
@@ -314,6 +320,8 @@ static tui_node* php_to_tui_node(zval *obj)
                 YGNodeStyleSetAlignItems(node->yoga_node, YGAlignFlexEnd);
             } else if (strcmp(align, "stretch") == 0) {
                 YGNodeStyleSetAlignItems(node->yoga_node, YGAlignStretch);
+            } else if (strcmp(align, "baseline") == 0) {
+                YGNodeStyleSetAlignItems(node->yoga_node, YGAlignBaseline);
             }
         }
 
@@ -350,6 +358,8 @@ static tui_node* php_to_tui_node(zval *obj)
                 YGNodeStyleSetAlignSelf(node->yoga_node, YGAlignFlexEnd);
             } else if (strcmp(alignSelf, "stretch") == 0) {
                 YGNodeStyleSetAlignSelf(node->yoga_node, YGAlignStretch);
+            } else if (strcmp(alignSelf, "baseline") == 0) {
+                YGNodeStyleSetAlignSelf(node->yoga_node, YGAlignBaseline);
             }
         }
 
@@ -648,6 +658,27 @@ static tui_node* php_to_tui_node(zval *obj)
             } else {
                 YGNodeStyleSetPositionType(node->yoga_node, YGPositionTypeRelative);
             }
+        }
+
+        /* aspectRatio - maintain width/height proportions */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "aspectRatio", sizeof("aspectRatio")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) != IS_NULL) {
+            float ar = (float)zval_get_double(prop);
+            if (ar > 0) {
+                YGNodeStyleSetAspectRatio(node->yoga_node, ar);
+            }
+        }
+
+        /* direction - RTL/LTR layout direction */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "direction", sizeof("direction")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            const char *dir = Z_STRVAL_P(prop);
+            if (strcmp(dir, "rtl") == 0) {
+                YGNodeStyleSetDirection(node->yoga_node, YGDirectionRTL);
+            } else if (strcmp(dir, "ltr") == 0) {
+                YGNodeStyleSetDirection(node->yoga_node, YGDirectionLTR);
+            }
+            /* YGDirectionInherit is the default */
         }
 
         /* borderStyle */
@@ -1521,13 +1552,22 @@ static const zend_function_entry tui_instance_methods[] = {
     PHP_ME(TuiInstance, unmount, arginfo_tuiinstance_unmount, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, waitUntilExit, arginfo_tuiinstance_waituntilexit, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, exit, arginfo_tuiinstance_exit, ZEND_ACC_PUBLIC)
-    PHP_ME(TuiInstance, useState, arginfo_tuiinstance_usestate, ZEND_ACC_PUBLIC)
-    PHP_ME(TuiInstance, useInput, arginfo_tuiinstance_useinput, ZEND_ACC_PUBLIC)
-    PHP_ME(TuiInstance, useFocus, arginfo_tuiinstance_usefocus, ZEND_ACC_PUBLIC)
-    PHP_ME(TuiInstance, useFocusManager, arginfo_tuiinstance_usefocusmanager, ZEND_ACC_PUBLIC)
-    PHP_ME(TuiInstance, useStdin, arginfo_tuiinstance_usestdin, ZEND_ACC_PUBLIC)
-    PHP_ME(TuiInstance, useStdout, arginfo_tuiinstance_usestdout, ZEND_ACC_PUBLIC)
-    PHP_ME(TuiInstance, useStderr, arginfo_tuiinstance_usestderr, ZEND_ACC_PUBLIC)
+    /* New method names */
+    PHP_MALIAS(TuiInstance, state, useState, arginfo_tuiinstance_usestate, ZEND_ACC_PUBLIC)
+    PHP_MALIAS(TuiInstance, onInput, useInput, arginfo_tuiinstance_useinput, ZEND_ACC_PUBLIC)
+    PHP_MALIAS(TuiInstance, focus, useFocus, arginfo_tuiinstance_usefocus, ZEND_ACC_PUBLIC)
+    PHP_MALIAS(TuiInstance, focusManager, useFocusManager, arginfo_tuiinstance_usefocusmanager, ZEND_ACC_PUBLIC)
+    PHP_MALIAS(TuiInstance, stdin, useStdin, arginfo_tuiinstance_usestdin, ZEND_ACC_PUBLIC)
+    PHP_MALIAS(TuiInstance, stdout, useStdout, arginfo_tuiinstance_usestdout, ZEND_ACC_PUBLIC)
+    PHP_MALIAS(TuiInstance, stderr, useStderr, arginfo_tuiinstance_usestderr, ZEND_ACC_PUBLIC)
+    /* Deprecated aliases (old names) */
+    PHP_ME(TuiInstance, useState, arginfo_tuiinstance_usestate, ZEND_ACC_PUBLIC | ZEND_ACC_DEPRECATED)
+    PHP_ME(TuiInstance, useInput, arginfo_tuiinstance_useinput, ZEND_ACC_PUBLIC | ZEND_ACC_DEPRECATED)
+    PHP_ME(TuiInstance, useFocus, arginfo_tuiinstance_usefocus, ZEND_ACC_PUBLIC | ZEND_ACC_DEPRECATED)
+    PHP_ME(TuiInstance, useFocusManager, arginfo_tuiinstance_usefocusmanager, ZEND_ACC_PUBLIC | ZEND_ACC_DEPRECATED)
+    PHP_ME(TuiInstance, useStdin, arginfo_tuiinstance_usestdin, ZEND_ACC_PUBLIC | ZEND_ACC_DEPRECATED)
+    PHP_ME(TuiInstance, useStdout, arginfo_tuiinstance_usestdout, ZEND_ACC_PUBLIC | ZEND_ACC_DEPRECATED)
+    PHP_ME(TuiInstance, useStderr, arginfo_tuiinstance_usestderr, ZEND_ACC_PUBLIC | ZEND_ACC_DEPRECATED)
     PHP_ME(TuiInstance, getTerminalSize, arginfo_tuiinstance_getterminalsize, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, setState, arginfo_tuiinstance_setstate, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, focusNext, arginfo_tuiinstance_focusnext, ZEND_ACC_PUBLIC)
@@ -4374,6 +4414,13 @@ static PHP_MINIT_FUNCTION(tui)
 {
     zend_class_entry ce;
 
+    /* Initialize shared Yoga configuration */
+    TUI_G(yoga_config) = YGConfigNew();
+    if (TUI_G(yoga_config)) {
+        YGConfigSetPointScaleFactor(TUI_G(yoga_config), 1.0f);  /* Terminal uses integer positions */
+        YGConfigSetUseWebDefaults(TUI_G(yoga_config), false);
+    }
+
     /* Register resource types for canvas, table, sprite, buffer */
     le_tui_canvas = zend_register_list_destructors_ex(tui_canvas_dtor, NULL, TUI_CANVAS_RES_NAME, module_number);
     le_tui_table = zend_register_list_destructors_ex(tui_table_dtor, NULL, TUI_TABLE_RES_NAME, module_number);
@@ -4421,6 +4468,8 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_null(tui_box_ce, "overflowY", sizeof("overflowY")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_string(tui_box_ce, "display", sizeof("display")-1, "flex", ZEND_ACC_PUBLIC);
     zend_declare_property_string(tui_box_ce, "position", sizeof("position")-1, "relative", ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "aspectRatio", sizeof("aspectRatio")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "direction", sizeof("direction")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "borderStyle", sizeof("borderStyle")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "borderColor", sizeof("borderColor")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_bool(tui_box_ce, "focusable", sizeof("focusable")-1, 0, ZEND_ACC_PUBLIC);
@@ -4570,6 +4619,18 @@ static PHP_MINIT_FUNCTION(tui)
 }
 /* }}} */
 
+/* {{{ PHP_MSHUTDOWN_FUNCTION */
+static PHP_MSHUTDOWN_FUNCTION(tui)
+{
+    /* Free shared Yoga configuration */
+    if (TUI_G(yoga_config)) {
+        YGConfigFree(TUI_G(yoga_config));
+        TUI_G(yoga_config) = NULL;
+    }
+    return SUCCESS;
+}
+/* }}} */
+
 /* {{{ PHP_MINFO_FUNCTION */
 static PHP_MINFO_FUNCTION(tui)
 {
@@ -4586,7 +4647,7 @@ zend_module_entry tui_module_entry = {
     "tui",
     tui_functions,
     PHP_MINIT(tui),
-    NULL,  /* MSHUTDOWN */
+    PHP_MSHUTDOWN(tui),
     NULL,  /* RINIT */
     NULL,  /* RSHUTDOWN */
     PHP_MINFO(tui),

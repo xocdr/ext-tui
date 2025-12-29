@@ -29,12 +29,15 @@ extern zend_module_entry tui_module_entry;
 #include "TSRM.h"
 #endif
 
+#include <yoga/Yoga.h>
+
 /* Module globals */
 ZEND_BEGIN_MODULE_GLOBALS(tui)
     zend_bool raw_mode_active;
     int original_termios_saved;
     int terminal_width;
     int terminal_height;
+    YGConfigRef yoga_config;
 ZEND_END_MODULE_GLOBALS(tui)
 
 #ifdef ZTS
