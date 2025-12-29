@@ -67,6 +67,74 @@ tui_node* tui_node_create_text(const char *text)
     return node;
 }
 
+tui_node* tui_node_create_static(void)
+{
+    tui_node *node = calloc(1, sizeof(tui_node));
+    if (!node) return NULL;
+
+    node->type = TUI_NODE_STATIC;
+    node->yoga_node = YGNodeNew();
+    if (!node->yoga_node) {
+        free(node);
+        return NULL;
+    }
+
+    node->child_capacity = INITIAL_CHILDREN_CAPACITY;
+    node->children = calloc(node->child_capacity, sizeof(tui_node*));
+    if (!node->children) {
+        YGNodeFree(node->yoga_node);
+        free(node);
+        return NULL;
+    }
+
+    return node;
+}
+
+tui_node* tui_node_create_newline(int count)
+{
+    tui_node *node = calloc(1, sizeof(tui_node));
+    if (!node) return NULL;
+
+    node->type = TUI_NODE_NEWLINE;
+    node->newline_count = count > 0 ? count : 1;
+    node->yoga_node = YGNodeNew();
+    if (!node->yoga_node) {
+        free(node);
+        return NULL;
+    }
+
+    /* Set height to number of lines */
+    YGNodeStyleSetHeight(node->yoga_node, (float)node->newline_count);
+
+    return node;
+}
+
+tui_node* tui_node_create_spacer(void)
+{
+    tui_node *node = calloc(1, sizeof(tui_node));
+    if (!node) return NULL;
+
+    node->type = TUI_NODE_SPACER;
+    node->yoga_node = YGNodeNew();
+    if (!node->yoga_node) {
+        free(node);
+        return NULL;
+    }
+
+    /* Spacer has flexGrow: 1 by default */
+    YGNodeStyleSetFlexGrow(node->yoga_node, 1.0f);
+
+    return node;
+}
+
+void tui_node_set_id(tui_node *node, const char *id)
+{
+    if (!node) return;
+
+    free(node->id);
+    node->id = id ? strdup(id) : NULL;
+}
+
 void tui_node_destroy(tui_node *node)
 {
     if (!node) return;
@@ -83,6 +151,7 @@ void tui_node_destroy(tui_node *node)
     free(node->children);
     free(node->text);
     free(node->key);
+    free(node->id);
     free(node);
 }
 

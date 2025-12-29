@@ -13,7 +13,11 @@
 
 typedef enum {
     TUI_NODE_BOX,
-    TUI_NODE_TEXT
+    TUI_NODE_TEXT,
+    TUI_NODE_STATIC,      /* Static output (renders above dynamic content) */
+    TUI_NODE_NEWLINE,     /* Blank line(s) */
+    TUI_NODE_SPACER,      /* Flexible space (flexGrow: 1) */
+    TUI_NODE_TRANSFORM    /* Text transformation wrapper */
 } tui_node_type;
 
 typedef struct {
@@ -47,6 +51,7 @@ typedef enum {
 typedef struct tui_node {
     tui_node_type type;
     char *key;                   /* Node identity for reconciler */
+    char *id;                    /* ID for focus-by-id */
     tui_style style;
 
     /* For text nodes */
@@ -56,6 +61,10 @@ typedef struct tui_node {
     /* For box nodes with borders */
     tui_border_style border_style;
     tui_color border_color;
+    tui_color border_top_color;     /* Per-side border colors */
+    tui_color border_right_color;
+    tui_color border_bottom_color;
+    tui_color border_left_color;
 
     /* Focus management */
     int focusable;
@@ -72,12 +81,24 @@ typedef struct tui_node {
 
     /* Computed layout (from Yoga) */
     float x, y, width, height;
+
+    /* For STATIC nodes: track seen items */
+    int static_items_rendered;
+
+    /* For NEWLINE nodes: number of lines */
+    int newline_count;
 } tui_node;
 
 /* Lifecycle */
 tui_node* tui_node_create_box(void);
 tui_node* tui_node_create_text(const char *text);
+tui_node* tui_node_create_static(void);
+tui_node* tui_node_create_newline(int count);
+tui_node* tui_node_create_spacer(void);
 void tui_node_destroy(tui_node *node);
+
+/* ID management */
+void tui_node_set_id(tui_node *node, const char *id);
 
 /* Tree manipulation */
 void tui_node_append_child(tui_node *parent, tui_node *child);

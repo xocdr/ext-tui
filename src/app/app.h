@@ -13,6 +13,16 @@
 #include "../event/loop.h"
 #include "php.h"
 
+/* State slot for useState hook */
+typedef struct {
+    zval value;           /* Current state value */
+    zval setter;          /* Setter closure */
+    int index;            /* State slot index */
+} tui_state_slot;
+
+/* Maximum state slots per app */
+#define TUI_MAX_STATES 64
+
 typedef struct {
     /* Terminal state */
     int fullscreen;
@@ -78,6 +88,14 @@ typedef struct {
 
     /* Cleanup state */
     int destroyed;  /* Prevent double-free */
+
+    /* useState hook state management */
+    tui_state_slot states[TUI_MAX_STATES];
+    int state_count;          /* Number of allocated state slots */
+    int state_index;          /* Current hook index (reset each render) */
+
+    /* Focus management */
+    int focus_enabled;        /* Whether focus system is active */
 } tui_app;
 
 /* Lifecycle */
@@ -115,5 +133,15 @@ void tui_app_remove_timer(tui_app *app, int timer_id);
 /* Internal callbacks */
 void tui_app_on_input(const char *input, int len, void *userdata);
 void tui_app_on_resize(int width, int height, void *userdata);
+
+/* State management for useState hook */
+int tui_app_get_or_create_state_slot(tui_app *app, zval *initial, int *is_new);
+void tui_app_reset_state_index(tui_app *app);
+void tui_app_cleanup_states(tui_app *app);
+
+/* Focus by ID */
+int tui_app_focus_by_id(tui_app *app, const char *id);
+void tui_app_enable_focus(tui_app *app);
+void tui_app_disable_focus(tui_app *app);
 
 #endif /* TUI_APP_H */

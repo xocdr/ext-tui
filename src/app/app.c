@@ -114,6 +114,9 @@ void tui_app_destroy(tui_app *app)
         }
     }
 
+    /* Clean up useState slots */
+    tui_app_cleanup_states(app);
+
     /* Free resources */
     if (app->root_node) {
         tui_node_destroy(app->root_node);
@@ -934,5 +937,118 @@ static void render_node_to_buffer(tui_app *app, tui_node *node, int offset_x, in
     /* Render children */
     for (int i = 0; i < node->child_count; i++) {
         render_node_to_buffer(app, node->children[i], x, y);
+    }
+}
+
+/* ------------------------------------------------------------------
+ * useState hook state management
+ * ------------------------------------------------------------------ */
+
+void tui_app_reset_state_index(tui_app *app)
+{
+    if (app) {
+        app->state_index = 0;
+    }
+}
+
+void tui_app_cleanup_states(tui_app *app)
+{
+    if (!app) return;
+
+    for (int i = 0; i < app->state_count; i++) {
+        if (!Z_ISUNDEF(app->states[i].value)) {
+            zval_ptr_dtor(&app->states[i].value);
+            ZVAL_UNDEF(&app->states[i].value);
+        }
+        if (!Z_ISUNDEF(app->states[i].setter)) {
+            zval_ptr_dtor(&app->states[i].setter);
+            ZVAL_UNDEF(&app->states[i].setter);
+        }
+    }
+    app->state_count = 0;
+    app->state_index = 0;
+}
+
+/* Note: The actual useState implementation with closure creation is in tui.c
+ * because it requires access to the PHP class entries and closure mechanisms.
+ * This function provides the C-level state slot management. */
+
+int tui_app_get_or_create_state_slot(tui_app *app, zval *initial, int *is_new)
+{
+    if (!app) return -1;
+
+    int index = app->state_index++;
+
+    if (index >= TUI_MAX_STATES) {
+        php_error_docref(NULL, E_WARNING, "Maximum number of useState hooks (%d) exceeded", TUI_MAX_STATES);
+        return -1;
+    }
+
+    if (index >= app->state_count) {
+        /* First render - initialize this state slot */
+        app->state_count = index + 1;
+        ZVAL_COPY(&app->states[index].value, initial);
+        ZVAL_UNDEF(&app->states[index].setter);  /* Will be set by caller */
+        app->states[index].index = index;
+        *is_new = 1;
+    } else {
+        *is_new = 0;
+    }
+
+    return index;
+}
+
+/* ------------------------------------------------------------------
+ * Focus by ID
+ * ------------------------------------------------------------------ */
+
+/* Helper: find node by ID in tree */
+static tui_node* find_node_by_id(tui_node *node, const char *id)
+{
+    if (!node || !id) return NULL;
+
+    /* Check if this node matches */
+    if (node->id && strcmp(node->id, id) == 0) {
+        return node;
+    }
+
+    /* Search children */
+    for (int i = 0; i < node->child_count; i++) {
+        tui_node *found = find_node_by_id(node->children[i], id);
+        if (found) return found;
+    }
+
+    return NULL;
+}
+
+int tui_app_focus_by_id(tui_app *app, const char *id)
+{
+    if (!app || !id || !app->root_node) return 0;
+
+    tui_node *node = find_node_by_id(app->root_node, id);
+    if (node && node->focusable) {
+        tui_app_set_focus(app, node);
+        return 1;
+    }
+
+    return 0;
+}
+
+void tui_app_enable_focus(tui_app *app)
+{
+    if (app) {
+        app->focus_enabled = 1;
+    }
+}
+
+void tui_app_disable_focus(tui_app *app)
+{
+    if (app) {
+        app->focus_enabled = 0;
+        /* Optionally clear current focus */
+        if (app->focused_node) {
+            app->focused_node->focused = 0;
+            app->focused_node = NULL;
+        }
     }
 }
