@@ -9,13 +9,16 @@ Colors, text attributes, and visual styling in ext-tui.
 Specify colors as `[red, green, blue]` with values 0-255:
 
 ```php
-new TuiText([
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+
+new Text([
     'content' => 'Colored text',
     'color' => [255, 100, 100],           // Foreground
     'backgroundColor' => [50, 0, 0],       // Background
 ]);
 
-new TuiBox([
+new Box([
     'borderStyle' => 'single',
     'borderColor' => [100, 150, 255],
 ]);
@@ -26,7 +29,9 @@ new TuiBox([
 Use standard hex color notation:
 
 ```php
-new TuiText([
+use Xocdr\Tui\Ext\Text;
+
+new Text([
     'content' => 'Hex color',
     'color' => '#ff6600',
 ]);
@@ -53,7 +58,9 @@ $gradient = tui_gradient([255, 0, 0], [0, 0, 255], 10);
 ### Bold
 
 ```php
-new TuiText([
+use Xocdr\Tui\Ext\Text;
+
+new Text([
     'content' => 'Important',
     'bold' => true,
 ]);
@@ -64,7 +71,7 @@ new TuiText([
 Reduced intensity text:
 
 ```php
-new TuiText([
+new Text([
     'content' => 'Less important',
     'dim' => true,
 ]);
@@ -73,7 +80,7 @@ new TuiText([
 ### Italic
 
 ```php
-new TuiText([
+new Text([
     'content' => 'Emphasized',
     'italic' => true,
 ]);
@@ -82,7 +89,7 @@ new TuiText([
 ### Underline
 
 ```php
-new TuiText([
+new Text([
     'content' => 'Linked text',
     'underline' => true,
 ]);
@@ -93,7 +100,7 @@ new TuiText([
 Swap foreground and background:
 
 ```php
-new TuiText([
+new Text([
     'content' => 'Selected',
     'inverse' => true,
 ]);
@@ -102,7 +109,7 @@ new TuiText([
 ### Strikethrough
 
 ```php
-new TuiText([
+new Text([
     'content' => 'Deleted',
     'strikethrough' => true,
 ]);
@@ -111,7 +118,7 @@ new TuiText([
 ### Combining Styles
 
 ```php
-new TuiText([
+new Text([
     'content' => 'Error!',
     'color' => [255, 100, 100],
     'bold' => true,
@@ -121,7 +128,7 @@ new TuiText([
 
 ## Border Styles
 
-Available border styles for TuiBox:
+Available border styles for Box:
 
 | Style | Characters | Example |
 |-------|------------|---------|
@@ -131,7 +138,9 @@ Available border styles for TuiBox:
 | `bold` | `━┃┏┓┗┛` | Box with thick lines |
 
 ```php
-new TuiBox([
+use Xocdr\Tui\Ext\Box;
+
+new Box([
     'borderStyle' => 'round',
     'borderColor' => [100, 200, 255],
     'children' => [...],
@@ -174,7 +183,10 @@ $function = [97, 175, 239];   // Blue
 Change appearance based on state:
 
 ```php
-function renderButton(string $label, bool $focused, bool $disabled): TuiBox
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+
+function renderButton(string $label, bool $focused, bool $disabled): Box
 {
     $textColor = $disabled
         ? [100, 100, 100]
@@ -184,13 +196,13 @@ function renderButton(string $label, bool $focused, bool $disabled): TuiBox
         ? null
         : ($focused ? [100, 200, 255] : null);
 
-    return new TuiBox([
+    return new Box([
         'padding' => 1,
         'borderStyle' => 'single',
         'borderColor' => $focused ? [100, 200, 255] : [100, 100, 100],
         'focusable' => !$disabled,
         'children' => [
-            new TuiText([
+            new Text([
                 'content' => $label,
                 'color' => $textColor,
                 'backgroundColor' => $bgColor,
@@ -229,6 +241,6 @@ Not all terminals support all attributes:
 
 ## See Also
 
-- [Components](components.md) - TuiBox and TuiText
+- [Components](components.md) - Box and Text
 - [Animation](animation.md) - Color transitions
 - [Reference: Classes](../reference/classes.md) - All properties

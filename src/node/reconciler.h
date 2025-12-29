@@ -22,7 +22,8 @@ typedef struct {
     tui_diff_type type;
     tui_node *old_node;
     tui_node *new_node;
-    int index;
+    int old_index;   /* Position in old tree (-1 if N/A) */
+    int new_index;   /* Position in new tree (-1 if N/A) */
 } tui_diff_op;
 
 typedef struct {

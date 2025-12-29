@@ -51,22 +51,25 @@ Create a simple TUI application:
 
 ```php
 <?php
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+
 if (!tui_is_interactive()) {
     die("Requires an interactive terminal\n");
 }
 
 $app = function () {
-    return new TuiBox([
+    return new Box([
         'flexDirection' => 'column',
         'padding' => 1,
         'borderStyle' => 'round',
         'children' => [
-            new TuiText([
+            new Text([
                 'content' => 'Hello, ext-tui!',
                 'color' => [100, 200, 255],
                 'bold' => true,
             ]),
-            new TuiText([
+            new Text([
                 'content' => 'Press Ctrl+C to exit.',
                 'dim' => true,
             ]),
@@ -90,6 +93,10 @@ Add keyboard input handling:
 
 ```php
 <?php
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\Key;
+
 if (!tui_is_interactive()) {
     die("Requires an interactive terminal\n");
 }
@@ -97,17 +104,17 @@ if (!tui_is_interactive()) {
 $counter = 0;
 
 $app = function () use (&$counter) {
-    return new TuiBox([
+    return new Box([
         'flexDirection' => 'column',
         'padding' => 1,
         'borderStyle' => 'single',
         'children' => [
-            new TuiText([
+            new Text([
                 'content' => "Count: $counter",
                 'color' => [100, 255, 100],
                 'bold' => true,
             ]),
-            new TuiText([
+            new Text([
                 'content' => 'UP/DOWN to change, ESC to exit',
                 'dim' => true,
             ]),
@@ -117,7 +124,7 @@ $app = function () use (&$counter) {
 
 $instance = tui_render($app);
 
-tui_set_input_handler($instance, function (TuiKey $key) use ($instance, &$counter) {
+tui_set_input_handler($instance, function (Key $key) use ($instance, &$counter) {
     if ($key->escape) {
         tui_unmount($instance);
         return;
@@ -142,20 +149,23 @@ echo "Final count: $counter\n";
 
 All UIs are built with two component types:
 
-- **TuiBox** - Container with flexbox layout
-- **TuiText** - Styled text content
+- **Xocdr\Tui\Ext\Box** - Container with flexbox layout
+- **Xocdr\Tui\Ext\Text** - Styled text content
 
 Components are created with a properties array:
 
 ```php
-$box = new TuiBox([
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+
+$box = new Box([
     'width' => 40,
     'height' => 10,
     'padding' => 1,
     'borderStyle' => 'single',
 ]);
 
-$text = new TuiText([
+$text = new Text([
     'content' => 'Hello',
     'bold' => true,
     'color' => [255, 200, 0],
@@ -170,9 +180,9 @@ $text = new TuiText([
 4. **Update state** - Modify state and call `tui_rerender($instance)`
 5. **Exit** - Call `tui_unmount($instance)` or let Ctrl+C exit
 
-### The TuiInstance
+### The Instance
 
-`tui_render()` returns a `TuiInstance` that you pass to other functions:
+`tui_render()` returns an `Xocdr\Tui\Ext\Instance` that you pass to other functions:
 
 ```php
 $instance = tui_render($app);

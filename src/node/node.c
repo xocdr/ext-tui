@@ -14,7 +14,7 @@
 #define INITIAL_CHILDREN_CAPACITY 4
 
 /* Forward declarations */
-static void copy_layout_recursive(tui_node *node);
+static int copy_layout_recursive(tui_node *node);
 static YGSize text_measure_func(YGNodeConstRef yg_node, float width,
     YGMeasureMode widthMode, float height, YGMeasureMode heightMode);
 
@@ -404,19 +404,36 @@ static YGSize text_measure_func(YGNodeConstRef yg_node, float width,
     return size;
 }
 
-/* Recursively copy layout results from Yoga to tui_node */
-static void copy_layout_recursive(tui_node *node)
+/*
+ * Recursively copy layout results from Yoga to tui_node.
+ * Only copies nodes that have new layout data (optimization).
+ * Returns 1 if any node in subtree had new layout, 0 otherwise.
+ */
+static int copy_layout_recursive(tui_node *node)
 {
-    if (!node || !node->yoga_node) return;
+    if (!node || !node->yoga_node) return 0;
 
-    /* Copy this node's layout */
-    node->x = YGNodeLayoutGetLeft(node->yoga_node);
-    node->y = YGNodeLayoutGetTop(node->yoga_node);
-    node->width = YGNodeLayoutGetWidth(node->yoga_node);
-    node->height = YGNodeLayoutGetHeight(node->yoga_node);
+    int had_changes = 0;
 
-    /* Recurse to children */
-    for (int i = 0; i < node->child_count; i++) {
-        copy_layout_recursive(node->children[i]);
+    /* Check if this node has new layout data */
+    if (YGNodeGetHasNewLayout(node->yoga_node)) {
+        /* Copy this node's layout */
+        node->x = YGNodeLayoutGetLeft(node->yoga_node);
+        node->y = YGNodeLayoutGetTop(node->yoga_node);
+        node->width = YGNodeLayoutGetWidth(node->yoga_node);
+        node->height = YGNodeLayoutGetHeight(node->yoga_node);
+
+        /* Clear the flag so we don't copy again unnecessarily */
+        YGNodeSetHasNewLayout(node->yoga_node, false);
+        had_changes = 1;
     }
+
+    /* Recurse to children (always, as children may have changed even if parent didn't) */
+    for (int i = 0; i < node->child_count; i++) {
+        if (copy_layout_recursive(node->children[i])) {
+            had_changes = 1;
+        }
+    }
+
+    return had_changes;
 }

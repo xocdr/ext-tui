@@ -15,7 +15,7 @@ User-friendly guides with examples:
 | Guide | Description |
 |-------|-------------|
 | [Getting Started](manual/getting-started.md) | Installation, hello world, core concepts |
-| [Components & Layout](manual/components.md) | TuiBox, TuiText, flexbox layouts |
+| [Components & Layout](manual/components.md) | Box, Text, flexbox layouts |
 | [Styling](manual/styling.md) | Colors, text attributes, borders |
 | [Input Handling](manual/input.md) | Keyboard events, focus, resize |
 | [Drawing](manual/drawing.md) | Buffers, canvas, primitives, sprites, tables |
@@ -28,7 +28,7 @@ Complete API documentation:
 | Reference | Description |
 |-----------|-------------|
 | [Functions](reference/functions.md) | All functions with signatures |
-| [Classes](reference/classes.md) | TuiBox, TuiText, TuiKey, TuiInstance |
+| [Classes](reference/classes.md) | Box, Text, Key, Instance |
 | [Constants](reference/constants.md) | TUI_EASE_*, TUI_CANVAS_*, etc. |
 
 ## Specifications
@@ -50,17 +50,20 @@ Complete API documentation:
 
 ```php
 <?php
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+
 if (!tui_is_interactive()) {
     die("Requires interactive terminal\n");
 }
 
 $app = function () {
-    return new TuiBox([
+    return new Box([
         'flexDirection' => 'column',
         'padding' => 1,
         'borderStyle' => 'round',
         'children' => [
-            new TuiText([
+            new Text([
                 'content' => 'Hello, ext-tui!',
                 'color' => [100, 200, 255],
                 'bold' => true,

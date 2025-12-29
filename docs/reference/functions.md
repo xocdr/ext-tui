@@ -7,7 +7,7 @@ Complete list of ext-tui functions.
 ### tui_render
 
 ```php
-tui_render(callable $component, array $options = []): TuiInstance
+tui_render(callable $component, array $options = []): Xocdr\Tui\Ext\Instance
 ```
 
 Renders a TUI component tree.
@@ -19,7 +19,7 @@ Renders a TUI component tree.
 ### tui_rerender
 
 ```php
-tui_rerender(TuiInstance $instance): void
+tui_rerender(Xocdr\Tui\Ext\Instance $instance): void
 ```
 
 Forces re-render of component tree.
@@ -27,7 +27,7 @@ Forces re-render of component tree.
 ### tui_unmount
 
 ```php
-tui_unmount(TuiInstance $instance): void
+tui_unmount(Xocdr\Tui\Ext\Instance $instance): void
 ```
 
 Stops TUI and restores terminal.
@@ -35,7 +35,7 @@ Stops TUI and restores terminal.
 ### tui_wait_until_exit
 
 ```php
-tui_wait_until_exit(TuiInstance $instance): void
+tui_wait_until_exit(Xocdr\Tui\Ext\Instance $instance): void
 ```
 
 Blocks until TUI exits.
@@ -47,23 +47,23 @@ Blocks until TUI exits.
 ### tui_set_input_handler
 
 ```php
-tui_set_input_handler(TuiInstance $instance, callable $handler): void
+tui_set_input_handler(Xocdr\Tui\Ext\Instance $instance, callable $handler): void
 ```
 
-Handler receives: `function(TuiKey $key): void`
+Handler receives: `function(Xocdr\Tui\Ext\Key $key): void`
 
 ### tui_set_focus_handler
 
 ```php
-tui_set_focus_handler(TuiInstance $instance, callable $handler): void
+tui_set_focus_handler(Xocdr\Tui\Ext\Instance $instance, callable $handler): void
 ```
 
-Handler receives: `function(TuiFocusEvent $event): void`
+Handler receives: `function(Xocdr\Tui\Ext\FocusEvent $event): void`
 
 ### tui_set_resize_handler
 
 ```php
-tui_set_resize_handler(TuiInstance $instance, callable $handler): void
+tui_set_resize_handler(Xocdr\Tui\Ext\Instance $instance, callable $handler): void
 ```
 
 Handler receives: `function(int $width, int $height): void`
@@ -71,7 +71,7 @@ Handler receives: `function(int $width, int $height): void`
 ### tui_set_tick_handler
 
 ```php
-tui_set_tick_handler(TuiInstance $instance, callable $handler): void
+tui_set_tick_handler(Xocdr\Tui\Ext\Instance $instance, callable $handler): void
 ```
 
 Handler called each frame.
@@ -83,7 +83,7 @@ Handler called each frame.
 ### tui_focus_next
 
 ```php
-tui_focus_next(TuiInstance $instance): void
+tui_focus_next(Xocdr\Tui\Ext\Instance $instance): void
 ```
 
 Moves focus to next focusable element.
@@ -91,7 +91,7 @@ Moves focus to next focusable element.
 ### tui_focus_prev
 
 ```php
-tui_focus_prev(TuiInstance $instance): void
+tui_focus_prev(Xocdr\Tui\Ext\Instance $instance): void
 ```
 
 Moves focus to previous focusable element.
@@ -99,7 +99,7 @@ Moves focus to previous focusable element.
 ### tui_get_focused_node
 
 ```php
-tui_get_focused_node(TuiInstance $instance): ?array
+tui_get_focused_node(Xocdr\Tui\Ext\Instance $instance): ?array
 ```
 
 Returns info about focused node or null.
@@ -111,7 +111,7 @@ Returns info about focused node or null.
 ### tui_add_timer
 
 ```php
-tui_add_timer(TuiInstance $instance, callable $callback, int $intervalMs): int
+tui_add_timer(Xocdr\Tui\Ext\Instance $instance, callable $callback, int $intervalMs): int
 ```
 
 Adds repeating timer. Returns timer ID.
@@ -119,7 +119,7 @@ Adds repeating timer. Returns timer ID.
 ### tui_remove_timer
 
 ```php
-tui_remove_timer(TuiInstance $instance, int $timerId): void
+tui_remove_timer(Xocdr\Tui\Ext\Instance $instance, int $timerId): void
 ```
 
 Removes timer by ID.
@@ -139,7 +139,7 @@ Returns `[int $width, int $height]`.
 ### tui_get_size
 
 ```php
-tui_get_size(TuiInstance $instance): ?array
+tui_get_size(Xocdr\Tui\Ext\Instance $instance): ?array
 ```
 
 Returns `['width' => int, 'height' => int, 'columns' => int, 'rows' => int]`.

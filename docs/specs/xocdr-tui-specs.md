@@ -81,7 +81,7 @@ echo "Interactive: " . (Tui::isInteractive() ? 'yes' : 'no') . "\n";
      │
 ┌────▼────────────────────────────────────────────────────────┐
 │                   ext-tui C Extension                        │
-│  TuiBox │ TuiText │ TuiInstance │ Yoga Layout │ Terminal     │
+│  Xocdr\Tui\Ext\{Box,Text,Instance} │ Yoga Layout │ Terminal │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -402,7 +402,7 @@ isFocusable(): bool
 
 // Children
 children(array $children): self
-render(): TuiBox
+render(): \Xocdr\Tui\Ext\Box
 ```
 
 ### Text Component
@@ -517,7 +517,7 @@ noWrap(): self
 // Getters
 getContent(): string
 getStyle(): array
-render(): TuiText
+render(): \Xocdr\Tui\Ext\Text
 ```
 
 ### Table Component
@@ -547,7 +547,7 @@ borderColor(string $color): self
 headerColor(string $color): self
 headerBgColor(string $color): self
 showHeader(bool $show): self
-render(): TuiBox
+render(): \Xocdr\Tui\Ext\Box
 toString(): string
 ```
 
@@ -589,7 +589,7 @@ label(string $label): self
 color(string $color): self
 advance(): self
 getFrame(): string
-render(): TuiText
+render(): \Xocdr\Tui\Ext\Text
 ```
 
 ### ProgressBar Component
@@ -620,7 +620,7 @@ fillColor(string $color): self
 emptyColor(string $color): self
 showPercentage(): self
 gradient(Gradient $gradient): self
-render(): TuiBox
+render(): \Xocdr\Tui\Ext\Box
 ```
 
 ### BusyBar Component
@@ -1017,7 +1017,7 @@ use Tui\Events\InputEvent;
 
 // Properties
 $event->key        // Character key pressed
-$event->nativeKey  // TuiKey object with:
+$event->nativeKey  // \Xocdr\Tui\Ext\Key object with:
                    //   ->name (string) - Key name
                    //   ->upArrow, ->downArrow, ->leftArrow, ->rightArrow (bool)
                    //   ->return, ->escape, ->backspace, ->delete, ->tab (bool)
@@ -1513,7 +1513,7 @@ Modifier key detection.
 ```php
 use Tui\Input\Modifier;
 
-// Check modifiers on TuiKey
+// Check modifiers on \Xocdr\Tui\Ext\Key
 if ($nativeKey->ctrl) { /* Ctrl pressed */ }
 if ($nativeKey->shift) { /* Shift pressed */ }
 if ($nativeKey->alt) { /* Alt pressed */ }

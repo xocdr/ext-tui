@@ -2,14 +2,18 @@
 
 Complete reference for ext-tui classes.
 
-## TuiBox
+All classes are in the `Xocdr\Tui\Ext` namespace.
+
+## Xocdr\Tui\Ext\Box
 
 Flexbox container component.
 
 ### Constructor
 
 ```php
-new TuiBox(array $props = [])
+use Xocdr\Tui\Ext\Box;
+
+new Box(array $props = [])
 ```
 
 ### Properties
@@ -40,28 +44,36 @@ new TuiBox(array $props = [])
 | `gap` | int | 0 | Gap between children |
 | `borderStyle` | string\|null | null | `'single'`, `'double'`, `'round'`, `'bold'` |
 | `borderColor` | array\|string\|null | null | RGB array or hex string |
+| `borderTopColor` | array\|string\|null | null | Top border color |
+| `borderRightColor` | array\|string\|null | null | Right border color |
+| `borderBottomColor` | array\|string\|null | null | Bottom border color |
+| `borderLeftColor` | array\|string\|null | null | Left border color |
 | `focusable` | bool | false | Can receive focus |
 | `focused` | bool | false | Currently focused |
+| `key` | string\|null | null | Reconciliation key |
+| `id` | string\|null | null | Focus ID |
 | `children` | array | [] | Child components |
 
 ### Methods
 
 ```php
-addChild(TuiBox|TuiText $child): self
+addChild(Box|Text $child): self
 ```
 
 Adds child component. Returns `$this` for chaining.
 
 ---
 
-## TuiText
+## Xocdr\Tui\Ext\Text
 
 Text display component.
 
 ### Constructor
 
 ```php
-new TuiText(array $props = [])
+use Xocdr\Tui\Ext\Text;
+
+new Text(array $props = [])
 ```
 
 ### Properties
@@ -77,10 +89,11 @@ new TuiText(array $props = [])
 | `underline` | bool | false | Underlined text |
 | `inverse` | bool | false | Inverted colors |
 | `strikethrough` | bool | false | Strikethrough |
+| `wrap` | string\|null | null | Wrap mode (`'word'`, `'char'`) |
 
 ---
 
-## TuiInstance
+## Xocdr\Tui\Ext\Instance
 
 Running TUI application. Returned by `tui_render()`.
 
@@ -106,9 +119,56 @@ exit(int $code = 0): void
 ```
 Requests exit with code.
 
+### Hook Methods
+
+```php
+useState(mixed $initialValue): array
+```
+Returns `[$value, $setter]` for state management.
+
+```php
+useInput(callable $handler): void
+```
+Registers input handler.
+
+```php
+useFocus(): Focus
+```
+Returns Focus object with `isFocused` property.
+
+```php
+useFocusManager(): FocusManager
+```
+Returns FocusManager for programmatic focus control.
+
+```php
+useStdin(): StdinContext
+```
+Returns stdin stream context.
+
+```php
+useStdout(): StdoutContext
+```
+Returns stdout stream context with terminal dimensions.
+
+```php
+useStderr(): StderrContext
+```
+Returns stderr stream context.
+
+```php
+getTerminalSize(): array
+```
+Returns `[width, height]`.
+
+```php
+measureElement(Box|Text $element): ?array
+```
+Returns layout info for element.
+
 ---
 
-## TuiKey
+## Xocdr\Tui\Ext\Key
 
 Keyboard event. Passed to input handlers.
 
@@ -127,6 +187,11 @@ Keyboard event. Passed to input handlers.
 | `backspace` | bool | Backspace |
 | `delete` | bool | Delete |
 | `tab` | bool | Tab |
+| `home` | bool | Home |
+| `end` | bool | End |
+| `pageUp` | bool | Page Up |
+| `pageDown` | bool | Page Down |
+| `functionKey` | int | Function key number (1-12), 0 if not F-key |
 | `ctrl` | bool | Ctrl held |
 | `alt` | bool | Alt held |
 | `meta` | bool | Meta held |
@@ -134,7 +199,7 @@ Keyboard event. Passed to input handlers.
 
 ---
 
-## TuiFocusEvent
+## Xocdr\Tui\Ext\FocusEvent
 
 Focus change event. Passed to focus handlers.
 
@@ -154,3 +219,159 @@ Node info arrays contain:
 - `width` (int)
 - `height` (int)
 - `type` (string): `'box'` or `'text'`
+
+---
+
+## Xocdr\Tui\Ext\Focus
+
+Focus state object returned by `$instance->useFocus()`.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `isFocused` | bool | Whether this element has focus |
+
+### Methods
+
+```php
+focus(string $id): void
+```
+Focus element by ID.
+
+---
+
+## Xocdr\Tui\Ext\FocusManager
+
+Focus management returned by `$instance->useFocusManager()`.
+
+### Methods
+
+```php
+focusNext(): void
+```
+Move focus to next focusable element.
+
+```php
+focusPrevious(): void
+```
+Move focus to previous focusable element.
+
+```php
+focus(string $id): void
+```
+Focus element by ID.
+
+```php
+enableFocus(): void
+```
+Enable focus system.
+
+```php
+disableFocus(): void
+```
+Disable focus system.
+
+---
+
+## Xocdr\Tui\Ext\StdinContext
+
+Stdin stream context.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `isRawModeSupported` | bool | Whether raw mode is available |
+
+### Methods
+
+```php
+setRawMode(bool $mode): void
+```
+Enable/disable raw mode.
+
+---
+
+## Xocdr\Tui\Ext\StdoutContext
+
+Stdout stream context.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `columns` | int | Terminal width |
+| `rows` | int | Terminal height |
+| `isTTY` | bool | Whether stdout is a TTY |
+
+### Methods
+
+```php
+write(string $data): void
+```
+Write directly to stdout.
+
+---
+
+## Xocdr\Tui\Ext\StderrContext
+
+Stderr stream context.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `columns` | int | Terminal width |
+| `rows` | int | Terminal height |
+| `isTTY` | bool | Whether stderr is a TTY |
+
+### Methods
+
+```php
+write(string $data): void
+```
+Write directly to stderr.
+
+---
+
+## Xocdr\Tui\Ext\Newline
+
+Newline component (extends Box).
+
+### Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `count` | int | 1 | Number of blank lines |
+
+---
+
+## Xocdr\Tui\Ext\Spacer
+
+Spacer component (extends Box). Automatically sets `flexGrow: 1`.
+
+---
+
+## Xocdr\Tui\Ext\Transform
+
+Transform component (extends Box).
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `transform` | callable\|null | Text transformation function |
+
+---
+
+## Xocdr\Tui\Ext\StaticOutput
+
+Static output component (extends Box). Content rendered above dynamic UI.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `items` | array\|null | Items to render statically |
+| `render` | callable\|null | Render function for items |

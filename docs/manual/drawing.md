@@ -6,7 +6,7 @@ Low-level graphics using buffers, canvas, and drawing primitives.
 
 ext-tui provides two approaches for graphics:
 
-1. **Components** - TuiBox/TuiText for structured layouts (recommended)
+1. **Components** - Box/Text for structured layouts (recommended)
 2. **Drawing API** - Buffers and primitives for custom graphics
 
 The drawing API is useful for:
@@ -273,6 +273,8 @@ Available spinner types:
 
 ```php
 <?php
+use Xocdr\Tui\Ext\Key;
+
 if (!tui_is_interactive()) {
     die("Requires interactive terminal\n");
 }
@@ -306,7 +308,7 @@ $app = function () use ($buffer, &$playerX, &$playerY) {
 
 $instance = tui_render($app);
 
-tui_set_input_handler($instance, function (TuiKey $key) use ($instance, &$playerX, &$playerY, &$running) {
+tui_set_input_handler($instance, function (Key $key) use ($instance, &$playerX, &$playerY, &$running) {
     if ($key->escape) {
         $running = false;
         tui_unmount($instance);

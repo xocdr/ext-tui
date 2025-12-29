@@ -7,9 +7,11 @@ Handle keyboard input, focus navigation, and terminal events.
 Register an input handler to respond to key presses:
 
 ```php
+use Xocdr\Tui\Ext\Key;
+
 $instance = tui_render($app);
 
-tui_set_input_handler($instance, function (TuiKey $key) use ($instance) {
+tui_set_input_handler($instance, function (Key $key) use ($instance) {
     // Handle keyboard input
     if ($key->escape) {
         tui_unmount($instance);
@@ -24,9 +26,9 @@ tui_set_input_handler($instance, function (TuiKey $key) use ($instance) {
 tui_wait_until_exit($instance);
 ```
 
-## The TuiKey Object
+## The Key Object
 
-Input handlers receive a `TuiKey` object with these properties:
+Input handlers receive a `Xocdr\Tui\Ext\Key` object with these properties:
 
 ### Character Keys
 
@@ -68,10 +70,12 @@ $key->shift   // Shift modifier held
 ### Menu Navigation
 
 ```php
+use Xocdr\Tui\Ext\Key;
+
 $items = ['New', 'Open', 'Save', 'Quit'];
 $selected = 0;
 
-tui_set_input_handler($instance, function (TuiKey $key) use ($instance, &$selected, $items) {
+tui_set_input_handler($instance, function (Key $key) use ($instance, &$selected, $items) {
     if ($key->escape) {
         tui_unmount($instance);
         return;
@@ -97,7 +101,9 @@ tui_set_input_handler($instance, function (TuiKey $key) use ($instance, &$select
 ### Keyboard Shortcuts
 
 ```php
-tui_set_input_handler($instance, function (TuiKey $key) use ($instance) {
+use Xocdr\Tui\Ext\Key;
+
+tui_set_input_handler($instance, function (Key $key) use ($instance) {
     // Ctrl+S to save
     if ($key->ctrl && $key->key === 's') {
         save();
@@ -122,9 +128,11 @@ tui_set_input_handler($instance, function (TuiKey $key) use ($instance) {
 ### Text Input
 
 ```php
+use Xocdr\Tui\Ext\Key;
+
 $text = '';
 
-tui_set_input_handler($instance, function (TuiKey $key) use ($instance, &$text) {
+tui_set_input_handler($instance, function (Key $key) use ($instance, &$text) {
     if ($key->escape) {
         tui_unmount($instance);
         return;
@@ -150,20 +158,24 @@ tui_set_input_handler($instance, function (TuiKey $key) use ($instance, &$text) 
 Make elements focusable and navigate between them:
 
 ```php
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\Key;
+
 $app = function () {
-    return new TuiBox([
+    return new Box([
         'flexDirection' => 'column',
         'gap' => 1,
         'children' => [
-            new TuiBox([
+            new Box([
                 'focusable' => true,
                 'borderStyle' => 'single',
-                'children' => [new TuiText(['content' => 'Option 1'])],
+                'children' => [new Text(['content' => 'Option 1'])],
             ]),
-            new TuiBox([
+            new Box([
                 'focusable' => true,
                 'borderStyle' => 'single',
-                'children' => [new TuiText(['content' => 'Option 2'])],
+                'children' => [new Text(['content' => 'Option 2'])],
             ]),
         ],
     ]);
@@ -171,7 +183,7 @@ $app = function () {
 
 $instance = tui_render($app);
 
-tui_set_input_handler($instance, function (TuiKey $key) use ($instance) {
+tui_set_input_handler($instance, function (Key $key) use ($instance) {
     if ($key->tab) {
         if ($key->shift) {
             tui_focus_prev($instance);
@@ -188,7 +200,9 @@ tui_set_input_handler($instance, function (TuiKey $key) use ($instance) {
 Respond to focus changes:
 
 ```php
-tui_set_focus_handler($instance, function (TuiFocusEvent $event) {
+use Xocdr\Tui\Ext\FocusEvent;
+
+tui_set_focus_handler($instance, function (FocusEvent $event) {
     if ($event->current) {
         // Something gained focus
         echo "Focused: {$event->direction}\n";
@@ -270,4 +284,4 @@ tui_set_tick_handler($instance, function () use ($instance, &$time) {
 
 - [Components](components.md) - focusable property
 - [Reference: Functions](../reference/functions.md) - Input functions
-- [Reference: Classes](../reference/classes.md) - TuiKey, TuiFocusEvent
+- [Reference: Classes](../reference/classes.md) - Key, FocusEvent

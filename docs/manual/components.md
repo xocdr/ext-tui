@@ -2,33 +2,38 @@
 
 ext-tui uses a component-based architecture with flexbox layout powered by Facebook's Yoga engine.
 
-## TuiBox
+All classes are in the `Xocdr\Tui\Ext` namespace.
+
+## Box
 
 Container component for layout and structure.
 
 ### Creating Boxes
 
 ```php
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+
 // Empty box with properties
-$box = new TuiBox([
+$box = new Box([
     'width' => 40,
     'height' => 10,
     'padding' => 1,
 ]);
 
 // Box with children
-$box = new TuiBox([
+$box = new Box([
     'flexDirection' => 'column',
     'children' => [
-        new TuiText(['content' => 'Item 1']),
-        new TuiText(['content' => 'Item 2']),
+        new Text(['content' => 'Item 1']),
+        new Text(['content' => 'Item 2']),
     ],
 ]);
 
 // Adding children dynamically
-$box = new TuiBox(['flexDirection' => 'row']);
-$box->addChild(new TuiText(['content' => 'Left']));
-$box->addChild(new TuiText(['content' => 'Right']));
+$box = new Box(['flexDirection' => 'row']);
+$box->addChild(new Text(['content' => 'Left']));
+$box->addChild(new Text(['content' => 'Right']));
 ```
 
 ### Flex Direction
@@ -37,13 +42,13 @@ Control the main axis for child layout:
 
 ```php
 // Vertical stack (default)
-new TuiBox([
+new Box([
     'flexDirection' => 'column',
     'children' => [...],
 ]);
 
 // Horizontal row
-new TuiBox([
+new Box([
     'flexDirection' => 'row',
     'children' => [...],
 ]);
@@ -57,19 +62,19 @@ new TuiBox([
 
 ```php
 // Fixed size
-new TuiBox([
+new Box([
     'width' => 40,
     'height' => 10,
 ]);
 
 // Percentage of parent
-new TuiBox([
+new Box([
     'width' => '50%',
     'height' => '100%',
 ]);
 
 // Flexible growth
-new TuiBox([
+new Box([
     'flexGrow' => 1,    // Take available space
     'flexShrink' => 0,  // Don't shrink
 ]);
@@ -79,10 +84,10 @@ new TuiBox([
 
 ```php
 // All sides
-new TuiBox(['padding' => 2, 'margin' => 1]);
+new Box(['padding' => 2, 'margin' => 1]);
 
 // Individual sides
-new TuiBox([
+new Box([
     'paddingTop' => 1,
     'paddingBottom' => 1,
     'paddingLeft' => 2,
@@ -90,7 +95,7 @@ new TuiBox([
 ]);
 
 // Shorthand (X = horizontal, Y = vertical)
-new TuiBox([
+new Box([
     'paddingX' => 2,
     'paddingY' => 1,
 ]);
@@ -102,7 +107,7 @@ Control how children are positioned:
 
 ```php
 // Main axis (along flexDirection)
-new TuiBox([
+new Box([
     'justifyContent' => 'flex-start',   // Pack at start (default)
     // 'justifyContent' => 'center',    // Center items
     // 'justifyContent' => 'flex-end',  // Pack at end
@@ -112,7 +117,7 @@ new TuiBox([
 ]);
 
 // Cross axis (perpendicular to flexDirection)
-new TuiBox([
+new Box([
     'alignItems' => 'stretch',      // Fill available space (default)
     // 'alignItems' => 'flex-start',  // Align at start
     // 'alignItems' => 'center',      // Center items
@@ -125,13 +130,13 @@ new TuiBox([
 Space between children:
 
 ```php
-new TuiBox([
+new Box([
     'flexDirection' => 'column',
     'gap' => 1,  // 1 row gap between children
     'children' => [
-        new TuiText(['content' => 'Item 1']),
-        new TuiText(['content' => 'Item 2']),
-        new TuiText(['content' => 'Item 3']),
+        new Text(['content' => 'Item 1']),
+        new Text(['content' => 'Item 2']),
+        new Text(['content' => 'Item 3']),
     ],
 ]);
 ```
@@ -139,7 +144,7 @@ new TuiBox([
 ### Borders
 
 ```php
-new TuiBox([
+new Box([
     'borderStyle' => 'single',  // ┌─┐│└─┘
     // 'borderStyle' => 'double',  // ╔═╗║╚═╝
     // 'borderStyle' => 'round',   // ╭─╮│╰─╯
@@ -148,7 +153,7 @@ new TuiBox([
 ]);
 ```
 
-## TuiText
+## Text
 
 Display styled text content.
 
@@ -156,10 +161,10 @@ Display styled text content.
 
 ```php
 // Simple text
-new TuiText(['content' => 'Hello, World!']);
+new Text(['content' => 'Hello, World!']);
 
 // Styled text
-new TuiText([
+new Text([
     'content' => 'Important!',
     'bold' => true,
     'color' => [255, 100, 100],
@@ -169,7 +174,7 @@ new TuiText([
 ### Text Styles
 
 ```php
-new TuiText([
+new Text([
     'content' => 'Styled',
     'bold' => true,
     'italic' => true,
@@ -184,14 +189,14 @@ new TuiText([
 
 ```php
 // RGB array
-new TuiText([
+new Text([
     'content' => 'Red text',
     'color' => [255, 0, 0],
     'backgroundColor' => [50, 0, 0],
 ]);
 
 // Hex string
-new TuiText([
+new Text([
     'content' => 'Blue text',
     'color' => '#0066ff',
 ]);
@@ -202,31 +207,31 @@ new TuiText([
 ### Header-Body-Footer
 
 ```php
-new TuiBox([
+new Box([
     'width' => '100%',
     'height' => '100%',
     'flexDirection' => 'column',
     'children' => [
         // Header
-        new TuiBox([
+        new Box([
             'height' => 3,
             'borderStyle' => 'single',
             'justifyContent' => 'center',
             'alignItems' => 'center',
             'children' => [
-                new TuiText(['content' => 'My App', 'bold' => true]),
+                new Text(['content' => 'My App', 'bold' => true]),
             ],
         ]),
         // Body
-        new TuiBox([
+        new Box([
             'flexGrow' => 1,
             'padding' => 1,
         ]),
         // Footer
-        new TuiBox([
+        new Box([
             'height' => 1,
             'children' => [
-                new TuiText(['content' => 'Press q to quit', 'dim' => true]),
+                new Text(['content' => 'Press q to quit', 'dim' => true]),
             ],
         ]),
     ],
@@ -236,19 +241,19 @@ new TuiBox([
 ### Sidebar Layout
 
 ```php
-new TuiBox([
+new Box([
     'width' => '100%',
     'height' => '100%',
     'flexDirection' => 'row',
     'children' => [
         // Sidebar
-        new TuiBox([
+        new Box([
             'width' => 25,
             'borderStyle' => 'single',
             'flexShrink' => 0,
         ]),
         // Main content
-        new TuiBox([
+        new Box([
             'flexGrow' => 1,
             'padding' => 1,
         ]),
@@ -259,17 +264,17 @@ new TuiBox([
 ### Centered Content
 
 ```php
-new TuiBox([
+new Box([
     'width' => '100%',
     'height' => '100%',
     'justifyContent' => 'center',
     'alignItems' => 'center',
     'children' => [
-        new TuiBox([
+        new Box([
             'padding' => 2,
             'borderStyle' => 'round',
             'children' => [
-                new TuiText(['content' => 'Centered!']),
+                new Text(['content' => 'Centered!']),
             ],
         ]),
     ],
@@ -285,14 +290,14 @@ $selected = 1;
 $children = [];
 foreach ($items as $i => $item) {
     $isSelected = $i === $selected;
-    $children[] = new TuiText([
+    $children[] = new Text([
         'content' => ($isSelected ? '> ' : '  ') . $item,
         'color' => $isSelected ? [100, 255, 100] : [200, 200, 200],
         'bold' => $isSelected,
     ]);
 }
 
-new TuiBox([
+new Box([
     'flexDirection' => 'column',
     'padding' => 1,
     'borderStyle' => 'single',
@@ -305,22 +310,26 @@ new TuiBox([
 Make boxes focusable for tab navigation:
 
 ```php
+use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\Key;
+
 $app = function () {
-    return new TuiBox([
+    return new Box([
         'flexDirection' => 'column',
         'gap' => 1,
         'children' => [
-            new TuiBox([
+            new Box([
                 'focusable' => true,
                 'padding' => 1,
                 'borderStyle' => 'single',
-                'children' => [new TuiText(['content' => 'Button 1'])],
+                'children' => [new Text(['content' => 'Button 1'])],
             ]),
-            new TuiBox([
+            new Box([
                 'focusable' => true,
                 'padding' => 1,
                 'borderStyle' => 'single',
-                'children' => [new TuiText(['content' => 'Button 2'])],
+                'children' => [new Text(['content' => 'Button 2'])],
             ]),
         ],
     ]);
@@ -328,7 +337,7 @@ $app = function () {
 
 $instance = tui_render($app);
 
-tui_set_input_handler($instance, function (TuiKey $key) use ($instance) {
+tui_set_input_handler($instance, function (Key $key) use ($instance) {
     if ($key->tab) {
         tui_focus_next($instance);
         tui_rerender($instance);

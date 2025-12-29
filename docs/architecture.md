@@ -10,7 +10,7 @@ ext-tui is a PHP C extension that provides terminal UI capabilities. It follows 
 ┌──────────────────────────────────────────────────────────┐
 │                      PHP Layer                           │
 │  ┌─────────┐ ┌─────────┐ ┌────────────┐ ┌─────────────┐ │
-│  │ TuiBox  │ │ TuiText │ │TuiInstance │ │   TuiKey    │ │
+│  │   Box   │ │  Text   │ │  Instance  │ │     Key     │ │
 │  └────┬────┘ └────┬────┘ └─────┬──────┘ └──────┬──────┘ │
 └───────┼──────────┼─────────────┼───────────────┼────────┘
         │          │             │               │
@@ -89,14 +89,14 @@ ext-tui/
 
 The main extension file that bridges PHP and C:
 
-- **Class Definitions**: TuiBox, TuiText, TuiInstance, TuiKey
+- **Class Definitions**: Box, Text, Instance, Key (in `Xocdr\Tui\Ext` namespace)
 - **Function Exports**: tui_render(), tui_set_input_handler(), etc.
 - **Object Mapping**: Converts PHP objects to C structs and back
-- **Memory Management**: Custom object handlers for TuiInstance
+- **Memory Management**: Custom object handlers for Instance
 
 Key patterns:
 ```c
-// Custom object structure for proper cleanup
+// Custom object structure for Xocdr\Tui\Ext\Instance
 typedef struct {
     tui_app *app;
     zend_object std;
@@ -358,7 +358,7 @@ tui_wrapped_text* tui_wrap_text(const char *text, int width, tui_wrap_mode mode)
    │
 2. tui.c creates tui_app, stores callback
    │
-3. Initial component call → PHP returns TuiBox/TuiText tree
+3. Initial component call → PHP returns Box/Text tree
    │
 4. php_to_tui_node() converts PHP objects to tui_node tree
    │
@@ -382,7 +382,7 @@ tui_wrapped_text* tui_wrap_text(const char *text, int width, tui_wrap_mode mode)
    │
 4. Built-in handlers (Ctrl+C, Tab navigation)
    │
-5. PHP input handler called with TuiKey object
+5. PHP input handler called with Key object
    │
 6. render_pending flag set → re-render on next loop
 ```
@@ -403,7 +403,7 @@ zval_ptr_dtor(&fci.function_name);
 
 ### Resource Cleanup
 
-TuiInstance has a custom destructor:
+Instance has a custom destructor:
 
 ```c
 static void tui_instance_free_object(zend_object *obj) {
