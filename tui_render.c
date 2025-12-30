@@ -161,6 +161,9 @@ PHP_FUNCTION(tui_render)
     fci_copy.params = params;
     fci_copy.retval = &retval;
 
+    /* Capture output during initial render to prevent leakage to terminal */
+    php_output_start_default();
+
     if (zend_call_function(&fci_copy, &fcc) == SUCCESS) {
         if (Z_TYPE(retval) == IS_OBJECT) {
             if (!instanceof_function(Z_OBJCE(retval), tui_box_ce) &&
@@ -198,6 +201,9 @@ PHP_FUNCTION(tui_render)
 
     /* Clean up the copied param reference */
     zval_ptr_dtor(&params[0]);
+
+    /* Discard any captured output from initial render */
+    php_output_discard();
 
     /* Start the app */
     if (tui_app_start(app) != 0) {

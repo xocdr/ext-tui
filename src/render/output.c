@@ -74,12 +74,18 @@ void tui_output_enter_alternate(tui_output *out)
 {
     if (!out || out->mode == TUI_OUTPUT_ALTERNATE) return;
 
-    char buf[32];
+    char buf[64];
     size_t len;
 
+    /* Enter alternate screen buffer */
     tui_ansi_alternate_screen_enter(buf, &len);
     write_all(STDOUT_FILENO, buf, len);
 
+    /* Clear screen and move cursor to home position */
+    tui_ansi_clear_screen(buf, &len);
+    write_all(STDOUT_FILENO, buf, len);
+
+    /* Hide cursor */
     tui_ansi_cursor_hide(buf, &len);
     write_all(STDOUT_FILENO, buf, len);
 
