@@ -213,6 +213,54 @@ function renderButton(string $label, bool $focused, bool $disabled): Box
 }
 ```
 
+## Hyperlinks (OSC 8)
+
+Make text clickable with terminal hyperlinks:
+
+```php
+use Xocdr\Tui\Ext\Text;
+
+// Simple hyperlink
+new Text([
+    'content' => 'Visit our website',
+    'hyperlink' => 'https://example.com',
+    'underline' => true,
+    'color' => [100, 150, 255],
+]);
+
+// With ID for grouping (same ID = same link)
+new Text([
+    'content' => 'Click here',
+    'hyperlink' => [
+        'url' => 'https://example.com/docs',
+        'id' => 'docs-link',
+    ],
+]);
+```
+
+### How It Works
+
+Hyperlinks use OSC 8 escape sequences:
+- `ESC ] 8 ; id=ID ; URL ESC \` - Start hyperlink
+- `ESC ] 8 ; ; ESC \` - End hyperlink
+
+The `id` parameter groups multiple text spans as a single link (clicking any part opens the same URL).
+
+### Terminal Support
+
+| Terminal | Support |
+|----------|---------|
+| iTerm2 | ✅ Full |
+| Kitty | ✅ Full |
+| GNOME Terminal 3.26+ | ✅ Full |
+| Windows Terminal | ✅ Full |
+| Alacritty | ⚠️ Limited |
+| macOS Terminal.app | ❌ None |
+
+**Tip:** Combine with underline and color to make links visually obvious even in terminals without hyperlink support.
+
+---
+
 ## Terminal Compatibility
 
 ### True Color Support

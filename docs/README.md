@@ -16,8 +16,8 @@ User-friendly guides with examples:
 |-------|-------------|
 | [Getting Started](manual/getting-started.md) | Installation, hello world, core concepts |
 | [Components & Layout](manual/components.md) | Box, Text, flexbox layouts |
-| [Styling](manual/styling.md) | Colors, text attributes, borders |
-| [Input Handling](manual/input.md) | Keyboard events, focus, resize |
+| [Styling](manual/styling.md) | Colors, text attributes, borders, hyperlinks |
+| [Input Handling](manual/input.md) | Keyboard, mouse, focus, clipboard, history |
 | [Drawing](manual/drawing.md) | Buffers, canvas, primitives, sprites, tables |
 | [Animation](manual/animation.md) | Easing, interpolation, effects |
 

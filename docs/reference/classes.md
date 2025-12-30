@@ -50,6 +50,10 @@ new Box(array $props = [])
 | `borderLeftColor` | array\|string\|null | null | Left border color |
 | `focusable` | bool | false | Can receive focus |
 | `focused` | bool | false | Currently focused |
+| `tabIndex` | int | 0 | Tab order (-1 = skip, 0+ = order) |
+| `focusGroup` | string\|null | null | Focus group name |
+| `autoFocus` | bool | false | Focus on mount |
+| `focusTrap` | bool | false | Trap focus within container |
 | `key` | string\|null | null | Reconciliation key |
 | `id` | string\|null | null | Focus ID |
 | `children` | array | [] | Child components |
@@ -90,6 +94,7 @@ new Text(array $props = [])
 | `inverse` | bool | false | Inverted colors |
 | `strikethrough` | bool | false | Strikethrough |
 | `wrap` | string\|null | null | Wrap mode (`'word'`, `'char'`) |
+| `hyperlink` | string\|array\|null | null | URL or `['url' => '...', 'id' => '...']` |
 
 ---
 
@@ -219,6 +224,46 @@ Node info arrays contain:
 - `width` (int)
 - `height` (int)
 - `type` (string): `'box'` or `'text'`
+
+---
+
+## Xocdr\Tui\Ext\MouseEvent
+
+Mouse event. Passed to mouse handlers.
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `x` | int | Column (0-based) |
+| `y` | int | Row (0-based) |
+| `button` | string | Button name (see below) |
+| `action` | string | Action type (see below) |
+| `ctrl` | bool | Ctrl held |
+| `meta` | bool | Meta/Alt held |
+| `shift` | bool | Shift held |
+
+### Button Values
+
+| Value | Description |
+|-------|-------------|
+| `'left'` | Left mouse button |
+| `'middle'` | Middle mouse button |
+| `'right'` | Right mouse button |
+| `'scroll_up'` | Scroll wheel up |
+| `'scroll_down'` | Scroll wheel down |
+| `'scroll_left'` | Scroll wheel left (horizontal) |
+| `'scroll_right'` | Scroll wheel right (horizontal) |
+| `'none'` | No button (motion without button) |
+
+### Action Values
+
+| Value | Description |
+|-------|-------------|
+| `'press'` | Button pressed down |
+| `'release'` | Button released |
+| `'move'` | Motion without button (hover) |
+| `'drag'` | Motion with button held |
 
 ---
 

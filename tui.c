@@ -124,8 +124,6 @@ zend_class_entry *tui_static_ce;
 zend_class_entry *tui_color_ce;
 
 /* Object handlers */
-static zend_object_handlers tui_box_handlers;
-static zend_object_handlers tui_text_handlers;
 static zend_object_handlers tui_instance_handlers;
 static zend_object_handlers tui_focus_handlers;
 static zend_object_handlers tui_focus_manager_handlers;
@@ -1572,9 +1570,6 @@ PHP_METHOD(TuiInstance, exit)
     }
 }
 /* }}} */
-
-/* Forward declaration for state setter */
-static void state_setter_call(tui_app *app, int index, zval *new_value);
 
 /* {{{ TuiInstance::useState(mixed $initial): array */
 PHP_METHOD(TuiInstance, useState)

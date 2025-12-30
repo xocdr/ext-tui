@@ -6,6 +6,7 @@
 
 #include "loop.h"
 #include "../terminal/terminal.h"
+#include "../render/buffer.h"
 #include "php.h"
 #include "php_tui.h"
 #include <stdlib.h>
@@ -17,13 +18,6 @@
 /* Constants for configuration */
 #define DEFAULT_POLL_TIMEOUT_MS 100
 #define MIN_POLL_TIMEOUT_MS 1
-
-/* Maximum terminal dimension in characters. This caps the terminal size
-   reported to applications, preventing excessive memory allocation in
-   render buffers (width * height * sizeof(cell) bytes). 1000x1000 allows
-   for very large terminals while keeping buffer size manageable (~8MB max).
-   Standard terminals are typically 80-200 columns and 24-100 rows. */
-#define MAX_TERMINAL_DIMENSION 1000
 
 #define MAX_TIMERS 32
 
@@ -194,20 +188,28 @@ int tui_loop_run(tui_loop *loop)
 
     int ret = poll(fds, 1, timeout);
 
-    /* Check for resize using sig_atomic_t flag
-     * Read and clear in one check - sig_atomic_t ensures atomic read/write.
-     * We always get current terminal size when handling, so missing
-     * intermediate signals is fine. */
-    if (loop->resize_cb && resize_pending) {
-        resize_pending = 0;  /* Clear before processing */
-        /* Get actual terminal size (always current, regardless of signal count) */
-        int width, height;
-        if (tui_terminal_get_size(&width, &height) == 0) {
-            /* Validate terminal size before using */
-            if (width > 0 && width <= MAX_TERMINAL_DIMENSION &&
-                height > 0 && height <= MAX_TERMINAL_DIMENSION) {
-                TUI_METRIC_INC(resize_events);
-                loop->resize_cb(width, height, loop->resize_userdata);
+    /* Check for resize using sig_atomic_t flag.
+     * We atomically test-and-clear to avoid race conditions:
+     * 1. Read the flag value
+     * 2. If set, clear it immediately before processing
+     * This ensures we don't lose signals that arrive during processing,
+     * since we always fetch the current terminal size anyway. */
+    if (loop->resize_cb) {
+        sig_atomic_t pending = resize_pending;
+        if (pending) {
+            resize_pending = 0;  /* Clear before processing to catch new signals */
+            /* Get actual terminal size (always current, regardless of signal count) */
+            int width, height;
+            if (tui_terminal_get_size(&width, &height) == 0) {
+                /* Validate terminal size against buffer limits to prevent
+                 * excessive memory allocation. Use configurable buffer limits. */
+                int max_width = tui_buffer_get_max_width();
+                int max_height = tui_buffer_get_max_height();
+                if (width > 0 && width <= max_width &&
+                    height > 0 && height <= max_height) {
+                    TUI_METRIC_INC(resize_events);
+                    loop->resize_cb(width, height, loop->resize_userdata);
+                }
             }
         }
     }

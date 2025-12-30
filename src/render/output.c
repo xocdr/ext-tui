@@ -15,6 +15,11 @@
 
 #define OUTPUT_BUFFER_SIZE 65536
 
+/* Maximum supported terminal dimensions for buffer size validation.
+ * Larger terminals will still work but may use more chunks. */
+#define MAX_VALIDATED_WIDTH 500
+#define MAX_VALIDATED_HEIGHT 500
+
 /**
  * Write all bytes to file descriptor, handling partial writes and EINTR.
  * Returns 0 on success, -1 on error.
@@ -97,9 +102,20 @@ void tui_output_exit_alternate(tui_output *out)
     out->mode = TUI_OUTPUT_NORMAL;
 }
 
+/**
+ * Compare two styles for equality.
+ * Uses explicit field comparison instead of memcmp to avoid
+ * issues with struct padding bytes containing garbage.
+ */
 static int styles_equal(const tui_style *a, const tui_style *b)
 {
-    return memcmp(a, b, sizeof(tui_style)) == 0;
+    return a->fg.is_set == b->fg.is_set &&
+           a->fg.r == b->fg.r && a->fg.g == b->fg.g && a->fg.b == b->fg.b &&
+           a->bg.is_set == b->bg.is_set &&
+           a->bg.r == b->bg.r && a->bg.g == b->bg.g && a->bg.b == b->bg.b &&
+           a->bold == b->bold && a->dim == b->dim &&
+           a->italic == b->italic && a->underline == b->underline &&
+           a->inverse == b->inverse && a->strikethrough == b->strikethrough;
 }
 
 static size_t apply_style_diff(char *buf, const tui_style *old_style, const tui_style *new_style)

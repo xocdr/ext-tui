@@ -12,9 +12,9 @@ This document describes known limitations and areas for future improvement in ex
 
 ### Event Handling
 
-- **No mouse support**: Currently only keyboard input is supported. Mouse events (clicks, scroll) are not implemented.
 - **Limited modifier detection**: Some terminal emulators may not send full modifier information (Shift, Alt, Ctrl) for all key combinations.
 - **Escape key delay**: Single Escape key press requires a timeout to distinguish from escape sequences, which may cause a brief delay.
+- **Mouse support varies**: Mouse support uses SGR mode (1006) which is widely supported, but some terminals may have limited functionality.
 
 ### Text Rendering
 
@@ -25,7 +25,16 @@ This document describes known limitations and areas for future improvement in ex
 ### Memory and Performance
 
 - **No lazy rendering**: The entire visible area is re-rendered on each update. This may be slow for very complex UIs.
-- **Node tree depth limit**: Extremely deep node trees (100+ levels) may cause stack issues during rendering.
+- **Node tree depth limit**: Tree traversal is limited to 256 levels to prevent stack overflow.
+
+### Thread Safety
+
+- **Not thread-safe**: ext-tui is designed for single-threaded use. All TUI operations must be performed from the same thread.
+- **No concurrent access**: Multiple PHP threads or processes should not access the same TUI instance simultaneously.
+- **Signal handlers**: Signal handling (e.g., for window resize) uses global state and is not reentrant.
+- **Terminal state**: Raw mode and alternate screen buffer are global terminal states that cannot be safely shared.
+
+**Recommendation**: Use a single PHP process for TUI applications. For concurrent operations, use async I/O or message passing rather than threads.
 
 ## Implemented Features
 
@@ -39,11 +48,16 @@ The following features have been fully implemented:
 - ✅ **Tables**: Table rendering with alignment and borders
 - ✅ **Progress indicators**: Progress bars, busy bars, and spinners
 - ✅ **Drawing primitives**: Lines, rectangles, circles, ellipses, triangles
+- ✅ **Mouse events**: Click, scroll, drag with SGR mode (1006)
+- ✅ **Clipboard**: OSC 52 clipboard read/write
+- ✅ **Hyperlinks**: OSC 8 terminal hyperlinks
+- ✅ **Bracketed paste**: Detect and handle pasted text
+- ✅ **Input history**: Navigate through input history
+- ✅ **Focus management**: Tab index, focus groups, focus traps
 
 ## Planned Improvements
 
 ### Near Term
-- [ ] Mouse event support (click, scroll, drag)
 - [ ] Built-in input components (TextInput, Select, Checkbox)
 - [ ] Performance optimizations for large node trees
 

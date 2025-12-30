@@ -16,6 +16,9 @@
 
 #define INITIAL_CHILDREN_CAPACITY 4
 
+/* Maximum recursion depth for tree traversal (prevents stack overflow) */
+#define MAX_TREE_DEPTH 256
+
 /* Forward declarations */
 static int copy_layout_recursive(tui_node *node);
 static YGSize text_measure_func(YGNodeConstRef yg_node, float width,
@@ -659,7 +662,11 @@ static int focus_list_add(focus_list *list, tui_node *node)
     if (list->count >= list->capacity) {
         int new_cap = list->capacity * 2;
         if (new_cap < 16) new_cap = 16;
-        tui_node **new_nodes = realloc(list->nodes, new_cap * sizeof(tui_node*));
+        /* Check for integer overflow in allocation size */
+        if (new_cap > INT_MAX / (int)sizeof(tui_node*)) {
+            return -1;  /* Would overflow */
+        }
+        tui_node **new_nodes = realloc(list->nodes, (size_t)new_cap * sizeof(tui_node*));
         if (!new_nodes) return -1;
         list->nodes = new_nodes;
         list->capacity = new_cap;
@@ -668,9 +675,13 @@ static int focus_list_add(focus_list *list, tui_node *node)
     return 0;
 }
 
-static void collect_focusable_nodes(tui_node *node, focus_list *list, const char *group, tui_node *trap_root)
+/**
+ * Recursively collect focusable nodes into a list.
+ * Returns 0 on success, -1 on allocation failure.
+ */
+static int collect_focusable_nodes(tui_node *node, focus_list *list, const char *group, tui_node *trap_root)
 {
-    if (!node) return;
+    if (!node) return 0;
 
     /* Skip if we have a trap but this node is outside it */
     if (trap_root && node != trap_root) {
@@ -681,21 +692,27 @@ static void collect_focusable_nodes(tui_node *node, focus_list *list, const char
             if (p == trap_root) { inside_trap = 1; break; }
             p = p->parent;
         }
-        if (!inside_trap) return;
+        if (!inside_trap) return 0;
     }
 
     /* If focusable and tab_index >= 0, add to list */
     if (node->focusable && node->tab_index >= 0) {
         /* If group filter specified, only add matching group */
         if (!group || (node->focus_group && strcmp(node->focus_group, group) == 0)) {
-            focus_list_add(list, node);
+            if (focus_list_add(list, node) != 0) {
+                return -1;  /* Allocation failed */
+            }
         }
     }
 
     /* Recurse to children */
     for (int i = 0; i < node->child_count; i++) {
-        collect_focusable_nodes(node->children[i], list, group, trap_root);
+        if (collect_focusable_nodes(node->children[i], list, group, trap_root) != 0) {
+            return -1;  /* Propagate error */
+        }
     }
+
+    return 0;
 }
 
 /* Compare function for sorting by tab_index */
@@ -733,7 +750,10 @@ tui_node* tui_focus_find_next(tui_node *root, tui_node *current)
 
     /* Collect focusable nodes */
     focus_list list = {NULL, 0, 0};
-    collect_focusable_nodes(search_root, &list, NULL, trap);
+    if (collect_focusable_nodes(search_root, &list, NULL, trap) != 0) {
+        free(list.nodes);
+        return NULL;  /* Allocation failed */
+    }
 
     if (list.count == 0) {
         free(list.nodes);
@@ -774,7 +794,10 @@ tui_node* tui_focus_find_prev(tui_node *root, tui_node *current)
 
     /* Collect focusable nodes */
     focus_list list = {NULL, 0, 0};
-    collect_focusable_nodes(search_root, &list, NULL, trap);
+    if (collect_focusable_nodes(search_root, &list, NULL, trap) != 0) {
+        free(list.nodes);
+        return NULL;  /* Allocation failed */
+    }
 
     if (list.count == 0) {
         free(list.nodes);
@@ -808,7 +831,10 @@ tui_node* tui_focus_find_next_in_group(tui_node *root, tui_node *current, const 
     if (!root || !group) return NULL;
 
     focus_list list = {NULL, 0, 0};
-    collect_focusable_nodes(root, &list, group, NULL);
+    if (collect_focusable_nodes(root, &list, group, NULL) != 0) {
+        free(list.nodes);
+        return NULL;  /* Allocation failed */
+    }
 
     if (list.count == 0) {
         free(list.nodes);
@@ -862,7 +888,10 @@ tui_node* tui_focus_find_first(tui_node *root)
     if (!root) return NULL;
 
     focus_list list = {NULL, 0, 0};
-    collect_focusable_nodes(root, &list, NULL, NULL);
+    if (collect_focusable_nodes(root, &list, NULL, NULL) != 0) {
+        free(list.nodes);
+        return NULL;  /* Allocation failed */
+    }
 
     if (list.count == 0) {
         free(list.nodes);
@@ -884,35 +913,31 @@ int tui_node_contains_point(tui_node *node, int x, int y)
 {
     if (!node) return 0;
 
-    /* Get absolute position by walking up parent chain */
-    float abs_x = 0, abs_y = 0;
-    tui_node *p = node;
+    /* Calculate absolute position by accumulating parent positions.
+     * Start with the node's own position and add each ancestor's position. */
+    float abs_x = node->x;
+    float abs_y = node->y;
+    tui_node *p = node->parent;
     while (p) {
         abs_x += p->x;
         abs_y += p->y;
         p = p->parent;
     }
-    /* Subtract node's own position since we added it in the loop */
-    abs_x -= node->x;
-    abs_y -= node->y;
 
-    /* Add node's position to get its absolute bounds */
-    float node_left = abs_x + node->x;
-    float node_top = abs_y + node->y;
-    float node_right = node_left + node->width;
-    float node_bottom = node_top + node->height;
-
-    return (x >= node_left && x < node_right &&
-            y >= node_top && y < node_bottom);
+    /* Check if point is within node's absolute bounds */
+    return (x >= abs_x && x < abs_x + node->width &&
+            y >= abs_y && y < abs_y + node->height);
 }
 
 /*
  * Recursive helper for hit testing.
  * Returns the deepest node containing the point, or NULL.
+ * Depth parameter prevents stack overflow on deeply nested trees.
  */
-static tui_node* hit_test_recursive(tui_node *node, int x, int y, float parent_x, float parent_y)
+static tui_node* hit_test_recursive(tui_node *node, int x, int y,
+                                     float parent_x, float parent_y, int depth)
 {
-    if (!node) return NULL;
+    if (!node || depth >= MAX_TREE_DEPTH) return NULL;
 
     /* Calculate absolute position of this node */
     float abs_x = parent_x + node->x;
@@ -928,7 +953,8 @@ static tui_node* hit_test_recursive(tui_node *node, int x, int y, float parent_x
     /* Children are rendered in order, so later children appear on top */
     /* Search in reverse order to find topmost child first */
     for (int i = node->child_count - 1; i >= 0; i--) {
-        tui_node *hit = hit_test_recursive(node->children[i], x, y, abs_x, abs_y);
+        tui_node *hit = hit_test_recursive(node->children[i], x, y,
+                                           abs_x, abs_y, depth + 1);
         if (hit) return hit;
     }
 
@@ -939,16 +965,17 @@ static tui_node* hit_test_recursive(tui_node *node, int x, int y, float parent_x
 tui_node* tui_node_hit_test(tui_node *root, int x, int y)
 {
     if (!root) return NULL;
-    return hit_test_recursive(root, x, y, 0, 0);
+    return hit_test_recursive(root, x, y, 0, 0, 0);
 }
 
 /*
  * Helper: collect all nodes containing a point (from root to leaf)
+ * Depth parameter prevents stack overflow on deeply nested trees.
  */
 static void collect_hit_nodes(tui_node *node, int x, int y, float parent_x, float parent_y,
-                              tui_node ***nodes, int *count, int *capacity)
+                              tui_node ***nodes, int *count, int *capacity, int depth)
 {
-    if (!node) return;
+    if (!node || depth >= MAX_TREE_DEPTH) return;
 
     float abs_x = parent_x + node->x;
     float abs_y = parent_y + node->y;
@@ -959,11 +986,15 @@ static void collect_hit_nodes(tui_node *node, int x, int y, float parent_x, floa
         return;  /* Point not in this node */
     }
 
-    /* Add this node to the list */
+    /* Add this node to the list (with overflow protection) */
     if (*count >= *capacity) {
         int new_cap = *capacity * 2;
         if (new_cap < 16) new_cap = 16;
-        tui_node **new_nodes = realloc(*nodes, new_cap * sizeof(tui_node*));
+        /* Check for overflow before allocation */
+        if (new_cap > INT_MAX / (int)sizeof(tui_node*)) {
+            return;  /* Would overflow, stop */
+        }
+        tui_node **new_nodes = realloc(*nodes, (size_t)new_cap * sizeof(tui_node*));
         if (!new_nodes) return;  /* Allocation failure, just stop */
         *nodes = new_nodes;
         *capacity = new_cap;
@@ -972,7 +1003,8 @@ static void collect_hit_nodes(tui_node *node, int x, int y, float parent_x, floa
 
     /* Recurse to children */
     for (int i = 0; i < node->child_count; i++) {
-        collect_hit_nodes(node->children[i], x, y, abs_x, abs_y, nodes, count, capacity);
+        collect_hit_nodes(node->children[i], x, y, abs_x, abs_y,
+                          nodes, count, capacity, depth + 1);
     }
 }
 
@@ -987,7 +1019,7 @@ tui_node** tui_node_hit_test_all(tui_node *root, int x, int y, int *count)
     int capacity = 0;
     *count = 0;
 
-    collect_hit_nodes(root, x, y, 0, 0, &nodes, count, &capacity);
+    collect_hit_nodes(root, x, y, 0, 0, &nodes, count, &capacity, 0);
 
     if (*count == 0) {
         free(nodes);

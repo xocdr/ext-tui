@@ -420,12 +420,17 @@ size_t tui_base64_decode_len(size_t src_len)
 
 int tui_base64_decode(const char *src, size_t src_len, char *dst, size_t dst_size)
 {
+    /* Validate input parameters */
+    if (!src || !dst || dst_size == 0) {
+        return 0;
+    }
+
     const unsigned char *in = (const unsigned char *)src;
     unsigned char *out = (unsigned char *)dst;
     unsigned char *out_end = out + dst_size;
     int val = 0, valb = -8;
 
-    for (size_t i = 0; i < src_len && out < out_end; i++) {
+    for (size_t i = 0; i < src_len; i++) {
         signed char c = b64_decode_table[in[i]];
         if (c == -2) continue;  /* Skip whitespace */
         if (c == -1) break;     /* Invalid or padding */
@@ -433,6 +438,10 @@ int tui_base64_decode(const char *src, size_t src_len, char *dst, size_t dst_siz
         val = (val << 6) + c;
         valb += 6;
         if (valb >= 0) {
+            /* Check bounds BEFORE writing to prevent buffer overflow */
+            if (out >= out_end) {
+                break;  /* Buffer full, stop decoding */
+            }
             *out++ = (unsigned char)((val >> valb) & 0xFF);
             valb -= 8;
         }
@@ -453,7 +462,13 @@ static char clipboard_target_char(tui_clipboard_target target)
 int tui_ansi_clipboard_write(char *buf, size_t buf_size, const char *text, size_t text_len,
                               tui_clipboard_target target)
 {
-    if (!text || text_len == 0) return -1;
+    /* Validate inputs */
+    if (!buf || buf_size == 0 || !text || text_len == 0) return -1;
+
+    /* Limit text size to prevent integer overflow in base64 calculation.
+     * Base64 produces 4 bytes for every 3 input bytes, so we need text_len * 4/3.
+     * Limit to ~1GB to be safe (SIZE_MAX / 4 prevents overflow in multiplication). */
+    if (text_len > SIZE_MAX / 4) return -1;
 
     /* Calculate required size: \033]52;X;<base64>\007 */
     size_t b64_len = tui_base64_encode_len(text_len);
@@ -461,6 +476,8 @@ int tui_ansi_clipboard_write(char *buf, size_t buf_size, const char *text, size_
     size_t suffix_len = 1;  /* \007 */
     size_t total = prefix_len + b64_len + suffix_len + 1;
 
+    /* Check for overflow in total calculation */
+    if (total < b64_len) return -1;  /* Overflow occurred */
     if (buf_size < total) return -1;
 
     /* Build the sequence */

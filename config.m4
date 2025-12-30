@@ -70,6 +70,23 @@ if test "$PHP_TUI" != "no"; then
   dnl Set C++20 for Yoga sources
   CXXFLAGS="$CXXFLAGS -std=c++20"
 
+  dnl Enable strict compiler warnings for better code quality
+  dnl -Wall: Enable most warnings
+  dnl -Wextra: Enable additional warnings
+  dnl -Wno-unused-parameter: Disable unused parameter warnings (common in PHP extensions)
+  dnl -Wformat=2: Strict format string checking
+  dnl -Wstrict-prototypes: Require function prototypes (C only)
+  dnl -Wshadow: Warn when local variable shadows another
+  dnl -Wconversion: Warn on implicit type conversions that may lose data
+  dnl -Wcast-align: Warn on pointer casts that increase alignment requirements
+  TUI_CFLAGS="-Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow"
+
+  dnl Add C-specific warnings
+  CFLAGS="$CFLAGS $TUI_CFLAGS -Wstrict-prototypes"
+
+  dnl Add C++ warnings (no strict-prototypes for C++)
+  CXXFLAGS="$CXXFLAGS $TUI_CFLAGS"
+
   dnl Create extension with all sources (C and C++)
   PHP_NEW_EXTENSION([tui],
     [$TUI_SOURCES $YOGA_SOURCES],

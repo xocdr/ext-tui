@@ -55,3 +55,24 @@ Used with `tui_table_set_align()`.
 | `TUI_ALIGN_LEFT` | Left-align column |
 | `TUI_ALIGN_CENTER` | Center column |
 | `TUI_ALIGN_RIGHT` | Right-align column |
+
+## Mouse Tracking Modes
+
+Used with `tui_mouse_enable()`.
+
+| Constant | ANSI Mode | Description |
+|----------|-----------|-------------|
+| `TUI_MOUSE_MODE_OFF` | - | Disable mouse tracking |
+| `TUI_MOUSE_MODE_CLICK` | 1000 | Basic click events only |
+| `TUI_MOUSE_MODE_BUTTON` | 1002 | Button press/release events |
+| `TUI_MOUSE_MODE_ALL` | 1003 | All events including hover |
+
+## Clipboard Targets
+
+Used with `tui_clipboard_write()`, `tui_clipboard_request()`, `tui_clipboard_clear()`.
+
+| Constant | Target | Description |
+|----------|--------|-------------|
+| `TUI_CLIPBOARD_CLIPBOARD` | 'c' | System clipboard (default) |
+| `TUI_CLIPBOARD_PRIMARY` | 'p' | Primary selection (X11) |
+| `TUI_CLIPBOARD_SECONDARY` | 's' | Secondary selection (X11) |

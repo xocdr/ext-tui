@@ -159,7 +159,13 @@ int tui_utf8_decode_n(const char *str, int len, uint32_t *codepoint)
             *codepoint = c;  /* Invalid, treat as single byte */
             return 1;
         }
-        *codepoint = ((c & 0x1F) << 6) | (str[1] & 0x3F);
+        uint32_t cp = ((c & 0x1F) << 6) | (str[1] & 0x3F);
+        /* Reject overlong encodings: 2-byte must encode >= 0x80 */
+        if (cp < 0x80) {
+            *codepoint = c;
+            return 1;
+        }
+        *codepoint = cp;
         return 2;
     }
 
@@ -171,9 +177,20 @@ int tui_utf8_decode_n(const char *str, int len, uint32_t *codepoint)
             *codepoint = c;
             return 1;
         }
-        *codepoint = ((c & 0x0F) << 12) |
+        uint32_t cp = ((c & 0x0F) << 12) |
                      ((str[1] & 0x3F) << 6) |
                      (str[2] & 0x3F);
+        /* Reject overlong encodings: 3-byte must encode >= 0x800 */
+        if (cp < 0x800) {
+            *codepoint = c;
+            return 1;
+        }
+        /* Reject UTF-16 surrogates (U+D800 to U+DFFF) - invalid in UTF-8 */
+        if (cp >= 0xD800 && cp <= 0xDFFF) {
+            *codepoint = c;
+            return 1;
+        }
+        *codepoint = cp;
         return 3;
     }
 
@@ -186,10 +203,16 @@ int tui_utf8_decode_n(const char *str, int len, uint32_t *codepoint)
             *codepoint = c;
             return 1;
         }
-        *codepoint = ((c & 0x07) << 18) |
+        uint32_t cp = ((c & 0x07) << 18) |
                      ((str[1] & 0x3F) << 12) |
                      ((str[2] & 0x3F) << 6) |
                      (str[3] & 0x3F);
+        /* Reject overlong encodings and out-of-range: 4-byte must encode 0x10000-0x10FFFF */
+        if (cp < 0x10000 || cp > 0x10FFFF) {
+            *codepoint = c;
+            return 1;
+        }
+        *codepoint = cp;
         return 4;
     }
 
@@ -252,6 +275,11 @@ int tui_utf8_decode(const char *str, uint32_t *codepoint)
                       (str[2] & 0x3F);
         /* Reject overlong encodings: 3-byte must encode >= 0x800 */
         if (cp < 0x800) {
+            *codepoint = c;
+            return 1;
+        }
+        /* Reject UTF-16 surrogates (U+D800 to U+DFFF) - invalid in UTF-8 */
+        if (cp >= 0xD800 && cp <= 0xDFFF) {
             *codepoint = c;
             return 1;
         }

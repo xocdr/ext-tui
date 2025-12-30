@@ -104,6 +104,198 @@ tui_get_focused_node(Xocdr\Tui\Ext\Instance $instance): ?array
 
 Returns info about focused node or null.
 
+### tui_focus_next_in_group
+
+```php
+tui_focus_next_in_group(Xocdr\Tui\Ext\Instance $instance, string $group): void
+```
+
+Moves focus to next element within specified focus group.
+
+### tui_focus_by_id
+
+```php
+tui_focus_by_id(Xocdr\Tui\Ext\Instance $instance, string $id): void
+```
+
+Focuses element by ID.
+
+---
+
+## Mouse
+
+### tui_mouse_enable
+
+```php
+tui_mouse_enable(Xocdr\Tui\Ext\Instance $instance, int $mode): void
+```
+
+Enables mouse tracking. Modes: `TUI_MOUSE_MODE_CLICK`, `TUI_MOUSE_MODE_BUTTON`, `TUI_MOUSE_MODE_ALL`.
+
+### tui_mouse_disable
+
+```php
+tui_mouse_disable(Xocdr\Tui\Ext\Instance $instance): void
+```
+
+Disables mouse tracking.
+
+### tui_set_mouse_handler
+
+```php
+tui_set_mouse_handler(Xocdr\Tui\Ext\Instance $instance, callable $handler): void
+```
+
+Handler receives: `function(Xocdr\Tui\Ext\MouseEvent $event): void`
+
+### tui_hit_test
+
+```php
+tui_hit_test(Xocdr\Tui\Ext\Instance $instance, int $x, int $y): ?array
+```
+
+Returns deepest node at coordinates, or null.
+
+### tui_hit_test_all
+
+```php
+tui_hit_test_all(Xocdr\Tui\Ext\Instance $instance, int $x, int $y): array
+```
+
+Returns all nodes at coordinates (root to leaf order).
+
+---
+
+## Clipboard (OSC 52)
+
+### tui_clipboard_write
+
+```php
+tui_clipboard_write(string $text, int $target = TUI_CLIPBOARD_CLIPBOARD): void
+```
+
+Writes text to clipboard.
+
+### tui_clipboard_request
+
+```php
+tui_clipboard_request(int $target = TUI_CLIPBOARD_CLIPBOARD): void
+```
+
+Requests clipboard contents (async).
+
+### tui_clipboard_clear
+
+```php
+tui_clipboard_clear(int $target = TUI_CLIPBOARD_CLIPBOARD): void
+```
+
+Clears clipboard.
+
+### tui_set_clipboard_handler
+
+```php
+tui_set_clipboard_handler(Xocdr\Tui\Ext\Instance $instance, callable $handler): void
+```
+
+Handler receives: `function(string $content): void`
+
+---
+
+## Input History
+
+### tui_history_create
+
+```php
+tui_history_create(int $maxEntries = 1000): resource
+```
+
+Creates input history with max capacity.
+
+### tui_history_destroy
+
+```php
+tui_history_destroy(resource $history): void
+```
+
+Frees history resources.
+
+### tui_history_add
+
+```php
+tui_history_add(resource $history, string $entry): void
+```
+
+Adds entry to history (deduplicates consecutive entries).
+
+### tui_history_prev
+
+```php
+tui_history_prev(resource $history): ?string
+```
+
+Returns previous history entry, or null.
+
+### tui_history_next
+
+```php
+tui_history_next(resource $history): ?string
+```
+
+Returns next history entry, or null.
+
+### tui_history_save_temp
+
+```php
+tui_history_save_temp(resource $history, string $input): void
+```
+
+Saves current input before navigating history.
+
+### tui_history_get_temp
+
+```php
+tui_history_get_temp(resource $history): ?string
+```
+
+Returns saved temporary input.
+
+### tui_history_reset
+
+```php
+tui_history_reset(resource $history): void
+```
+
+Resets navigation position.
+
+---
+
+## Bracketed Paste
+
+### tui_bracketed_paste_enable
+
+```php
+tui_bracketed_paste_enable(Xocdr\Tui\Ext\Instance $instance): void
+```
+
+Enables bracketed paste mode.
+
+### tui_bracketed_paste_disable
+
+```php
+tui_bracketed_paste_disable(Xocdr\Tui\Ext\Instance $instance): void
+```
+
+Disables bracketed paste mode.
+
+### tui_set_paste_handler
+
+```php
+tui_set_paste_handler(Xocdr\Tui\Ext\Instance $instance, callable $handler): void
+```
+
+Handler receives: `function(string $text): void`
+
 ---
 
 ## Timers

@@ -9,6 +9,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+/* Maximum mouse coordinate value (prevents overflow).
+   Terminal coordinates rarely exceed 10000 even on very large displays. */
+#define MAX_MOUSE_COORD_VALUE 65535
+
 /* ----------------------------------------------------------------
  * Mouse Event Parsing
  * ---------------------------------------------------------------- */
@@ -34,24 +38,33 @@ int tui_input_parse_mouse(const char *buf, int len, tui_mouse_event *event)
     int i = 3;
     char terminator = 0;
 
-    /* Parse button code */
+    /* Parse button code (with overflow protection) */
     while (i < len && buf[i] >= '0' && buf[i] <= '9') {
+        if (button > MAX_MOUSE_COORD_VALUE / 10) {
+            return 0;  /* Would overflow, invalid sequence */
+        }
         button = button * 10 + (buf[i] - '0');
         i++;
     }
     if (i >= len || buf[i] != ';') return 0;
     i++;
 
-    /* Parse x coordinate */
+    /* Parse x coordinate (with overflow protection) */
     while (i < len && buf[i] >= '0' && buf[i] <= '9') {
+        if (x > MAX_MOUSE_COORD_VALUE / 10) {
+            return 0;  /* Would overflow, invalid sequence */
+        }
         x = x * 10 + (buf[i] - '0');
         i++;
     }
     if (i >= len || buf[i] != ';') return 0;
     i++;
 
-    /* Parse y coordinate */
+    /* Parse y coordinate (with overflow protection) */
     while (i < len && buf[i] >= '0' && buf[i] <= '9') {
+        if (y > MAX_MOUSE_COORD_VALUE / 10) {
+            return 0;  /* Would overflow, invalid sequence */
+        }
         y = y * 10 + (buf[i] - '0');
         i++;
     }
