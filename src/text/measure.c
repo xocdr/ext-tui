@@ -42,8 +42,9 @@ static int is_emoji_modifier(uint32_t codepoint)
 
 /**
  * Check if codepoint is part of an emoji sequence (ZWJ, VS, modifier).
+ * Currently unused but kept for future emoji sequence detection improvements.
  */
-static int is_emoji_sequence_part(uint32_t codepoint)
+static int __attribute__((unused)) is_emoji_sequence_part(uint32_t codepoint)
 {
     return (codepoint == UNICODE_ZWJ ||
             codepoint == UNICODE_VS16 ||

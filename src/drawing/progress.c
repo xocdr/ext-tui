@@ -286,11 +286,11 @@ int tui_spinner_frame(tui_spinner_type spinner_type, int frame, char *output)
 
     int idx = frame % count;
     const char *ch = frames[idx];
-    int len = strlen(ch);
+    size_t len = strlen(ch);
     memcpy(output, ch, len);
     output[len] = '\0';
 
-    return len;
+    return (int)len;
 }
 
 int tui_spinner_frame_count(tui_spinner_type spinner_type)

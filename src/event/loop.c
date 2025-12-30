@@ -215,11 +215,11 @@ int tui_loop_run(tui_loop *loop)
     }
 
     if (ret > 0 && (fds[0].revents & POLLIN)) {
-        int n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
+        ssize_t n = read(STDIN_FILENO, buf, sizeof(buf) - 1);
         if (n > 0 && loop->input_cb) {
             buf[n] = '\0';
             TUI_METRIC_INC(input_events);
-            loop->input_cb(buf, n, loop->input_userdata);
+            loop->input_cb(buf, (int)n, loop->input_userdata);
         }
     }
 

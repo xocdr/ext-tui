@@ -360,7 +360,7 @@ char** tui_canvas_render(tui_canvas *canvas, int *line_count)
                 if (tui_canvas_get(canvas, base_x + 1, base_y + 1)) bits |= 1;
 
                 const char *block = block_chars[bits];
-                int len = strlen(block);
+                size_t len = strlen(block);
                 memcpy(p, block, len);
                 p += len;
 

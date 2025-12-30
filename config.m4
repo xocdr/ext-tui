@@ -79,7 +79,7 @@ if test "$PHP_TUI" != "no"; then
   dnl -Wshadow: Warn when local variable shadows another
   dnl -Wconversion: Warn on implicit type conversions that may lose data
   dnl -Wcast-align: Warn on pointer casts that increase alignment requirements
-  TUI_CFLAGS="-Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow"
+  TUI_CFLAGS="-Wall -Wextra -Wno-unused-parameter -Wformat=2 -Wshadow -Wconversion -Wno-sign-conversion"
 
   dnl Add C-specific warnings
   CFLAGS="$CFLAGS $TUI_CFLAGS -Wstrict-prototypes"

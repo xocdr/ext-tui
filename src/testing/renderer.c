@@ -261,7 +261,7 @@ void tui_test_renderer_send_key(tui_test_renderer *renderer, int key_code)
     }
 
     if (seq) {
-        tui_test_renderer_send_input(renderer, seq, strlen(seq));
+        tui_test_renderer_send_input(renderer, seq, (int)strlen(seq));
     }
 }
 

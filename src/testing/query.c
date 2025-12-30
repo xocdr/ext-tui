@@ -173,10 +173,10 @@ void tui_test_get_node_info(tui_node *node, tui_test_node_info *info)
 
     info->id = node->id;
     info->text = node->text;
-    info->x = node->x;
-    info->y = node->y;
-    info->width = node->width;
-    info->height = node->height;
+    info->x = (int)node->x;
+    info->y = (int)node->y;
+    info->width = (int)node->width;
+    info->height = (int)node->height;
     info->focusable = node->focusable;
     info->focused = node->focused;
 

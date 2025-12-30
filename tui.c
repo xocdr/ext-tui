@@ -25,6 +25,8 @@
 #include "src/app/app.h"
 #include "src/node/node.h"
 #include "src/terminal/terminal.h"
+#include "src/terminal/ansi.h"
+#include "src/event/input.h"
 #include "src/drawing/primitives.h"
 #include "src/drawing/canvas.h"
 #include "src/drawing/animation.h"
@@ -49,6 +51,7 @@ static int le_tui_table;
 static int le_tui_sprite;
 static int le_tui_buffer;
 static int le_tui_test_renderer;
+static int le_tui_history;
 
 /* Maximum depth for recursive tree operations - matches app.c */
 #define MAX_TREE_DEPTH 256
@@ -58,6 +61,7 @@ static int le_tui_test_renderer;
 #define TUI_SPRITE_RES_NAME "TuiSprite"
 #define TUI_BUFFER_RES_NAME "TuiBuffer"
 #define TUI_TEST_RENDERER_RES_NAME "TuiTestRenderer"
+#define TUI_HISTORY_RES_NAME "TuiHistory"
 
 /* Resource destructors */
 static void tui_canvas_dtor(zend_resource *res)
@@ -97,6 +101,14 @@ static void tui_test_renderer_dtor(zend_resource *res)
     tui_test_renderer *renderer = (tui_test_renderer *)res->ptr;
     if (renderer) {
         tui_test_renderer_destroy(renderer);
+    }
+}
+
+static void tui_history_dtor(zend_resource *res)
+{
+    tui_input_history *history = (tui_input_history *)res->ptr;
+    if (history) {
+        tui_history_destroy(history);
     }
 }
 
@@ -1177,6 +1189,33 @@ static tui_node* php_to_tui_node_impl(zval *obj, int depth)
         prop = zend_read_property(ce, Z_OBJ_P(obj), "focused", sizeof("focused")-1, 1, &rv);
         if (prop && zend_is_true(prop)) {
             node->focused = 1;
+        }
+
+        /* tabIndex - tab order (-1 = skip, 0+ = order) */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "tabIndex", sizeof("tabIndex")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_LONG) {
+            node->tab_index = (int)Z_LVAL_P(prop);
+        }
+
+        /* focusGroup - group name for scoped tabbing */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "focusGroup", sizeof("focusGroup")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            if (tui_node_set_focus_group(node, Z_STRVAL_P(prop)) < 0) {
+                tui_node_destroy(node);
+                return NULL;
+            }
+        }
+
+        /* autoFocus - focus on mount */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "autoFocus", sizeof("autoFocus")-1, 1, &rv);
+        if (prop && zend_is_true(prop)) {
+            node->auto_focus = 1;
+        }
+
+        /* focusTrap - trap focus within container */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "focusTrap", sizeof("focusTrap")-1, 1, &rv);
+        if (prop && zend_is_true(prop)) {
+            node->focus_trap = 1;
         }
 
         /* key - for reconciliation */
@@ -2386,6 +2425,359 @@ PHP_FUNCTION(tui_is_ci)
 }
 /* }}} */
 
+/* ------------------------------------------------------------------
+ * Terminal Mode Functions (Mouse, Bracketed Paste)
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_mouse_enable(int $mode = TUI_MOUSE_MODE_BUTTON): bool */
+PHP_FUNCTION(tui_mouse_enable)
+{
+    zend_long mode = TUI_MOUSE_MODE_BUTTON;
+
+    ZEND_PARSE_PARAMETERS_START(0, 1)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_LONG(mode)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (mode < TUI_MOUSE_MODE_OFF || mode > TUI_MOUSE_MODE_ALL) {
+        zend_throw_exception(zend_ce_exception, "Invalid mouse mode", 0);
+        RETURN_THROWS();
+    }
+
+    int result = tui_terminal_enable_mouse((tui_mouse_mode)mode);
+    RETURN_BOOL(result == 0);
+}
+/* }}} */
+
+/* {{{ tui_mouse_disable(): bool */
+PHP_FUNCTION(tui_mouse_disable)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    int result = tui_terminal_disable_mouse();
+    RETURN_BOOL(result == 0);
+}
+/* }}} */
+
+/* {{{ tui_mouse_get_mode(): int */
+PHP_FUNCTION(tui_mouse_get_mode)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_mouse_mode mode = tui_terminal_get_mouse_mode();
+    RETURN_LONG((zend_long)mode);
+}
+/* }}} */
+
+/* {{{ tui_bracketed_paste_enable(): bool */
+PHP_FUNCTION(tui_bracketed_paste_enable)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    int result = tui_terminal_enable_bracketed_paste();
+    RETURN_BOOL(result == 0);
+}
+/* }}} */
+
+/* {{{ tui_bracketed_paste_disable(): bool */
+PHP_FUNCTION(tui_bracketed_paste_disable)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    int result = tui_terminal_disable_bracketed_paste();
+    RETURN_BOOL(result == 0);
+}
+/* }}} */
+
+/* {{{ tui_bracketed_paste_is_enabled(): bool */
+PHP_FUNCTION(tui_bracketed_paste_is_enabled)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    int result = tui_terminal_is_bracketed_paste_enabled();
+    RETURN_BOOL(result != 0);
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Clipboard Functions (OSC 52)
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_clipboard_copy(string $text, string $target = 'clipboard'): bool */
+PHP_FUNCTION(tui_clipboard_copy)
+{
+    zend_string *text;
+    zend_string *target = NULL;
+    tui_clipboard_target clipboard_target = TUI_CLIPBOARD_CLIPBOARD;
+
+    ZEND_PARSE_PARAMETERS_START(1, 2)
+        Z_PARAM_STR(text)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR(target)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (target != NULL) {
+        if (zend_string_equals_literal(target, "primary")) {
+            clipboard_target = TUI_CLIPBOARD_PRIMARY;
+        } else if (zend_string_equals_literal(target, "secondary")) {
+            clipboard_target = TUI_CLIPBOARD_SECONDARY;
+        } else if (!zend_string_equals_literal(target, "clipboard")) {
+            zend_throw_exception(zend_ce_exception,
+                "Invalid clipboard target. Use 'clipboard', 'primary', or 'secondary'", 0);
+            RETURN_THROWS();
+        }
+    }
+
+    /* Allocate buffer for base64-encoded output */
+    size_t buf_size = tui_base64_encode_len(ZSTR_LEN(text)) + 32;
+    char *buf = emalloc(buf_size);
+
+    int len = tui_ansi_clipboard_write(buf, buf_size, ZSTR_VAL(text), ZSTR_LEN(text), clipboard_target);
+    if (len < 0) {
+        efree(buf);
+        RETURN_FALSE;
+    }
+
+    /* Write to stdout */
+    ssize_t written = write(STDOUT_FILENO, buf, (size_t)len);
+    efree(buf);
+
+    RETURN_BOOL(written == len);
+}
+/* }}} */
+
+/* {{{ tui_clipboard_request(string $target = 'clipboard'): void */
+PHP_FUNCTION(tui_clipboard_request)
+{
+    zend_string *target = NULL;
+    tui_clipboard_target clipboard_target = TUI_CLIPBOARD_CLIPBOARD;
+
+    ZEND_PARSE_PARAMETERS_START(0, 1)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR(target)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (target != NULL) {
+        if (zend_string_equals_literal(target, "primary")) {
+            clipboard_target = TUI_CLIPBOARD_PRIMARY;
+        } else if (zend_string_equals_literal(target, "secondary")) {
+            clipboard_target = TUI_CLIPBOARD_SECONDARY;
+        } else if (!zend_string_equals_literal(target, "clipboard")) {
+            zend_throw_exception(zend_ce_exception,
+                "Invalid clipboard target. Use 'clipboard', 'primary', or 'secondary'", 0);
+            RETURN_THROWS();
+        }
+    }
+
+    char buf[32];
+    size_t len;
+    tui_ansi_clipboard_request(buf, &len, clipboard_target);
+    write(STDOUT_FILENO, buf, len);
+}
+/* }}} */
+
+/* {{{ tui_clipboard_clear(string $target = 'clipboard'): void */
+PHP_FUNCTION(tui_clipboard_clear)
+{
+    zend_string *target = NULL;
+    tui_clipboard_target clipboard_target = TUI_CLIPBOARD_CLIPBOARD;
+
+    ZEND_PARSE_PARAMETERS_START(0, 1)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR(target)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (target != NULL) {
+        if (zend_string_equals_literal(target, "primary")) {
+            clipboard_target = TUI_CLIPBOARD_PRIMARY;
+        } else if (zend_string_equals_literal(target, "secondary")) {
+            clipboard_target = TUI_CLIPBOARD_SECONDARY;
+        } else if (!zend_string_equals_literal(target, "clipboard")) {
+            zend_throw_exception(zend_ce_exception,
+                "Invalid clipboard target. Use 'clipboard', 'primary', or 'secondary'", 0);
+            RETURN_THROWS();
+        }
+    }
+
+    char buf[32];
+    size_t len;
+    tui_ansi_clipboard_clear(buf, &len, clipboard_target);
+    write(STDOUT_FILENO, buf, len);
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Input History Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_history_create(int $maxEntries = 1000): resource */
+PHP_FUNCTION(tui_history_create)
+{
+    zend_long max_entries = 1000;
+
+    ZEND_PARSE_PARAMETERS_START(0, 1)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_LONG(max_entries)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (max_entries < 1 || max_entries > 100000) {
+        zend_throw_exception(zend_ce_exception, "maxEntries must be between 1 and 100000", 0);
+        RETURN_THROWS();
+    }
+
+    tui_input_history *history = tui_history_create((int)max_entries);
+    if (!history) {
+        RETURN_NULL();
+    }
+
+    RETURN_RES(zend_register_resource(history, le_tui_history));
+}
+/* }}} */
+
+/* {{{ tui_history_destroy(resource $history): void */
+PHP_FUNCTION(tui_history_destroy)
+{
+    zval *zhistory;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_RESOURCE(zhistory)
+    ZEND_PARSE_PARAMETERS_END();
+
+    /* Manually delete the resource - this will call the destructor */
+    zend_list_close(Z_RES_P(zhistory));
+}
+/* }}} */
+
+/* {{{ tui_history_add(resource $history, string $entry): void */
+PHP_FUNCTION(tui_history_add)
+{
+    zval *zhistory;
+    zend_string *entry;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_RESOURCE(zhistory)
+        Z_PARAM_STR(entry)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_input_history *history = (tui_input_history *)zend_fetch_resource(
+        Z_RES_P(zhistory), TUI_HISTORY_RES_NAME, le_tui_history);
+    if (!history) {
+        RETURN_THROWS();
+    }
+
+    tui_history_add(history, ZSTR_VAL(entry));
+}
+/* }}} */
+
+/* {{{ tui_history_prev(resource $history): ?string */
+PHP_FUNCTION(tui_history_prev)
+{
+    zval *zhistory;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_RESOURCE(zhistory)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_input_history *history = (tui_input_history *)zend_fetch_resource(
+        Z_RES_P(zhistory), TUI_HISTORY_RES_NAME, le_tui_history);
+    if (!history) {
+        RETURN_THROWS();
+    }
+
+    const char *prev = tui_history_prev(history);
+    if (prev) {
+        RETURN_STRING(prev);
+    }
+    RETURN_NULL();
+}
+/* }}} */
+
+/* {{{ tui_history_next(resource $history): ?string */
+PHP_FUNCTION(tui_history_next)
+{
+    zval *zhistory;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_RESOURCE(zhistory)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_input_history *history = (tui_input_history *)zend_fetch_resource(
+        Z_RES_P(zhistory), TUI_HISTORY_RES_NAME, le_tui_history);
+    if (!history) {
+        RETURN_THROWS();
+    }
+
+    const char *next = tui_history_next(history);
+    if (next) {
+        RETURN_STRING(next);
+    }
+    RETURN_NULL();
+}
+/* }}} */
+
+/* {{{ tui_history_reset(resource $history): void */
+PHP_FUNCTION(tui_history_reset)
+{
+    zval *zhistory;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_RESOURCE(zhistory)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_input_history *history = (tui_input_history *)zend_fetch_resource(
+        Z_RES_P(zhistory), TUI_HISTORY_RES_NAME, le_tui_history);
+    if (!history) {
+        RETURN_THROWS();
+    }
+
+    tui_history_reset_position(history);
+}
+/* }}} */
+
+/* {{{ tui_history_save_temp(resource $history, string $input): void */
+PHP_FUNCTION(tui_history_save_temp)
+{
+    zval *zhistory;
+    zend_string *input;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_RESOURCE(zhistory)
+        Z_PARAM_STR(input)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_input_history *history = (tui_input_history *)zend_fetch_resource(
+        Z_RES_P(zhistory), TUI_HISTORY_RES_NAME, le_tui_history);
+    if (!history) {
+        RETURN_THROWS();
+    }
+
+    tui_history_save_temp(history, ZSTR_VAL(input));
+}
+/* }}} */
+
+/* {{{ tui_history_get_temp(resource $history): ?string */
+PHP_FUNCTION(tui_history_get_temp)
+{
+    zval *zhistory;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_RESOURCE(zhistory)
+    ZEND_PARSE_PARAMETERS_END();
+
+    tui_input_history *history = (tui_input_history *)zend_fetch_resource(
+        Z_RES_P(zhistory), TUI_HISTORY_RES_NAME, le_tui_history);
+    if (!history) {
+        RETURN_THROWS();
+    }
+
+    const char *temp = tui_history_get_temp(history);
+    if (temp) {
+        RETURN_STRING(temp);
+    }
+    RETURN_NULL();
+}
+/* }}} */
+
 /* {{{ tui_string_width(string $text): int */
 PHP_FUNCTION(tui_string_width)
 {
@@ -2396,7 +2788,7 @@ PHP_FUNCTION(tui_string_width)
     ZEND_PARSE_PARAMETERS_END();
 
     /* Use the C implementation from text/measure.c */
-    int width = tui_string_width_n(ZSTR_VAL(text), ZSTR_LEN(text));
+    int width = tui_string_width_n(ZSTR_VAL(text), (int)ZSTR_LEN(text));
 
     RETURN_LONG(width);
 }
@@ -5134,6 +5526,76 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_is_ci, 0, 0, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
 
+/* Mouse functions */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_mouse_enable, 0, 0, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, mode, IS_LONG, 0, "2")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_mouse_disable, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_mouse_get_mode, 0, 0, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+/* Bracketed paste functions */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_bracketed_paste_enable, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_bracketed_paste_disable, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_bracketed_paste_is_enabled, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+/* Clipboard functions */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_clipboard_copy, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, target, IS_STRING, 0, "\"clipboard\"")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_clipboard_request, 0, 0, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, target, IS_STRING, 0, "\"clipboard\"")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_clipboard_clear, 0, 0, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, target, IS_STRING, 0, "\"clipboard\"")
+ZEND_END_ARG_INFO()
+
+/* History functions */
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_history_create, 0, 0, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, maxEntries, IS_LONG, 0, "1000")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_history_destroy, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, history)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_history_add, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, history)
+    ZEND_ARG_TYPE_INFO(0, entry, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_history_prev, 0, 1, IS_STRING, 1)
+    ZEND_ARG_INFO(0, history)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_history_next, 0, 1, IS_STRING, 1)
+    ZEND_ARG_INFO(0, history)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_history_reset, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, history)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_history_save_temp, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, history)
+    ZEND_ARG_TYPE_INFO(0, input, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_history_get_temp, 0, 1, IS_STRING, 1)
+    ZEND_ARG_INFO(0, history)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_string_width, 0, 1, IS_LONG, 0)
     ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
 ZEND_END_ARG_INFO()
@@ -5662,6 +6124,31 @@ static const zend_function_entry tui_functions[] = {
     PHP_FE(tui_is_interactive, arginfo_tui_is_interactive)
     PHP_FE(tui_is_ci, arginfo_tui_is_ci)
 
+    /* Mouse support */
+    PHP_FE(tui_mouse_enable, arginfo_tui_mouse_enable)
+    PHP_FE(tui_mouse_disable, arginfo_tui_mouse_disable)
+    PHP_FE(tui_mouse_get_mode, arginfo_tui_mouse_get_mode)
+
+    /* Bracketed paste */
+    PHP_FE(tui_bracketed_paste_enable, arginfo_tui_bracketed_paste_enable)
+    PHP_FE(tui_bracketed_paste_disable, arginfo_tui_bracketed_paste_disable)
+    PHP_FE(tui_bracketed_paste_is_enabled, arginfo_tui_bracketed_paste_is_enabled)
+
+    /* Clipboard (OSC 52) */
+    PHP_FE(tui_clipboard_copy, arginfo_tui_clipboard_copy)
+    PHP_FE(tui_clipboard_request, arginfo_tui_clipboard_request)
+    PHP_FE(tui_clipboard_clear, arginfo_tui_clipboard_clear)
+
+    /* Input history */
+    PHP_FE(tui_history_create, arginfo_tui_history_create)
+    PHP_FE(tui_history_destroy, arginfo_tui_history_destroy)
+    PHP_FE(tui_history_add, arginfo_tui_history_add)
+    PHP_FE(tui_history_prev, arginfo_tui_history_prev)
+    PHP_FE(tui_history_next, arginfo_tui_history_next)
+    PHP_FE(tui_history_reset, arginfo_tui_history_reset)
+    PHP_FE(tui_history_save_temp, arginfo_tui_history_save_temp)
+    PHP_FE(tui_history_get_temp, arginfo_tui_history_get_temp)
+
     /* Text utilities */
     PHP_FE(tui_string_width, arginfo_tui_string_width)
     PHP_FE(tui_wrap_text, arginfo_tui_wrap_text)
@@ -5853,6 +6340,13 @@ static PHP_MINIT_FUNCTION(tui)
     le_tui_sprite = zend_register_list_destructors_ex(tui_sprite_dtor, NULL, TUI_SPRITE_RES_NAME, module_number);
     le_tui_buffer = zend_register_list_destructors_ex(tui_buffer_dtor, NULL, TUI_BUFFER_RES_NAME, module_number);
     le_tui_test_renderer = zend_register_list_destructors_ex(tui_test_renderer_dtor, NULL, TUI_TEST_RENDERER_RES_NAME, module_number);
+    le_tui_history = zend_register_list_destructors_ex(tui_history_dtor, NULL, TUI_HISTORY_RES_NAME, module_number);
+
+    /* Register mouse mode constants */
+    REGISTER_LONG_CONSTANT("TUI_MOUSE_MODE_OFF", TUI_MOUSE_MODE_OFF, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_MOUSE_MODE_CLICK", TUI_MOUSE_MODE_CLICK, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_MOUSE_MODE_BUTTON", TUI_MOUSE_MODE_BUTTON, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_MOUSE_MODE_ALL", TUI_MOUSE_MODE_ALL, CONST_CS | CONST_PERSISTENT);
 
     /* Register Xocdr\Tui\Ext\Box class with methods */
     INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Box", tui_box_methods);
@@ -5901,6 +6395,10 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_null(tui_box_ce, "borderColor", sizeof("borderColor")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_bool(tui_box_ce, "focusable", sizeof("focusable")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_bool(tui_box_ce, "focused", sizeof("focused")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_long(tui_box_ce, "tabIndex", sizeof("tabIndex")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "focusGroup", sizeof("focusGroup")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_box_ce, "autoFocus", sizeof("autoFocus")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_box_ce, "focusTrap", sizeof("focusTrap")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "children", sizeof("children")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "key", sizeof("key")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "id", sizeof("id")-1, ZEND_ACC_PUBLIC);
@@ -5925,6 +6423,7 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_bool(tui_text_ce, "inverse", sizeof("inverse")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_bool(tui_text_ce, "strikethrough", sizeof("strikethrough")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_text_ce, "wrap", sizeof("wrap")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_text_ce, "hyperlink", sizeof("hyperlink")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_text_ce, "key", sizeof("key")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_text_ce, "id", sizeof("id")-1, ZEND_ACC_PUBLIC);
 

@@ -37,7 +37,7 @@ tui_sprite_frame tui_sprite_frame_create(const char **lines, int line_count,
                 frame.width = 0;
                 return frame;
             }
-            int w = tui_string_width_n(lines[i], strlen(lines[i]));
+            int w = tui_string_width_n(lines[i], (int)strlen(lines[i]));
             if (w > frame.width) frame.width = w;
         } else {
             frame.lines[i] = strdup("");
@@ -259,7 +259,7 @@ void tui_sprite_set_visible(tui_sprite *sprite, int visible)
 /* Reverse a UTF-8 string in-place, accounting for multi-byte characters */
 static void reverse_utf8_line(const char *input, char *output, int max_len)
 {
-    int len = strlen(input);
+    int len = (int)strlen(input);
     if (len == 0) {
         output[0] = '\0';
         return;
