@@ -56,6 +56,8 @@
 #define TUI_BUFFER_RES_NAME "TuiBuffer"
 #define TUI_TEST_RENDERER_RES_NAME "TuiTestRenderer"
 #define TUI_HISTORY_RES_NAME "TuiHistory"
+#define TUI_VIRTUAL_LIST_RES_NAME "TuiVirtualList"
+#define TUI_SCROLL_ANIM_RES_NAME "TuiScrollAnimation"
 
 /* ----------------------------------------------------------------
  * Shared class entries
@@ -85,6 +87,8 @@ extern int le_tui_sprite;
 extern int le_tui_buffer;
 extern int le_tui_test_renderer;
 extern int le_tui_history;
+extern int le_tui_virtual_list;
+extern int le_tui_scroll_animation;
 
 /* ----------------------------------------------------------------
  * TuiInstance custom object structure
@@ -316,5 +320,40 @@ PHP_FUNCTION(tui_get_reconciler_metrics);
 PHP_FUNCTION(tui_get_render_metrics);
 PHP_FUNCTION(tui_get_loop_metrics);
 PHP_FUNCTION(tui_get_pool_metrics);
+
+/* Virtual list functions (tui_virtual.c) */
+PHP_FUNCTION(tui_virtual_create);
+PHP_FUNCTION(tui_virtual_get_range);
+PHP_FUNCTION(tui_virtual_scroll_to);
+PHP_FUNCTION(tui_virtual_scroll_by);
+PHP_FUNCTION(tui_virtual_scroll_items);
+PHP_FUNCTION(tui_virtual_ensure_visible);
+PHP_FUNCTION(tui_virtual_page_up);
+PHP_FUNCTION(tui_virtual_page_down);
+PHP_FUNCTION(tui_virtual_scroll_top);
+PHP_FUNCTION(tui_virtual_scroll_bottom);
+PHP_FUNCTION(tui_virtual_set_count);
+PHP_FUNCTION(tui_virtual_set_viewport);
+PHP_FUNCTION(tui_virtual_item_offset);
+PHP_FUNCTION(tui_virtual_is_visible);
+PHP_FUNCTION(tui_virtual_destroy);
+
+/* Resource destructor for virtual list */
+void tui_virtual_list_dtor(zend_resource *res);
+
+/* Smooth scrolling functions (tui_scroll.c) */
+PHP_FUNCTION(tui_scroll_create);
+PHP_FUNCTION(tui_scroll_set_spring);
+PHP_FUNCTION(tui_scroll_set_target);
+PHP_FUNCTION(tui_scroll_by);
+PHP_FUNCTION(tui_scroll_update);
+PHP_FUNCTION(tui_scroll_snap);
+PHP_FUNCTION(tui_scroll_get_position);
+PHP_FUNCTION(tui_scroll_is_animating);
+PHP_FUNCTION(tui_scroll_progress);
+PHP_FUNCTION(tui_scroll_destroy);
+
+/* Resource destructor for scroll animation */
+void tui_scroll_animation_dtor(zend_resource *res);
 
 #endif /* TUI_INTERNAL_H */

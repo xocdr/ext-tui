@@ -20,6 +20,8 @@ int le_tui_sprite;
 int le_tui_buffer;
 int le_tui_test_renderer;
 int le_tui_history;
+int le_tui_virtual_list;
+int le_tui_scroll_animation;
 
 /* Resource destructors */
 static void tui_canvas_dtor(zend_resource *res)
@@ -2936,6 +2938,125 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_pool_metrics, 0, 0, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
+
+/* Virtual list functions arginfo */
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_virtual_create, 0, 0, 3)
+    ZEND_ARG_TYPE_INFO(0, item_count, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, item_height, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, viewport_height, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, overscan, IS_LONG, 0, "5")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_get_range, 0, 1, IS_ARRAY, 1)
+    ZEND_ARG_INFO(0, vlist)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_scroll_to, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, vlist)
+    ZEND_ARG_TYPE_INFO(0, index, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_scroll_by, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, vlist)
+    ZEND_ARG_TYPE_INFO(0, delta, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_scroll_items, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, vlist)
+    ZEND_ARG_TYPE_INFO(0, items, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_ensure_visible, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, vlist)
+    ZEND_ARG_TYPE_INFO(0, index, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_page_up, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, vlist)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_page_down, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, vlist)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_scroll_top, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, vlist)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_scroll_bottom, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, vlist)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_set_count, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, vlist)
+    ZEND_ARG_TYPE_INFO(0, item_count, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_set_viewport, 0, 2, IS_VOID, 0)
+    ZEND_ARG_INFO(0, vlist)
+    ZEND_ARG_TYPE_INFO(0, viewport_height, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_item_offset, 0, 2, IS_LONG, 0)
+    ZEND_ARG_INFO(0, vlist)
+    ZEND_ARG_TYPE_INFO(0, index, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_is_visible, 0, 2, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, vlist)
+    ZEND_ARG_TYPE_INFO(0, index, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_virtual_destroy, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, vlist)
+ZEND_END_ARG_INFO()
+
+/* Smooth scrolling functions arginfo */
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_scroll_create, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_scroll_set_spring, 0, 3, IS_VOID, 0)
+    ZEND_ARG_INFO(0, anim)
+    ZEND_ARG_TYPE_INFO(0, stiffness, IS_DOUBLE, 0)
+    ZEND_ARG_TYPE_INFO(0, damping, IS_DOUBLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_scroll_set_target, 0, 3, IS_VOID, 0)
+    ZEND_ARG_INFO(0, anim)
+    ZEND_ARG_TYPE_INFO(0, x, IS_DOUBLE, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_DOUBLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_scroll_by, 0, 3, IS_VOID, 0)
+    ZEND_ARG_INFO(0, anim)
+    ZEND_ARG_TYPE_INFO(0, dx, IS_DOUBLE, 0)
+    ZEND_ARG_TYPE_INFO(0, dy, IS_DOUBLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_scroll_update, 0, 2, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, anim)
+    ZEND_ARG_TYPE_INFO(0, dt, IS_DOUBLE, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_scroll_snap, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, anim)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_scroll_get_position, 0, 1, IS_ARRAY, 1)
+    ZEND_ARG_INFO(0, anim)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_scroll_is_animating, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, anim)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_scroll_progress, 0, 1, IS_DOUBLE, 0)
+    ZEND_ARG_INFO(0, anim)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_scroll_destroy, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, anim)
+ZEND_END_ARG_INFO()
 /* }}} */
 
 /* {{{ tui_functions[] */
@@ -3100,6 +3221,35 @@ static const zend_function_entry tui_functions[] = {
     PHP_FE(tui_get_loop_metrics, arginfo_tui_get_loop_metrics)
     PHP_FE(tui_get_pool_metrics, arginfo_tui_get_pool_metrics)
 
+    /* Virtual list / windowing */
+    PHP_FE(tui_virtual_create, arginfo_tui_virtual_create)
+    PHP_FE(tui_virtual_get_range, arginfo_tui_virtual_get_range)
+    PHP_FE(tui_virtual_scroll_to, arginfo_tui_virtual_scroll_to)
+    PHP_FE(tui_virtual_scroll_by, arginfo_tui_virtual_scroll_by)
+    PHP_FE(tui_virtual_scroll_items, arginfo_tui_virtual_scroll_items)
+    PHP_FE(tui_virtual_ensure_visible, arginfo_tui_virtual_ensure_visible)
+    PHP_FE(tui_virtual_page_up, arginfo_tui_virtual_page_up)
+    PHP_FE(tui_virtual_page_down, arginfo_tui_virtual_page_down)
+    PHP_FE(tui_virtual_scroll_top, arginfo_tui_virtual_scroll_top)
+    PHP_FE(tui_virtual_scroll_bottom, arginfo_tui_virtual_scroll_bottom)
+    PHP_FE(tui_virtual_set_count, arginfo_tui_virtual_set_count)
+    PHP_FE(tui_virtual_set_viewport, arginfo_tui_virtual_set_viewport)
+    PHP_FE(tui_virtual_item_offset, arginfo_tui_virtual_item_offset)
+    PHP_FE(tui_virtual_is_visible, arginfo_tui_virtual_is_visible)
+    PHP_FE(tui_virtual_destroy, arginfo_tui_virtual_destroy)
+
+    /* Smooth scrolling */
+    PHP_FE(tui_scroll_create, arginfo_tui_scroll_create)
+    PHP_FE(tui_scroll_set_spring, arginfo_tui_scroll_set_spring)
+    PHP_FE(tui_scroll_set_target, arginfo_tui_scroll_set_target)
+    PHP_FE(tui_scroll_by, arginfo_tui_scroll_by)
+    PHP_FE(tui_scroll_update, arginfo_tui_scroll_update)
+    PHP_FE(tui_scroll_snap, arginfo_tui_scroll_snap)
+    PHP_FE(tui_scroll_get_position, arginfo_tui_scroll_get_position)
+    PHP_FE(tui_scroll_is_animating, arginfo_tui_scroll_is_animating)
+    PHP_FE(tui_scroll_progress, arginfo_tui_scroll_progress)
+    PHP_FE(tui_scroll_destroy, arginfo_tui_scroll_destroy)
+
     PHP_FE_END
 };
 /* }}} */
@@ -3175,6 +3325,8 @@ static PHP_MINIT_FUNCTION(tui)
     le_tui_buffer = zend_register_list_destructors_ex(tui_buffer_dtor, NULL, TUI_BUFFER_RES_NAME, module_number);
     le_tui_test_renderer = zend_register_list_destructors_ex(tui_test_renderer_dtor, NULL, TUI_TEST_RENDERER_RES_NAME, module_number);
     le_tui_history = zend_register_list_destructors_ex(tui_history_dtor, NULL, TUI_HISTORY_RES_NAME, module_number);
+    le_tui_virtual_list = zend_register_list_destructors_ex(tui_virtual_list_dtor, NULL, TUI_VIRTUAL_LIST_RES_NAME, module_number);
+    le_tui_scroll_animation = zend_register_list_destructors_ex(tui_scroll_animation_dtor, NULL, TUI_SCROLL_ANIM_RES_NAME, module_number);
 
     /* Register mouse mode constants */
     REGISTER_LONG_CONSTANT("TUI_MOUSE_MODE_OFF", TUI_MOUSE_MODE_OFF, CONST_CS | CONST_PERSISTENT);

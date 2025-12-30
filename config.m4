@@ -37,6 +37,8 @@ if test "$PHP_TUI" != "no"; then
      tui_render.c \
      tui_testing.c \
      tui_metrics.c \
+     tui_virtual.c \
+     tui_scroll.c \
      src/terminal/terminal.c \
      src/terminal/ansi.c \
      src/terminal/capabilities.c \
@@ -55,6 +57,8 @@ if test "$PHP_TUI" != "no"; then
      src/drawing/table.c \
      src/drawing/progress.c \
      src/drawing/sprite.c \
+     src/scroll/virtual.c \
+     src/scroll/smooth.c \
      src/app/app.c \
      src/testing/renderer.c \
      src/testing/query.c \
@@ -124,6 +128,7 @@ if test "$PHP_TUI" != "no"; then
   PHP_ADD_BUILD_DIR([$ext_builddir/src/app])
   PHP_ADD_BUILD_DIR([$ext_builddir/src/testing])
   PHP_ADD_BUILD_DIR([$ext_builddir/src/pool])
+  PHP_ADD_BUILD_DIR([$ext_builddir/src/scroll])
 
   dnl Add build directories for Yoga
   PHP_ADD_BUILD_DIR([$ext_builddir/src/yoga])

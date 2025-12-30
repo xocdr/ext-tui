@@ -800,3 +800,224 @@ Returns `['x' => int, 'y' => int, 'width' => int, 'height' => int]`
 ```php
 tui_sprite_collides(resource $sprite1, resource $sprite2): bool
 ```
+
+---
+
+## Virtual List / Windowing
+
+Efficient rendering of large lists by only rendering visible items.
+
+### tui_virtual_create
+
+```php
+tui_virtual_create(int $itemCount, int $itemHeight, int $viewportHeight, int $overscan = 5): resource
+```
+
+Creates a virtual list for windowed rendering.
+
+**Parameters:**
+- `itemCount`: Total number of items in the list
+- `itemHeight`: Height of each item in rows (fixed)
+- `viewportHeight`: Height of visible area in rows
+- `overscan`: Extra items to render above/below visible area (default: 5)
+
+### tui_virtual_get_range
+
+```php
+tui_virtual_get_range(resource $vlist): array
+```
+
+Returns current visible range:
+- `start` (int): First visible item index (including overscan)
+- `end` (int): Last visible item index (exclusive, including overscan)
+- `offset` (float): Current scroll offset in rows
+- `progress` (float): Scroll progress 0.0 to 1.0
+- `item_count` (int): Total items
+- `viewport_height` (int): Viewport height
+- `max_scroll` (float): Maximum scroll offset
+
+### tui_virtual_scroll_to
+
+```php
+tui_virtual_scroll_to(resource $vlist, int $index): void
+```
+
+Scrolls to show item at top of viewport.
+
+### tui_virtual_scroll_by
+
+```php
+tui_virtual_scroll_by(resource $vlist, int $delta): void
+```
+
+Scrolls by a number of rows (positive = down, negative = up).
+
+### tui_virtual_scroll_items
+
+```php
+tui_virtual_scroll_items(resource $vlist, int $items): void
+```
+
+Scrolls by a number of items.
+
+### tui_virtual_ensure_visible
+
+```php
+tui_virtual_ensure_visible(resource $vlist, int $index): void
+```
+
+Ensures item is visible, scrolling minimally if needed.
+
+### tui_virtual_page_up / page_down
+
+```php
+tui_virtual_page_up(resource $vlist): void
+tui_virtual_page_down(resource $vlist): void
+```
+
+Scrolls by one page (viewport height - 1).
+
+### tui_virtual_scroll_top / scroll_bottom
+
+```php
+tui_virtual_scroll_top(resource $vlist): void
+tui_virtual_scroll_bottom(resource $vlist): void
+```
+
+Scrolls to top or bottom of list.
+
+### tui_virtual_set_count
+
+```php
+tui_virtual_set_count(resource $vlist, int $itemCount): void
+```
+
+Updates total item count (e.g., after filtering).
+
+### tui_virtual_set_viewport
+
+```php
+tui_virtual_set_viewport(resource $vlist, int $viewportHeight): void
+```
+
+Updates viewport height (e.g., after resize).
+
+### tui_virtual_item_offset
+
+```php
+tui_virtual_item_offset(resource $vlist, int $index): int
+```
+
+Returns Y offset of item relative to viewport (may be negative).
+
+### tui_virtual_is_visible
+
+```php
+tui_virtual_is_visible(resource $vlist, int $index): bool
+```
+
+Returns true if item is in visible range (including overscan).
+
+### tui_virtual_destroy
+
+```php
+tui_virtual_destroy(resource $vlist): void
+```
+
+Destroys virtual list resource.
+
+---
+
+## Smooth Scrolling
+
+Spring-physics based smooth scrolling animation.
+
+### tui_scroll_create
+
+```php
+tui_scroll_create(): resource
+```
+
+Creates a smooth scroll animation controller.
+
+### tui_scroll_set_spring
+
+```php
+tui_scroll_set_spring(resource $anim, float $stiffness, float $damping): void
+```
+
+Sets spring physics parameters.
+
+**Parameters:**
+- `stiffness`: Spring constant (default: 200.0, range: 50-500). Higher = faster.
+- `damping`: Damping ratio (default: 1.0 = critically damped).
+  - `< 1.0`: Underdamped (oscillates)
+  - `= 1.0`: Critically damped (fastest without oscillation)
+  - `> 1.0`: Overdamped (slower convergence)
+
+### tui_scroll_set_target
+
+```php
+tui_scroll_set_target(resource $anim, float $x, float $y): void
+```
+
+Sets the target scroll position. Animation begins automatically.
+
+### tui_scroll_by
+
+```php
+tui_scroll_by(resource $anim, float $dx, float $dy): void
+```
+
+Adds to current target (incremental scrolling).
+
+### tui_scroll_update
+
+```php
+tui_scroll_update(resource $anim, float $dt): bool
+```
+
+Updates animation for one frame. Returns `true` if still animating.
+
+**Parameters:**
+- `dt`: Time delta in seconds (e.g., `1.0/60.0` for 60fps)
+
+### tui_scroll_snap
+
+```php
+tui_scroll_snap(resource $anim): void
+```
+
+Immediately jumps to target position (cancels animation).
+
+### tui_scroll_get_position
+
+```php
+tui_scroll_get_position(resource $anim): array
+```
+
+Returns current scroll position as `['x' => float, 'y' => float]`.
+
+### tui_scroll_is_animating
+
+```php
+tui_scroll_is_animating(resource $anim): bool
+```
+
+Returns `true` if animation is in progress.
+
+### tui_scroll_progress
+
+```php
+tui_scroll_progress(resource $anim): float
+```
+
+Returns animation progress (0.0 to 1.0).
+
+### tui_scroll_destroy
+
+```php
+tui_scroll_destroy(resource $anim): void
+```
+
+Destroys scroll animation resource.
