@@ -1139,6 +1139,12 @@ tui_node* php_to_tui_node(zval *obj, int depth)
             node->focus_trap = 1;
         }
 
+        /* showCursor - show terminal cursor when focused (for text input) */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "showCursor", sizeof("showCursor")-1, 1, &rv);
+        if (prop && zend_is_true(prop)) {
+            node->show_cursor = 1;
+        }
+
         /* key - for reconciliation */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "key", sizeof("key")-1, 1, &rv);
         if (prop && Z_TYPE_P(prop) == IS_STRING) {
@@ -3634,6 +3640,7 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_null(tui_box_ce, "focusGroup", sizeof("focusGroup")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_bool(tui_box_ce, "autoFocus", sizeof("autoFocus")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_bool(tui_box_ce, "focusTrap", sizeof("focusTrap")-1, 0, ZEND_ACC_PUBLIC);
+    zend_declare_property_bool(tui_box_ce, "showCursor", sizeof("showCursor")-1, 0, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "children", sizeof("children")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "key", sizeof("key")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "id", sizeof("id")-1, ZEND_ACC_PUBLIC);

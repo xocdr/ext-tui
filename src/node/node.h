@@ -73,6 +73,7 @@ typedef struct tui_node {
     char *focus_group;           /* Group name for scoped tabbing */
     int auto_focus;              /* Focus on mount */
     int focus_trap;              /* Trap focus within this container */
+    int show_cursor;             /* Show terminal cursor when focused (for text input) */
 
     /* Hyperlink (OSC 8) */
     char *hyperlink_url;

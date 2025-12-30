@@ -258,6 +258,9 @@ static void tick_callback_wrapper(void *userdata)
     tui_app *app = (tui_app *)userdata;
     if (!app || !app->has_tick_handler) return;
 
+    /* Capture any output during callback to prevent terminal corruption */
+    php_output_start_default();
+
     zval retval;
     app->tick_fci.retval = &retval;
     app->tick_fci.param_count = 0;
@@ -266,6 +269,9 @@ static void tick_callback_wrapper(void *userdata)
     if (zend_call_function(&app->tick_fci, &app->tick_fcc) == SUCCESS) {
         zval_ptr_dtor(&retval);
     }
+
+    /* Discard any captured output */
+    php_output_discard();
 }
 
 void tui_app_set_tick_handler(tui_app *app, zend_fcall_info *fci, zend_fcall_info_cache *fcc)
@@ -359,6 +365,9 @@ static void call_focus_handler(tui_app *app, tui_node *old_node, tui_node *new_n
 {
     if (!app || !app->has_focus_handler || !tui_focus_event_ce) return;
 
+    /* Capture any output during callback to prevent terminal corruption */
+    php_output_start_default();
+
     zval retval;
     zval event;
     zval previous, current;
@@ -396,6 +405,9 @@ static void call_focus_handler(tui_app *app, tui_node *old_node, tui_node *new_n
     }
 
     zval_ptr_dtor(&event);
+
+    /* Discard any captured output */
+    php_output_discard();
 }
 
 void tui_app_focus_next(tui_app *app)
@@ -436,6 +448,13 @@ void tui_app_focus_next(tui_app *app)
 
     app->focused_node = nodes[next];
     app->focused_node->focused = 1;
+
+    /* Manage terminal cursor based on focused node's show_cursor flag */
+    if (app->focused_node->show_cursor) {
+        tui_output_show_cursor(app->output);
+    } else {
+        tui_output_hide_cursor(app->output);
+    }
 
     /* Call focus change handler */
     call_focus_handler(app, old_node, app->focused_node, "next");
@@ -485,6 +504,13 @@ void tui_app_focus_prev(tui_app *app)
     app->focused_node = nodes[prev];
     app->focused_node->focused = 1;
 
+    /* Manage terminal cursor based on focused node's show_cursor flag */
+    if (app->focused_node->show_cursor) {
+        tui_output_show_cursor(app->output);
+    } else {
+        tui_output_hide_cursor(app->output);
+    }
+
     /* Call focus change handler */
     call_focus_handler(app, old_node, app->focused_node, "prev");
 
@@ -507,8 +533,17 @@ void tui_app_set_focus(tui_app *app, tui_node *node)
     if (node && node->focusable) {
         app->focused_node = node;
         node->focused = 1;
+
+        /* Manage terminal cursor based on focused node's show_cursor flag */
+        if (node->show_cursor) {
+            tui_output_show_cursor(app->output);
+        } else {
+            tui_output_hide_cursor(app->output);
+        }
     } else {
         app->focused_node = NULL;
+        /* No focus, hide cursor */
+        tui_output_hide_cursor(app->output);
     }
 
     /* Call focus change handler */
@@ -697,12 +732,18 @@ static void timer_callback_wrapper(void *userdata)
 
     if (!timer || !timer->app || !timer->active) return;
 
+    /* Capture any output during callback to prevent terminal corruption */
+    php_output_start_default();
+
     zval retval;
     timer->fci.retval = &retval;
 
     if (zend_call_function(&timer->fci, &timer->fcc) == SUCCESS) {
         zval_ptr_dtor(&retval);
     }
+
+    /* Discard any captured output */
+    php_output_discard();
 }
 
 int tui_app_add_timer(tui_app *app, int interval_ms, zend_fcall_info *fci, zend_fcall_info_cache *fcc)
@@ -787,6 +828,9 @@ void tui_app_on_input(const char *input, int len, void *userdata)
 
     /* Call PHP input handler if set */
     if (app->has_input_handler && tui_key_ce) {
+        /* Capture any output during callback to prevent terminal corruption */
+        php_output_start_default();
+
         zval key_obj;
         zval retval;
 
@@ -848,6 +892,9 @@ void tui_app_on_input(const char *input, int len, void *userdata)
         }
 
         zval_ptr_dtor(&key_obj);
+
+        /* Discard any captured output */
+        php_output_discard();
     }
 
     /* Note: We don't set render_pending here because:
@@ -870,6 +917,9 @@ void tui_app_on_resize(int width, int height, void *userdata)
 
     /* Call PHP resize handler if set */
     if (app->has_resize_handler) {
+        /* Capture any output during callback to prevent terminal corruption */
+        php_output_start_default();
+
         zval retval;
         zval params[2];
 
@@ -883,6 +933,9 @@ void tui_app_on_resize(int width, int height, void *userdata)
         if (zend_call_function(&app->resize_fci, &app->resize_fcc) == SUCCESS) {
             zval_ptr_dtor(&retval);
         }
+
+        /* Discard any captured output */
+        php_output_discard();
     }
 
     /* Request FULL re-render (call component callback to rebuild tree with new size) */
