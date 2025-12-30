@@ -535,8 +535,8 @@ int tui_app_start(tui_app *app)
 
     app->running = 1;
 
-    /* Initial render */
-    tui_app_render(app);
+    /* Initial render - tree is already built by tui_render(), just render to screen */
+    tui_app_render_tree(app);
 
     return 0;
 }
@@ -619,19 +619,9 @@ void tui_app_render(tui_app *app)
 {
     if (!app || !app->running) return;
 
-    zval retval;
-
-    /* Call the PHP component function */
-    app->component_fci.retval = &retval;
-    if (zend_call_function(&app->component_fci, &app->component_fcc) == SUCCESS) {
-        /* The component should return a TuiBox or TuiText */
-        /* For now, we'll handle this in the PHP layer */
-        /* The retval contains the rendered element tree */
-
-        /* Note: The node tree is built by render_component_callback() in tui.c */
-        /* This call is for initial render; rerenders use tui_app_render_tree() */
-
-        zval_ptr_dtor(&retval);
+    /* Use rerender_callback to properly call component with Instance parameter */
+    if (app->rerender_callback) {
+        app->rerender_callback(app);
     }
 
     /* Render the tree to screen */

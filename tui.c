@@ -1480,7 +1480,11 @@ PHP_METHOD(TuiInstance, rerender)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (obj->app) {
-        tui_app_render(obj->app);
+        /* Use rerender_callback to properly rebuild tree with Instance parameter */
+        if (obj->app->rerender_callback) {
+            obj->app->rerender_callback(obj->app);
+        }
+        tui_app_render_tree(obj->app);
     }
 }
 /* }}} */
