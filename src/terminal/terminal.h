@@ -1,0 +1,46 @@
+/*
+  +----------------------------------------------------------------------+
+  | ext-tui: Terminal handling                                          |
+  +----------------------------------------------------------------------+
+  | Manages terminal state including raw mode, mouse tracking, and      |
+  | bracketed paste mode.                                               |
+  |                                                                      |
+  | Thread Safety: All functions in this module are MAIN-THREAD-ONLY.   |
+  | Terminal state (termios, mouse mode) is process-global. Only call   |
+  | these functions from the thread that owns the terminal.             |
+  +----------------------------------------------------------------------+
+*/
+
+#ifndef TUI_TERMINAL_H
+#define TUI_TERMINAL_H
+
+#include <termios.h>
+
+/*
+ * Terminal mode management
+ * Thread Safety: MAIN-THREAD-ONLY (modifies process-global termios)
+ */
+int tui_terminal_enable_raw_mode(void);
+int tui_terminal_disable_raw_mode(void);
+int tui_terminal_is_raw_mode(void);
+
+/* Terminal info */
+int tui_terminal_get_size(int *width, int *height);
+int tui_terminal_is_tty(void);
+
+/* Bracketed paste mode */
+int tui_terminal_enable_bracketed_paste(void);
+int tui_terminal_disable_bracketed_paste(void);
+int tui_terminal_is_bracketed_paste_enabled(void);
+
+/* Mouse tracking */
+#include "ansi.h"  /* For tui_mouse_mode */
+
+int tui_terminal_enable_mouse(tui_mouse_mode mode);
+int tui_terminal_disable_mouse(void);
+tui_mouse_mode tui_terminal_get_mouse_mode(void);
+
+/* Original termios storage */
+extern struct termios tui_original_termios;
+
+#endif /* TUI_TERMINAL_H */
