@@ -56,4 +56,4 @@ php_test_results_*.txt
 tmp/
 
 # Working directory (temp files, summaries, todos)
-.working/
+working/
