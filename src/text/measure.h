@@ -4,6 +4,10 @@
   +----------------------------------------------------------------------+
   | Provides Unicode-aware text width calculation and UTF-8 encoding/   |
   | decoding utilities.                                                 |
+  |                                                                      |
+  | Thread Safety: All functions in this module are THREAD-SAFE and     |
+  | REENTRANT. They operate only on their input parameters and have no  |
+  | global state.                                                        |
   +----------------------------------------------------------------------+
 */
 
@@ -16,6 +20,8 @@
 /**
  * Get display width of a Unicode codepoint.
  * Returns 0 for control/combining, 1 for most chars, 2 for CJK/emoji.
+ *
+ * Thread Safety: THREAD-SAFE, REENTRANT (pure function)
  */
 int tui_char_width(uint32_t codepoint);
 

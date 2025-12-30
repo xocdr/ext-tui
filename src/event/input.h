@@ -2,6 +2,12 @@
   +----------------------------------------------------------------------+
   | ext-tui: Input parsing                                              |
   +----------------------------------------------------------------------+
+  | Parses keyboard, mouse, and paste events from terminal input.       |
+  |                                                                      |
+  | Thread Safety:                                                       |
+  | - Parsing functions (tui_input_parse*) are THREAD-SAFE              |
+  | - History functions are OBJECT-LOCAL (safe with separate instances) |
+  +----------------------------------------------------------------------+
 */
 
 #ifndef TUI_INPUT_H

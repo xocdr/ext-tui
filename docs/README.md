@@ -44,6 +44,7 @@ Complete API documentation:
 |----------|-------------|
 | [limitations.md](limitations.md) | Known limitations and planned features |
 | [architecture.md](architecture.md) | Internal architecture overview |
+| [thread-safety.md](thread-safety.md) | Thread safety guide and annotations |
 | [security.md](security.md) | Security considerations |
 | [security-audit.md](security-audit.md) | Security audit checklist |
 | [CLAUDE.md](CLAUDE.md) | AI assistant context |
