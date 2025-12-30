@@ -39,6 +39,7 @@ if test "$PHP_TUI" != "no"; then
      tui_metrics.c \
      src/terminal/terminal.c \
      src/terminal/ansi.c \
+     src/terminal/capabilities.c \
      src/event/loop.c \
      src/event/input.c \
      src/node/node.c \

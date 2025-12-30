@@ -2320,6 +2320,33 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_is_ci, 0, 0, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
 
+/* Cursor shape functions */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_cursor_shape, 0, 1, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, shape, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_cursor_show, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_cursor_hide, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+/* Window title functions */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_set_title, 0, 1, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, title, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_reset_title, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+/* Capability functions */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_capabilities, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_has_capability, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
 /* Mouse functions */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_mouse_enable, 0, 0, _IS_BOOL, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, mode, IS_LONG, 0, "2")
@@ -2917,6 +2944,19 @@ static const zend_function_entry tui_functions[] = {
     PHP_FE(tui_get_terminal_size, arginfo_tui_get_terminal_size)
     PHP_FE(tui_is_interactive, arginfo_tui_is_interactive)
     PHP_FE(tui_is_ci, arginfo_tui_is_ci)
+
+    /* Cursor control */
+    PHP_FE(tui_cursor_shape, arginfo_tui_cursor_shape)
+    PHP_FE(tui_cursor_show, arginfo_tui_cursor_show)
+    PHP_FE(tui_cursor_hide, arginfo_tui_cursor_hide)
+
+    /* Window title */
+    PHP_FE(tui_set_title, arginfo_tui_set_title)
+    PHP_FE(tui_reset_title, arginfo_tui_reset_title)
+
+    /* Capabilities */
+    PHP_FE(tui_get_capabilities, arginfo_tui_get_capabilities)
+    PHP_FE(tui_has_capability, arginfo_tui_has_capability)
 
     /* Mouse support */
     PHP_FE(tui_mouse_enable, arginfo_tui_mouse_enable)

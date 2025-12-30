@@ -354,6 +354,87 @@ Returns true if running in CI environment.
 
 ---
 
+## Cursor Control
+
+### tui_cursor_shape
+
+```php
+tui_cursor_shape(string $shape): void
+```
+
+Sets cursor shape. Shapes: `default`, `block`, `block_blink`, `underline`, `underline_blink`, `bar`, `bar_blink`.
+
+### tui_cursor_show
+
+```php
+tui_cursor_show(): void
+```
+
+Shows cursor.
+
+### tui_cursor_hide
+
+```php
+tui_cursor_hide(): void
+```
+
+Hides cursor.
+
+---
+
+## Window Title
+
+### tui_set_title
+
+```php
+tui_set_title(string $title): void
+```
+
+Sets terminal window/tab title via OSC 2.
+
+### tui_reset_title
+
+```php
+tui_reset_title(): void
+```
+
+Resets window title to empty.
+
+---
+
+## Capability Detection
+
+### tui_get_capabilities
+
+```php
+tui_get_capabilities(): array
+```
+
+Returns terminal capabilities:
+- `terminal` (string): Terminal type (`kitty`, `iterm2`, `vte`, etc.)
+- `name` (string): Terminal name
+- `version` (string): Version if available
+- `color_depth` (int): 8, 256, or 16777216 (24-bit)
+- `capabilities` (array): Boolean flags for supported features
+
+Capabilities flags:
+- `true_color`, `256_color`
+- `mouse`, `mouse_sgr`
+- `bracketed_paste`, `clipboard_osc52`, `hyperlinks_osc8`
+- `sync_output`, `unicode`
+- `kitty_keyboard`, `kitty_graphics`, `sixel`
+- `cursor_shape`, `title`, `focus_events`, `alternate_screen`
+
+### tui_has_capability
+
+```php
+tui_has_capability(string $name): bool
+```
+
+Checks if terminal supports a specific capability.
+
+---
+
 ## Text Utilities
 
 ### tui_string_width

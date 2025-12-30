@@ -17,6 +17,23 @@ void tui_ansi_cursor_move(char *buf, size_t *len, int x, int y);
 void tui_ansi_cursor_save(char *buf, size_t *len);
 void tui_ansi_cursor_restore(char *buf, size_t *len);
 
+/* Cursor shape (DECSCUSR) */
+typedef enum {
+    TUI_CURSOR_DEFAULT = 0,        /* Terminal default */
+    TUI_CURSOR_BLOCK_BLINK = 1,    /* Blinking block */
+    TUI_CURSOR_BLOCK = 2,          /* Steady block */
+    TUI_CURSOR_UNDERLINE_BLINK = 3,/* Blinking underline */
+    TUI_CURSOR_UNDERLINE = 4,      /* Steady underline */
+    TUI_CURSOR_BAR_BLINK = 5,      /* Blinking bar (I-beam) */
+    TUI_CURSOR_BAR = 6             /* Steady bar (I-beam) */
+} tui_cursor_shape;
+
+void tui_ansi_cursor_shape(char *buf, size_t *len, tui_cursor_shape shape);
+
+/* Window title (OSC 0/2) */
+void tui_ansi_set_title(char *buf, size_t buf_size, size_t *len, const char *title);
+void tui_ansi_reset_title(char *buf, size_t *len);
+
 /* Screen control */
 void tui_ansi_clear_screen(char *buf, size_t *len);
 void tui_ansi_clear_line(char *buf, size_t *len);

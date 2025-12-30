@@ -59,6 +59,29 @@ void tui_ansi_cursor_restore(char *buf, size_t *len)
     safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, ESC "u"));
 }
 
+void tui_ansi_cursor_shape(char *buf, size_t *len, tui_cursor_shape shape)
+{
+    /* DECSCUSR - Set Cursor Style: ESC [ n SP q */
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, ESC "%d q", (int)shape));
+}
+
+void tui_ansi_set_title(char *buf, size_t buf_size, size_t *len, const char *title)
+{
+    /* OSC 2 ; title ST - Set window title */
+    int written = snprintf(buf, buf_size, "\033]2;%s\007", title ? title : "");
+    if (written > 0 && (size_t)written < buf_size) {
+        *len = (size_t)written;
+    } else {
+        *len = 0;
+    }
+}
+
+void tui_ansi_reset_title(char *buf, size_t *len)
+{
+    /* Reset to empty title */
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, "\033]2;\007"));
+}
+
 void tui_ansi_clear_screen(char *buf, size_t *len)
 {
     safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, ESC "2J" ESC "H"));
