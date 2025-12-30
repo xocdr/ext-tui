@@ -173,6 +173,14 @@ int tui_input_parse(const char *buf, int len, tui_key_event *event)
             return 0;
         }
 
+        /* Uppercase letter: infer shift and normalize to lowercase */
+        if (c >= 'A' && c <= 'Z') {
+            event->shift = true;
+            event->key[0] = c + ('a' - 'A');  /* Convert to lowercase */
+            event->key[1] = '\0';
+            return 0;
+        }
+
         /* Regular character */
         event->key[0] = c;
         event->key[1] = '\0';

@@ -13,6 +13,9 @@ This document describes known limitations and areas for future improvement in ex
 ### Event Handling
 
 - **Limited modifier detection**: Some terminal emulators may not send full modifier information (Shift, Alt, Ctrl) for all key combinations.
+  - **SHIFT+letter**: ext-tui infers SHIFT from uppercase letters (A-Z) and normalizes the key to lowercase. So typing `A` results in `$key->shift = true` and `$key->key = 'a'`.
+  - **SHIFT+number/symbol**: Cannot be detected. Terminals send the resulting character directly (e.g., `!` for Shift+1), with no way to know the original key or that Shift was pressed.
+  - **SHIFT+arrow/special keys**: Detected via escape sequences when the terminal supports it (most modern terminals do).
 - **Escape key delay**: Single Escape key press requires a timeout to distinguish from escape sequences, which may cause a brief delay.
 - **Mouse support varies**: Mouse support uses SGR mode (1006) which is widely supported, but some terminals may have limited functionality.
 
