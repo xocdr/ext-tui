@@ -289,3 +289,17 @@ void tui_ansi_hyperlink_end(char *buf, size_t *len)
     /* End hyperlink: ESC ] 8 ; ; ST */
     safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, "\x1b]8;;\x1b\\"));
 }
+
+/* Bracketed paste mode */
+
+void tui_ansi_bracketed_paste_enable(char *buf, size_t *len)
+{
+    /* Enable bracketed paste: ESC [ ? 2004 h */
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, ESC "?2004h"));
+}
+
+void tui_ansi_bracketed_paste_disable(char *buf, size_t *len)
+{
+    /* Disable bracketed paste: ESC [ ? 2004 l */
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, ESC "?2004l"));
+}

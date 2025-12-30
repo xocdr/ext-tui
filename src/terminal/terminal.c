@@ -93,3 +93,46 @@ int tui_terminal_is_tty(void)
 {
     return isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
 }
+
+/* Bracketed paste mode */
+
+#include "ansi.h"
+#include <stdio.h>
+
+static int bracketed_paste_enabled = 0;
+
+int tui_terminal_enable_bracketed_paste(void)
+{
+    if (bracketed_paste_enabled) return 0;
+    if (!tui_terminal_is_tty()) return -1;
+
+    char buf[32];
+    size_t len;
+    tui_ansi_bracketed_paste_enable(buf, &len);
+    if (write(STDOUT_FILENO, buf, len) != (ssize_t)len) {
+        return -1;
+    }
+
+    bracketed_paste_enabled = 1;
+    return 0;
+}
+
+int tui_terminal_disable_bracketed_paste(void)
+{
+    if (!bracketed_paste_enabled) return 0;
+
+    char buf[32];
+    size_t len;
+    tui_ansi_bracketed_paste_disable(buf, &len);
+    if (write(STDOUT_FILENO, buf, len) != (ssize_t)len) {
+        return -1;
+    }
+
+    bracketed_paste_enabled = 0;
+    return 0;
+}
+
+int tui_terminal_is_bracketed_paste_enabled(void)
+{
+    return bracketed_paste_enabled;
+}

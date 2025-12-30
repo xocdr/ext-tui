@@ -60,4 +60,8 @@ void tui_ansi_sync_end(char *buf, size_t *len);
 void tui_ansi_hyperlink_start(char *buf, size_t buf_size, size_t *len, const char *url, const char *id);
 void tui_ansi_hyperlink_end(char *buf, size_t *len);
 
+/* Bracketed paste mode */
+void tui_ansi_bracketed_paste_enable(char *buf, size_t *len);
+void tui_ansi_bracketed_paste_disable(char *buf, size_t *len);
+
 #endif /* TUI_ANSI_H */

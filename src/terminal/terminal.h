@@ -18,6 +18,11 @@ int tui_terminal_is_raw_mode(void);
 int tui_terminal_get_size(int *width, int *height);
 int tui_terminal_is_tty(void);
 
+/* Bracketed paste mode */
+int tui_terminal_enable_bracketed_paste(void);
+int tui_terminal_disable_bracketed_paste(void);
+int tui_terminal_is_bracketed_paste_enabled(void);
+
 /* Original termios storage */
 extern struct termios tui_original_termios;
 

@@ -193,3 +193,161 @@ int tui_input_parse(const char *buf, int len, tui_key_event *event)
     event->key[copy] = '\0';
     return 0;
 }
+
+/* Bracketed paste detection */
+
+int tui_input_is_paste_start(const char *buf, int len)
+{
+    if (len < TUI_PASTE_START_LEN) return 0;
+    return memcmp(buf, TUI_PASTE_START_SEQ, TUI_PASTE_START_LEN) == 0;
+}
+
+int tui_input_find_paste_end(const char *buf, int len)
+{
+    if (len < TUI_PASTE_END_LEN) return -1;
+
+    /* Search for paste end sequence */
+    for (int i = 0; i <= len - TUI_PASTE_END_LEN; i++) {
+        if (memcmp(buf + i, TUI_PASTE_END_SEQ, TUI_PASTE_END_LEN) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* Input history */
+
+#include <stdlib.h>
+
+#define DEFAULT_HISTORY_CAPACITY 64
+
+tui_input_history* tui_history_create(int max_entries)
+{
+    if (max_entries <= 0) max_entries = 1000;
+
+    tui_input_history *history = calloc(1, sizeof(tui_input_history));
+    if (!history) return NULL;
+
+    int initial_capacity = max_entries < DEFAULT_HISTORY_CAPACITY
+                         ? max_entries : DEFAULT_HISTORY_CAPACITY;
+
+    history->entries = calloc(initial_capacity, sizeof(char*));
+    if (!history->entries) {
+        free(history);
+        return NULL;
+    }
+
+    history->capacity = initial_capacity;
+    history->max_entries = max_entries;
+    history->position = -1;  /* -1 = not navigating */
+    history->count = 0;
+    history->temp_input = NULL;
+
+    return history;
+}
+
+void tui_history_destroy(tui_input_history *history)
+{
+    if (!history) return;
+
+    for (int i = 0; i < history->count; i++) {
+        free(history->entries[i]);
+    }
+    free(history->entries);
+    free(history->temp_input);
+    free(history);
+}
+
+int tui_history_add(tui_input_history *history, const char *entry)
+{
+    if (!history || !entry || !entry[0]) return -1;
+
+    /* Don't add duplicate of last entry */
+    if (history->count > 0 &&
+        strcmp(history->entries[history->count - 1], entry) == 0) {
+        tui_history_reset_position(history);
+        return 0;
+    }
+
+    /* Grow if needed */
+    if (history->count >= history->capacity) {
+        if (history->capacity >= history->max_entries) {
+            /* At max capacity - remove oldest entry */
+            free(history->entries[0]);
+            memmove(history->entries, history->entries + 1,
+                   (history->count - 1) * sizeof(char*));
+            history->count--;
+        } else {
+            /* Grow capacity */
+            int new_capacity = history->capacity * 2;
+            if (new_capacity > history->max_entries) {
+                new_capacity = history->max_entries;
+            }
+            char **new_entries = realloc(history->entries,
+                                         new_capacity * sizeof(char*));
+            if (!new_entries) return -1;
+            history->entries = new_entries;
+            history->capacity = new_capacity;
+        }
+    }
+
+    /* Add new entry */
+    history->entries[history->count] = strdup(entry);
+    if (!history->entries[history->count]) return -1;
+    history->count++;
+
+    tui_history_reset_position(history);
+    return 0;
+}
+
+const char* tui_history_prev(tui_input_history *history)
+{
+    if (!history || history->count == 0) return NULL;
+
+    if (history->position < 0) {
+        /* Starting navigation from end */
+        history->position = history->count - 1;
+    } else if (history->position > 0) {
+        history->position--;
+    } else {
+        /* Already at oldest */
+        return history->entries[0];
+    }
+
+    return history->entries[history->position];
+}
+
+const char* tui_history_next(tui_input_history *history)
+{
+    if (!history || history->position < 0) return NULL;
+
+    if (history->position < history->count - 1) {
+        history->position++;
+        return history->entries[history->position];
+    } else {
+        /* Back to current input */
+        history->position = -1;
+        return history->temp_input;
+    }
+}
+
+void tui_history_reset_position(tui_input_history *history)
+{
+    if (history) {
+        history->position = -1;
+        free(history->temp_input);
+        history->temp_input = NULL;
+    }
+}
+
+void tui_history_save_temp(tui_input_history *history, const char *input)
+{
+    if (!history) return;
+    free(history->temp_input);
+    history->temp_input = input ? strdup(input) : NULL;
+}
+
+const char* tui_history_get_temp(tui_input_history *history)
+{
+    return history ? history->temp_input : NULL;
+}
