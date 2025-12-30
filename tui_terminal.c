@@ -11,6 +11,7 @@
 
 #include "tui_internal.h"
 #include "src/terminal/capabilities.h"
+#include "src/terminal/notify.h"
 
 /* ------------------------------------------------------------------
  * Terminal Info Functions
@@ -612,5 +613,49 @@ PHP_FUNCTION(tui_has_capability)
     }
 
     RETURN_BOOL(tui_has_capability(caps, cap));
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Notification Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_bell(): void */
+PHP_FUNCTION(tui_bell)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    tui_bell();
+}
+/* }}} */
+
+/* {{{ tui_flash(): void */
+PHP_FUNCTION(tui_flash)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+    tui_flash();
+}
+/* }}} */
+
+/* {{{ tui_notify(string $title, ?string $body = null, int $priority = 0): bool */
+PHP_FUNCTION(tui_notify)
+{
+    zend_string *title;
+    zend_string *body = NULL;
+    zend_long priority = TUI_NOTIFY_NORMAL;
+
+    ZEND_PARSE_PARAMETERS_START(1, 3)
+        Z_PARAM_STR(title)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_STR_OR_NULL(body)
+        Z_PARAM_LONG(priority)
+    ZEND_PARSE_PARAMETERS_END();
+
+    int result = tui_notify(
+        ZSTR_VAL(title),
+        body ? ZSTR_VAL(body) : NULL,
+        (tui_notify_priority)priority
+    );
+
+    RETURN_BOOL(result == 0);
 }
 /* }}} */

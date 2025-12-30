@@ -1,17 +1,52 @@
 /*
   +----------------------------------------------------------------------+
-  | ext-tui: Kitty graphics PHP bindings                                 |
+  | ext-tui: Graphics protocol PHP bindings                              |
   +----------------------------------------------------------------------+
   | Copyright (c) The Exocoder Authors                                   |
   +----------------------------------------------------------------------+
   | This source file is subject to the MIT license that is bundled with |
   | this package in the file LICENSE.                                    |
   +----------------------------------------------------------------------+
+  | Supports multiple graphics protocols:                                 |
+  | - Kitty Graphics Protocol (preferred)                                |
+  | - iTerm2 Inline Images Protocol                                       |
+  | - Sixel Graphics Protocol (fallback)                                  |
+  +----------------------------------------------------------------------+
 */
 
 #include "tui_internal.h"
 #include "src/graphics/kitty.h"
+#include "src/graphics/iterm2.h"
+#include "src/graphics/sixel.h"
 #include <string.h>
+
+/* Graphics protocol enumeration */
+typedef enum {
+    TUI_GRAPHICS_PROTO_NONE = 0,
+    TUI_GRAPHICS_PROTO_KITTY,
+    TUI_GRAPHICS_PROTO_ITERM2,
+    TUI_GRAPHICS_PROTO_SIXEL
+} tui_graphics_protocol;
+
+/* Detect best available graphics protocol */
+static tui_graphics_protocol detect_graphics_protocol(void)
+{
+    /* Priority order:
+     * 1. Kitty - best quality, widest feature set
+     * 2. iTerm2 - good support for PNG, simpler protocol
+     * 3. Sixel - fallback for older terminals
+     */
+    if (tui_graphics_is_supported()) {
+        return TUI_GRAPHICS_PROTO_KITTY;
+    }
+    if (tui_iterm2_is_supported()) {
+        return TUI_GRAPHICS_PROTO_ITERM2;
+    }
+    if (tui_sixel_is_supported()) {
+        return TUI_GRAPHICS_PROTO_SIXEL;
+    }
+    return TUI_GRAPHICS_PROTO_NONE;
+}
 
 /* {{{ Resource destructor */
 void tui_image_dtor(zend_resource *res)
@@ -144,7 +179,7 @@ PHP_FUNCTION(tui_image_transmit)
 /* }}} */
 
 /* {{{ proto bool tui_image_display(resource $image, int $x, int $y, int $cols = 0, int $rows = 0)
-   Display transmitted image at position */
+   Display image at position using best available protocol */
 PHP_FUNCTION(tui_image_display)
 {
     zval *zimage;
@@ -167,8 +202,32 @@ PHP_FUNCTION(tui_image_display)
         RETURN_FALSE;
     }
 
-    RETURN_BOOL(tui_image_display_at(img, (int)x, (int)y,
-                                      (int)cols, (int)rows) == 0);
+    /* Auto-detect best protocol and use it */
+    tui_graphics_protocol proto = detect_graphics_protocol();
+    int result = -1;
+
+    switch (proto) {
+        case TUI_GRAPHICS_PROTO_KITTY:
+            result = tui_image_display_at(img, (int)x, (int)y,
+                                          (int)cols, (int)rows);
+            break;
+
+        case TUI_GRAPHICS_PROTO_ITERM2:
+            result = tui_iterm2_display(img, (int)x, (int)y,
+                                        (int)cols, (int)rows);
+            break;
+
+        case TUI_GRAPHICS_PROTO_SIXEL:
+            result = tui_sixel_display(img, (int)x, (int)y, NULL);
+            break;
+
+        case TUI_GRAPHICS_PROTO_NONE:
+        default:
+            result = -1;
+            break;
+    }
+
+    RETURN_BOOL(result == 0);
 }
 /* }}} */
 
@@ -273,5 +332,47 @@ PHP_FUNCTION(tui_graphics_supported)
     ZEND_PARSE_PARAMETERS_NONE();
 
     RETURN_BOOL(tui_graphics_is_supported());
+}
+/* }}} */
+
+/* {{{ proto string tui_graphics_protocol()
+   Get the best available graphics protocol name */
+PHP_FUNCTION(tui_graphics_protocol)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_graphics_protocol proto = detect_graphics_protocol();
+
+    switch (proto) {
+        case TUI_GRAPHICS_PROTO_KITTY:
+            RETURN_STRING("kitty");
+        case TUI_GRAPHICS_PROTO_ITERM2:
+            RETURN_STRING("iterm2");
+        case TUI_GRAPHICS_PROTO_SIXEL:
+            RETURN_STRING("sixel");
+        case TUI_GRAPHICS_PROTO_NONE:
+        default:
+            RETURN_STRING("none");
+    }
+}
+/* }}} */
+
+/* {{{ proto bool tui_iterm2_supported()
+   Check if iTerm2 graphics is supported by the terminal */
+PHP_FUNCTION(tui_iterm2_supported)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    RETURN_BOOL(tui_iterm2_is_supported());
+}
+/* }}} */
+
+/* {{{ proto bool tui_sixel_supported()
+   Check if Sixel graphics is supported by the terminal */
+PHP_FUNCTION(tui_sixel_supported)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    RETURN_BOOL(tui_sixel_is_supported());
 }
 /* }}} */

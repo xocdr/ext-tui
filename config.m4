@@ -40,9 +40,13 @@ if test "$PHP_TUI" != "no"; then
      tui_virtual.c \
      tui_scroll.c \
      tui_graphics.c \
+     tui_recording.c \
+     tui_a11y.c \
+     tui_dragdrop.c \
      src/terminal/terminal.c \
      src/terminal/ansi.c \
      src/terminal/capabilities.c \
+     src/terminal/notify.c \
      src/event/loop.c \
      src/event/input.c \
      src/node/node.c \
@@ -52,6 +56,7 @@ if test "$PHP_TUI" != "no"; then
      src/render/output.c \
      src/text/measure.c \
      src/text/wrap.c \
+     src/text/grapheme.c \
      src/drawing/primitives.c \
      src/drawing/canvas.c \
      src/drawing/animation.c \
@@ -61,6 +66,11 @@ if test "$PHP_TUI" != "no"; then
      src/scroll/virtual.c \
      src/scroll/smooth.c \
      src/graphics/kitty.c \
+     src/graphics/iterm2.c \
+     src/graphics/sixel.c \
+     src/recording/recorder.c \
+     src/a11y/accessibility.c \
+     src/interaction/dragdrop.c \
      src/app/app.c \
      src/testing/renderer.c \
      src/testing/query.c \
@@ -132,6 +142,9 @@ if test "$PHP_TUI" != "no"; then
   PHP_ADD_BUILD_DIR([$ext_builddir/src/pool])
   PHP_ADD_BUILD_DIR([$ext_builddir/src/scroll])
   PHP_ADD_BUILD_DIR([$ext_builddir/src/graphics])
+  PHP_ADD_BUILD_DIR([$ext_builddir/src/recording])
+  PHP_ADD_BUILD_DIR([$ext_builddir/src/a11y])
+  PHP_ADD_BUILD_DIR([$ext_builddir/src/interaction])
 
   dnl Add build directories for Yoga
   PHP_ADD_BUILD_DIR([$ext_builddir/src/yoga])

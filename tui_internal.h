@@ -190,6 +190,9 @@ PHP_FUNCTION(tui_set_title);
 PHP_FUNCTION(tui_reset_title);
 PHP_FUNCTION(tui_get_capabilities);
 PHP_FUNCTION(tui_has_capability);
+PHP_FUNCTION(tui_bell);
+PHP_FUNCTION(tui_flash);
+PHP_FUNCTION(tui_notify);
 PHP_FUNCTION(tui_mouse_enable);
 PHP_FUNCTION(tui_mouse_disable);
 PHP_FUNCTION(tui_mouse_get_mode);
@@ -220,6 +223,7 @@ PHP_FUNCTION(tui_pad);
 PHP_FUNCTION(tui_strip_ansi);
 PHP_FUNCTION(tui_string_width_ansi);
 PHP_FUNCTION(tui_slice_ansi);
+PHP_FUNCTION(tui_grapheme_count);
 
 /* Buffer functions (tui_buffer.c) */
 PHP_FUNCTION(tui_buffer_create);
@@ -368,8 +372,46 @@ PHP_FUNCTION(tui_image_clear);
 PHP_FUNCTION(tui_image_destroy);
 PHP_FUNCTION(tui_image_get_info);
 PHP_FUNCTION(tui_graphics_supported);
+PHP_FUNCTION(tui_graphics_protocol);
+PHP_FUNCTION(tui_iterm2_supported);
+PHP_FUNCTION(tui_sixel_supported);
 
 /* Resource destructor for image */
 void tui_image_dtor(zend_resource *res);
+
+/* Recording functions (tui_recording.c) */
+PHP_FUNCTION(tui_record_create);
+PHP_FUNCTION(tui_record_start);
+PHP_FUNCTION(tui_record_pause);
+PHP_FUNCTION(tui_record_resume);
+PHP_FUNCTION(tui_record_stop);
+PHP_FUNCTION(tui_record_capture);
+PHP_FUNCTION(tui_record_duration);
+PHP_FUNCTION(tui_record_frame_count);
+PHP_FUNCTION(tui_record_export);
+PHP_FUNCTION(tui_record_save);
+PHP_FUNCTION(tui_record_destroy);
+
+/* Resource destructor for recording */
+void tui_recording_dtor(zend_resource *res);
+extern int le_tui_recording;
+
+/* Accessibility functions (tui_a11y.c) */
+PHP_FUNCTION(tui_announce);
+PHP_FUNCTION(tui_prefers_reduced_motion);
+PHP_FUNCTION(tui_prefers_high_contrast);
+PHP_FUNCTION(tui_get_accessibility_features);
+PHP_FUNCTION(tui_aria_role_to_string);
+PHP_FUNCTION(tui_aria_role_from_string);
+
+/* Drag and drop functions (tui_dragdrop.c) */
+PHP_FUNCTION(tui_drag_start);
+PHP_FUNCTION(tui_drag_move);
+PHP_FUNCTION(tui_drag_end);
+PHP_FUNCTION(tui_drag_cancel);
+PHP_FUNCTION(tui_drag_is_active);
+PHP_FUNCTION(tui_drag_get_type);
+PHP_FUNCTION(tui_drag_get_data);
+PHP_FUNCTION(tui_drag_get_state);
 
 #endif /* TUI_INTERNAL_H */

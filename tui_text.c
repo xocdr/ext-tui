@@ -10,6 +10,7 @@
 */
 
 #include "tui_internal.h"
+#include "src/text/grapheme.h"
 
 /* ------------------------------------------------------------------
  * Text Utility Functions
@@ -190,5 +191,23 @@ PHP_FUNCTION(tui_slice_ansi)
     } else {
         RETURN_EMPTY_STRING();
     }
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Grapheme Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_grapheme_count(string $text): int */
+PHP_FUNCTION(tui_grapheme_count)
+{
+    zend_string *text;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(text)
+    ZEND_PARSE_PARAMETERS_END();
+
+    int count = tui_grapheme_count(ZSTR_VAL(text), (int)ZSTR_LEN(text));
+    RETURN_LONG(count);
 }
 /* }}} */

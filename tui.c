@@ -2350,6 +2350,19 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_has_capability, 0, 1, _IS_BO
     ZEND_ARG_TYPE_INFO(0, name, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
+/* Notification functions */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_bell, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_flash, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_notify, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, title, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, body, IS_STRING, 1, "null")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, priority, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
 /* Mouse functions */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_mouse_enable, 0, 0, _IS_BOOL, 0)
     ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, mode, IS_LONG, 0, "2")
@@ -2522,6 +2535,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_slice_ansi, 0, 3, IS_STRING,
     ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
     ZEND_ARG_TYPE_INFO(0, start, IS_LONG, 0)
     ZEND_ARG_TYPE_INFO(0, end, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_grapheme_count, 0, 1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
 /* Buffer arginfo */
@@ -3101,6 +3118,119 @@ ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_graphics_supported, 0, 0, _IS_BOOL, 0)
 ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_graphics_protocol, 0, 0, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_iterm2_supported, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_sixel_supported, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+/* Recording arginfo */
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_record_create, 0, 0, 2)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, height, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, title, IS_STRING, 1, "null")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_record_start, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, recording)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_record_pause, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, recording)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_record_resume, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, recording)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_record_stop, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, recording)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_record_capture, 0, 2, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, recording)
+    ZEND_ARG_TYPE_INFO(0, data, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_record_duration, 0, 1, IS_DOUBLE, 0)
+    ZEND_ARG_INFO(0, recording)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_record_frame_count, 0, 1, IS_LONG, 0)
+    ZEND_ARG_INFO(0, recording)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_record_export, 0, 1, IS_STRING, 0)
+    ZEND_ARG_INFO(0, recording)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_record_save, 0, 2, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, recording)
+    ZEND_ARG_TYPE_INFO(0, path, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_record_destroy, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, recording)
+ZEND_END_ARG_INFO()
+
+/* Accessibility arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_announce, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, message, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, priority, IS_STRING, 0, "\"polite\"")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_prefers_reduced_motion, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_prefers_high_contrast, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_get_accessibility_features, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_aria_role_to_string, 0, 1, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, role, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_aria_role_from_string, 0, 1, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, role, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+/* Drag and drop arginfo */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_drag_start, 0, 4, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, type, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, data, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_drag_move, 0, 2, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_drag_end, 0, 0, _IS_BOOL, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, dropped, _IS_BOOL, 0, "true")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_drag_cancel, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_drag_is_active, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_drag_get_type, 0, 0, IS_STRING, 1)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_drag_get_data, 0, 0, IS_STRING, 1)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_drag_get_state, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
 /* }}} */
 
 /* {{{ tui_functions[] */
@@ -3122,6 +3252,11 @@ static const zend_function_entry tui_functions[] = {
     /* Capabilities */
     PHP_FE(tui_get_capabilities, arginfo_tui_get_capabilities)
     PHP_FE(tui_has_capability, arginfo_tui_has_capability)
+
+    /* Notifications */
+    PHP_FE(tui_bell, arginfo_tui_bell)
+    PHP_FE(tui_flash, arginfo_tui_flash)
+    PHP_FE(tui_notify, arginfo_tui_notify)
 
     /* Mouse support */
     PHP_FE(tui_mouse_enable, arginfo_tui_mouse_enable)
@@ -3158,6 +3293,9 @@ static const zend_function_entry tui_functions[] = {
     PHP_FE(tui_strip_ansi, arginfo_tui_strip_ansi)
     PHP_FE(tui_string_width_ansi, arginfo_tui_string_width_ansi)
     PHP_FE(tui_slice_ansi, arginfo_tui_slice_ansi)
+
+    /* Grapheme utilities */
+    PHP_FE(tui_grapheme_count, arginfo_tui_grapheme_count)
 
     /* Render/App */
     PHP_FE(tui_render, arginfo_tui_render)
@@ -3304,6 +3442,40 @@ static const zend_function_entry tui_functions[] = {
     PHP_FE(tui_image_destroy, arginfo_tui_image_destroy)
     PHP_FE(tui_image_get_info, arginfo_tui_image_get_info)
     PHP_FE(tui_graphics_supported, arginfo_tui_graphics_supported)
+    PHP_FE(tui_graphics_protocol, arginfo_tui_graphics_protocol)
+    PHP_FE(tui_iterm2_supported, arginfo_tui_iterm2_supported)
+    PHP_FE(tui_sixel_supported, arginfo_tui_sixel_supported)
+
+    /* Recording */
+    PHP_FE(tui_record_create, arginfo_tui_record_create)
+    PHP_FE(tui_record_start, arginfo_tui_record_start)
+    PHP_FE(tui_record_pause, arginfo_tui_record_pause)
+    PHP_FE(tui_record_resume, arginfo_tui_record_resume)
+    PHP_FE(tui_record_stop, arginfo_tui_record_stop)
+    PHP_FE(tui_record_capture, arginfo_tui_record_capture)
+    PHP_FE(tui_record_duration, arginfo_tui_record_duration)
+    PHP_FE(tui_record_frame_count, arginfo_tui_record_frame_count)
+    PHP_FE(tui_record_export, arginfo_tui_record_export)
+    PHP_FE(tui_record_save, arginfo_tui_record_save)
+    PHP_FE(tui_record_destroy, arginfo_tui_record_destroy)
+
+    /* Accessibility */
+    PHP_FE(tui_announce, arginfo_tui_announce)
+    PHP_FE(tui_prefers_reduced_motion, arginfo_tui_prefers_reduced_motion)
+    PHP_FE(tui_prefers_high_contrast, arginfo_tui_prefers_high_contrast)
+    PHP_FE(tui_get_accessibility_features, arginfo_tui_get_accessibility_features)
+    PHP_FE(tui_aria_role_to_string, arginfo_tui_aria_role_to_string)
+    PHP_FE(tui_aria_role_from_string, arginfo_tui_aria_role_from_string)
+
+    /* Drag and drop */
+    PHP_FE(tui_drag_start, arginfo_tui_drag_start)
+    PHP_FE(tui_drag_move, arginfo_tui_drag_move)
+    PHP_FE(tui_drag_end, arginfo_tui_drag_end)
+    PHP_FE(tui_drag_cancel, arginfo_tui_drag_cancel)
+    PHP_FE(tui_drag_is_active, arginfo_tui_drag_is_active)
+    PHP_FE(tui_drag_get_type, arginfo_tui_drag_get_type)
+    PHP_FE(tui_drag_get_data, arginfo_tui_drag_get_data)
+    PHP_FE(tui_drag_get_state, arginfo_tui_drag_get_state)
 
     PHP_FE_END
 };
@@ -3383,6 +3555,7 @@ static PHP_MINIT_FUNCTION(tui)
     le_tui_virtual_list = zend_register_list_destructors_ex(tui_virtual_list_dtor, NULL, TUI_VIRTUAL_LIST_RES_NAME, module_number);
     le_tui_scroll_animation = zend_register_list_destructors_ex(tui_scroll_animation_dtor, NULL, TUI_SCROLL_ANIM_RES_NAME, module_number);
     le_tui_image = zend_register_list_destructors_ex(tui_image_dtor, NULL, TUI_IMAGE_RES_NAME, module_number);
+    le_tui_recording = zend_register_list_destructors_ex(tui_recording_dtor, NULL, "TuiRecording", module_number);
 
     /* Register version constants */
     REGISTER_STRING_CONSTANT("TUI_VERSION", PHP_TUI_VERSION, CONST_CS | CONST_PERSISTENT);
@@ -3393,6 +3566,22 @@ static PHP_MINIT_FUNCTION(tui)
     REGISTER_LONG_CONSTANT("TUI_MOUSE_MODE_CLICK", TUI_MOUSE_MODE_CLICK, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("TUI_MOUSE_MODE_BUTTON", TUI_MOUSE_MODE_BUTTON, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("TUI_MOUSE_MODE_ALL", TUI_MOUSE_MODE_ALL, CONST_CS | CONST_PERSISTENT);
+
+    /* Register notification priority constants */
+    REGISTER_LONG_CONSTANT("TUI_NOTIFY_NORMAL", 0, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_NOTIFY_URGENT", 1, CONST_CS | CONST_PERSISTENT);
+
+    /* Register ARIA role constants */
+    REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_NONE", 0, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_BUTTON", 1, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_CHECKBOX", 2, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_DIALOG", 3, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_NAVIGATION", 14, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_MENU", 12, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_MENUITEM", 13, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_TEXTBOX", 26, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_ALERT", 29, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_STATUS", 22, CONST_CS | CONST_PERSISTENT);
 
     /* Register Xocdr\Tui\Ext\Box class with methods */
     INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Box", tui_box_methods);
@@ -3453,6 +3642,11 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_null(tui_box_ce, "borderRightColor", sizeof("borderRightColor")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "borderBottomColor", sizeof("borderBottomColor")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "borderLeftColor", sizeof("borderLeftColor")-1, ZEND_ACC_PUBLIC);
+    /* Border title */
+    zend_declare_property_null(tui_box_ce, "borderTitle", sizeof("borderTitle")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_string(tui_box_ce, "borderTitlePosition", sizeof("borderTitlePosition")-1, "top-center", ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "borderTitleColor", sizeof("borderTitleColor")-1, ZEND_ACC_PUBLIC);
+    zend_declare_property_null(tui_box_ce, "borderTitleStyle", sizeof("borderTitleStyle")-1, ZEND_ACC_PUBLIC);
 
     /* Register Xocdr\Tui\Ext\Text class with methods */
     INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Text", tui_text_methods);
