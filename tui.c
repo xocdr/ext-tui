@@ -671,7 +671,7 @@ tui_node* php_to_tui_node(zval *obj, int depth)
     tui_node *node = NULL;
     zval rv;
 
-    if (ce == tui_box_ce) {
+    if (instanceof_function(ce, tui_box_ce)) {
         /* Create box node */
         node = tui_node_create_box();
         if (!node) return NULL;
@@ -1192,7 +1192,7 @@ tui_node* php_to_tui_node(zval *obj, int depth)
             } ZEND_HASH_FOREACH_END();
         }
 
-    } else if (ce == tui_text_ce) {
+    } else if (instanceof_function(ce, tui_text_ce)) {
         /* Get text content */
         zval *prop = zend_read_property(ce, Z_OBJ_P(obj), "content", sizeof("content")-1, 1, &rv);
         const char *text = "";
@@ -1754,6 +1754,24 @@ PHP_METHOD(TuiInstance, getTerminalSize)
 }
 /* }}} */
 
+/* {{{ TuiInstance::getSize(): array - Get terminal size with width/height aliases */
+PHP_METHOD(TuiInstance, getSize)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app) {
+        RETURN_NULL();
+    }
+
+    array_init(return_value);
+    add_assoc_long(return_value, "width", obj->app->width);
+    add_assoc_long(return_value, "height", obj->app->height);
+    add_assoc_long(return_value, "columns", obj->app->width);
+    add_assoc_long(return_value, "rows", obj->app->height);
+}
+/* }}} */
+
 /* {{{ TuiInstance::setState(int $index, mixed $value): void - Internal for setter */
 PHP_METHOD(TuiInstance, setState)
 {
@@ -2030,6 +2048,9 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_getterminalsize, 0, 0, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_getsize, 0, 0, IS_ARRAY, 1)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_setstate, 0, 2, IS_VOID, 0)
     ZEND_ARG_TYPE_INFO(0, index, IS_LONG, 0)
     ZEND_ARG_TYPE_INFO(0, value, IS_MIXED, 0)
@@ -2098,6 +2119,7 @@ static const zend_function_entry tui_instance_methods[] = {
     PHP_ME(TuiInstance, useStdout, arginfo_tuiinstance_usestdout, ZEND_ACC_PUBLIC | ZEND_ACC_DEPRECATED)
     PHP_ME(TuiInstance, useStderr, arginfo_tuiinstance_usestderr, ZEND_ACC_PUBLIC | ZEND_ACC_DEPRECATED)
     PHP_ME(TuiInstance, getTerminalSize, arginfo_tuiinstance_getterminalsize, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, getSize, arginfo_tuiinstance_getsize, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, setState, arginfo_tuiinstance_setstate, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, focusNext, arginfo_tuiinstance_focusnext, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, focusPrev, arginfo_tuiinstance_focusprev, ZEND_ACC_PUBLIC)
