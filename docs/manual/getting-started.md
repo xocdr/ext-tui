@@ -234,5 +234,10 @@ See the [xocdr/tui specification](https://github.com/xocdr/tui/blob/main/docs/sp
 - [Components & Layout](components.md) - Flexbox layouts
 - [Styling](styling.md) - Colors and text attributes
 - [Input Handling](input.md) - Keyboard events
+- [Terminal Control](terminal.md) - Cursor, title, capabilities
+- [Scrolling & Virtual Lists](scrolling.md) - Large datasets
 - [Drawing](drawing.md) - Canvas and buffer graphics
+- [Graphics](graphics.md) - Kitty graphics protocol
 - [Animation](animation.md) - Smooth transitions
+- [Metrics](metrics.md) - Performance profiling
+- [Testing](testing.md) - Headless testing

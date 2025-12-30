@@ -32,7 +32,8 @@
 extern zend_module_entry tui_module_entry;
 #define phpext_tui_ptr &tui_module_entry
 
-#define PHP_TUI_VERSION "0.1.0"
+#define PHP_TUI_VERSION "0.2.9"
+#define PHP_TUI_VERSION_ID 209  /* major * 10000 + minor * 100 + patch */
 
 #ifdef PHP_WIN32
 #   define PHP_TUI_API __declspec(dllexport)

@@ -3384,6 +3384,10 @@ static PHP_MINIT_FUNCTION(tui)
     le_tui_scroll_animation = zend_register_list_destructors_ex(tui_scroll_animation_dtor, NULL, TUI_SCROLL_ANIM_RES_NAME, module_number);
     le_tui_image = zend_register_list_destructors_ex(tui_image_dtor, NULL, TUI_IMAGE_RES_NAME, module_number);
 
+    /* Register version constants */
+    REGISTER_STRING_CONSTANT("TUI_VERSION", PHP_TUI_VERSION, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("TUI_VERSION_ID", PHP_TUI_VERSION_ID, CONST_CS | CONST_PERSISTENT);
+
     /* Register mouse mode constants */
     REGISTER_LONG_CONSTANT("TUI_MOUSE_MODE_OFF", TUI_MOUSE_MODE_OFF, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("TUI_MOUSE_MODE_CLICK", TUI_MOUSE_MODE_CLICK, CONST_CS | CONST_PERSISTENT);
