@@ -164,7 +164,12 @@ Returns stderr stream context.
 ```php
 getTerminalSize(): array
 ```
-Returns `[width, height]`.
+Returns `['columns' => int, 'rows' => int]`.
+
+```php
+getSize(): ?array
+```
+Returns `['width' => int, 'height' => int, 'columns' => int, 'rows' => int]` or `null` if not running.
 
 ```php
 measureElement(Box|Text $element): ?array
