@@ -121,9 +121,15 @@ void tui_app_destroy(tui_app *app)
     /* Clean up useState slots */
     tui_app_cleanup_states(app);
 
-    /* Free captured output buffer */
+    /* Clean up instance_zval if set (added refcount in tui_render.c) */
+    if (app->instance_zval_set) {
+        zval_ptr_dtor(&app->instance_zval);
+        app->instance_zval_set = 0;
+    }
+
+    /* Free captured output buffer - allocated with estrndup() in tui_render.c */
     if (app->captured_output) {
-        free(app->captured_output);
+        efree(app->captured_output);
         app->captured_output = NULL;
         app->captured_output_len = 0;
     }

@@ -24,9 +24,22 @@ static tui_app* get_app_from_instance(zval *instance);
 
 static void render_component_callback(tui_app *app)
 {
-    if (!app || !app->instance_zval) {
+    if (!app || !app->instance_zval_set) {
         return;
     }
+
+    /* Re-entrancy protection: if we're already rendering, just mark that a
+     * rerender was requested. The outer render will pick this up and re-render
+     * again after the current render completes. This prevents double-free of
+     * the node tree when a nested rerender is triggered (e.g., by a hook). */
+    if (app->is_rendering) {
+        app->rerender_requested = 1;
+        return;
+    }
+
+    /* Mark that we're now rendering */
+    app->is_rendering = 1;
+    app->rerender_requested = 0;
 
     /* Reset state index before each render (for useState hook ordering) */
     tui_app_reset_state_index(app);
@@ -34,7 +47,7 @@ static void render_component_callback(tui_app *app)
     /* Set up parameters - pass Instance as first argument */
     zval retval;
     zval params[1];
-    ZVAL_COPY(&params[0], app->instance_zval);
+    ZVAL_COPY(&params[0], &app->instance_zval);
 
     /* Save original param count and set up for our call */
     zend_fcall_info fci_copy = app->component_fci;
@@ -49,13 +62,17 @@ static void render_component_callback(tui_app *app)
     if (zend_call_function(&fci_copy, &app->component_fcc) == SUCCESS) {
         /* Convert PHP object tree to C node tree */
         if (Z_TYPE(retval) == IS_OBJECT) {
-            /* Free old tree */
-            if (app->root_node) {
-                tui_node_destroy(app->root_node);
-            }
+            /* Free old tree AFTER building new tree to avoid dangling pointer.
+             * This ensures app->root_node is never pointing to freed memory. */
+            tui_node *old_tree = app->root_node;
 
             /* Build new tree */
             app->root_node = php_to_tui_node(&retval, 0);
+
+            /* Now safe to free old tree */
+            if (old_tree) {
+                tui_node_destroy(old_tree);
+            }
         }
 
         zval_ptr_dtor(&retval);
@@ -88,6 +105,15 @@ static void render_component_callback(tui_app *app)
 
     /* Clean up the copied zval reference */
     zval_ptr_dtor(&params[0]);
+
+    /* Mark render complete */
+    app->is_rendering = 0;
+
+    /* If a rerender was requested during render, do it now */
+    if (app->rerender_requested) {
+        app->rerender_requested = 0;
+        render_component_callback(app);
+    }
 }
 
 /* Helper to get app from TuiInstance */
@@ -143,8 +169,11 @@ PHP_FUNCTION(tui_render)
     tui_instance_object *instance_obj = Z_TUI_INSTANCE_P(return_value);
     instance_obj->app = app;
 
-    /* Store reference to Instance zval in app for render_component_callback */
-    app->instance_zval = return_value;
+    /* Store a COPY of the Instance zval in app for render_component_callback.
+     * We must copy because return_value is on the stack and will be invalid
+     * after this function returns. The copy adds a reference to the object. */
+    ZVAL_COPY(&app->instance_zval, return_value);
+    app->instance_zval_set = 1;
 
     /* Initial render - call component to get tree with Instance parameter */
     zval retval;
@@ -170,7 +199,8 @@ PHP_FUNCTION(tui_render)
                 !instanceof_function(Z_OBJCE(retval), tui_text_ce)) {
                 zval_ptr_dtor(&retval);
                 zval_ptr_dtor(&params[0]);
-                app->instance_zval = NULL;
+                zval_ptr_dtor(&app->instance_zval);
+                app->instance_zval_set = 0;
                 instance_obj->app = NULL;
                 tui_app_destroy(app);
                 zend_throw_exception(zend_ce_exception,
@@ -181,7 +211,8 @@ PHP_FUNCTION(tui_render)
         } else if (Z_TYPE(retval) != IS_NULL) {
             zval_ptr_dtor(&retval);
             zval_ptr_dtor(&params[0]);
-            app->instance_zval = NULL;
+            zval_ptr_dtor(&app->instance_zval);
+            app->instance_zval_set = 0;
             instance_obj->app = NULL;
             tui_app_destroy(app);
             zend_throw_exception(zend_ce_exception,
@@ -191,7 +222,8 @@ PHP_FUNCTION(tui_render)
         zval_ptr_dtor(&retval);
     } else {
         zval_ptr_dtor(&params[0]);
-        app->instance_zval = NULL;
+        zval_ptr_dtor(&app->instance_zval);
+        app->instance_zval_set = 0;
         instance_obj->app = NULL;
         tui_app_destroy(app);
         zend_throw_exception(zend_ce_exception,
@@ -207,7 +239,8 @@ PHP_FUNCTION(tui_render)
 
     /* Start the app */
     if (tui_app_start(app) != 0) {
-        app->instance_zval = NULL;
+        zval_ptr_dtor(&app->instance_zval);
+        app->instance_zval_set = 0;
         instance_obj->app = NULL;
         tui_app_destroy(app);
         php_error_docref(NULL, E_ERROR, "Failed to start TUI application");

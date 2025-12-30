@@ -101,6 +101,10 @@ struct tui_app {
     /* Cleanup state */
     int destroyed;  /* Prevent double-free */
 
+    /* Re-entrancy protection */
+    int is_rendering;         /* Set during render to prevent nested rerenders */
+    int rerender_requested;   /* Set if rerender requested during render */
+
     /* useState hook state management */
     tui_state_slot states[TUI_MAX_STATES];
     int state_count;          /* Number of allocated state slots */
@@ -110,7 +114,8 @@ struct tui_app {
     int focus_enabled;        /* Whether focus system is active */
 
     /* PHP Instance object reference (for passing to render callback) */
-    zval *instance_zval;      /* Pointer to the Instance zval */
+    zval instance_zval;       /* Copy of the Instance zval (not pointer - must outlive stack) */
+    int instance_zval_set;    /* Whether instance_zval is initialized */
 };
 
 /* Lifecycle */
