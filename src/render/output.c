@@ -188,6 +188,11 @@ void tui_output_render(tui_output *out, tui_buffer *buf)
     char ansi[ANSI_BUFFER_SIZE];
     size_t ansi_len;
 
+    /* Begin synchronized output (DEC mode 2026) to prevent flicker */
+    tui_ansi_sync_start(ansi, &ansi_len);
+    memcpy(output + output_len, ansi, ansi_len);
+    output_len += ansi_len;
+
     tui_style current_style = {0};
     int last_x = -1, last_y = -1;
 
@@ -264,6 +269,15 @@ void tui_output_render(tui_output *out, tui_buffer *buf)
         memcpy(output + output_len, ansi, ansi_len);
         output_len += ansi_len;
     }
+
+    /* End synchronized output (DEC mode 2026) - terminal renders atomically */
+    tui_ansi_sync_end(ansi, &ansi_len);
+    if (output_len + ansi_len >= OUTPUT_BUFFER_SIZE) {
+        write_all(STDOUT_FILENO, output, output_len);
+        output_len = 0;
+    }
+    memcpy(output + output_len, ansi, ansi_len);
+    output_len += ansi_len;
 
     /* Write all output at once */
     if (output_len > 0) {

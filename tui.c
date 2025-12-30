@@ -1323,6 +1323,26 @@ static tui_node* php_to_tui_node_impl(zval *obj, int depth)
                 return NULL;
             }
         }
+
+        /* hyperlink - OSC 8 hyperlink URL */
+        prop = zend_read_property(ce, Z_OBJ_P(obj), "hyperlink", sizeof("hyperlink")-1, 1, &rv);
+        if (prop && Z_TYPE_P(prop) == IS_STRING) {
+            if (tui_node_set_hyperlink(node, Z_STRVAL_P(prop), NULL) < 0) {
+                tui_node_destroy(node);
+                return NULL;
+            }
+        } else if (prop && Z_TYPE_P(prop) == IS_ARRAY) {
+            /* Allow {url: 'http://...', id: 'link-1'} format */
+            HashTable *ht = Z_ARRVAL_P(prop);
+            zval *url_val = zend_hash_str_find(ht, "url", sizeof("url")-1);
+            zval *id_val = zend_hash_str_find(ht, "id", sizeof("id")-1);
+            const char *url = (url_val && Z_TYPE_P(url_val) == IS_STRING) ? Z_STRVAL_P(url_val) : NULL;
+            const char *link_id = (id_val && Z_TYPE_P(id_val) == IS_STRING) ? Z_STRVAL_P(id_val) : NULL;
+            if (url && tui_node_set_hyperlink(node, url, link_id) < 0) {
+                tui_node_destroy(node);
+                return NULL;
+            }
+        }
     }
 
     return node;

@@ -70,6 +70,10 @@ typedef struct tui_node {
     int focusable;
     int focused;
 
+    /* Hyperlink (OSC 8) */
+    char *hyperlink_url;
+    char *hyperlink_id;
+
     /* Yoga layout node */
     YGNodeRef yoga_node;
 
@@ -103,6 +107,9 @@ void tui_node_destroy(tui_node *node);
 
 /* ID management (returns 0 on success, -1 on allocation failure) */
 int tui_node_set_id(tui_node *node, const char *id);
+
+/* Hyperlink management (returns 0 on success, -1 on allocation failure) */
+int tui_node_set_hyperlink(tui_node *node, const char *url, const char *id);
 
 /* Tree manipulation (append_child returns 0 on success, -1 on failure) */
 int tui_node_append_child(tui_node *parent, tui_node *child);

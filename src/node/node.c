@@ -251,6 +251,34 @@ int tui_node_set_id(tui_node *node, const char *id)
     return 0;
 }
 
+int tui_node_set_hyperlink(tui_node *node, const char *url, const char *id)
+{
+    if (!node) return -1;
+
+    free(node->hyperlink_url);
+    free(node->hyperlink_id);
+
+    if (url) {
+        node->hyperlink_url = strdup(url);
+        if (!node->hyperlink_url) return -1;
+    } else {
+        node->hyperlink_url = NULL;
+    }
+
+    if (id) {
+        node->hyperlink_id = strdup(id);
+        if (!node->hyperlink_id) {
+            free(node->hyperlink_url);
+            node->hyperlink_url = NULL;
+            return -1;
+        }
+    } else {
+        node->hyperlink_id = NULL;
+    }
+
+    return 0;
+}
+
 void tui_node_destroy(tui_node *node)
 {
     if (!node) return;
@@ -286,6 +314,8 @@ void tui_node_destroy(tui_node *node)
     free(node->text);
     free(node->key);
     free(node->id);
+    free(node->hyperlink_url);
+    free(node->hyperlink_id);
     free(node);
 }
 

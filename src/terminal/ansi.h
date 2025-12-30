@@ -52,4 +52,12 @@ void tui_ansi_erase_screen_start(char *buf, size_t *len);
 /* Color conversion */
 int tui_rgb_to_ansi256(uint8_t r, uint8_t g, uint8_t b);
 
+/* Synchronized output (DEC mode 2026) - eliminates flicker */
+void tui_ansi_sync_start(char *buf, size_t *len);
+void tui_ansi_sync_end(char *buf, size_t *len);
+
+/* Hyperlinks (OSC 8) */
+void tui_ansi_hyperlink_start(char *buf, size_t buf_size, size_t *len, const char *url, const char *id);
+void tui_ansi_hyperlink_end(char *buf, size_t *len);
+
 #endif /* TUI_ANSI_H */

@@ -238,3 +238,54 @@ int tui_rgb_to_ansi256(uint8_t r, uint8_t g, uint8_t b)
 
     return 16 + (36 * ri) + (6 * gi) + bi;
 }
+
+/* Synchronized output (DEC mode 2026) */
+
+void tui_ansi_sync_start(char *buf, size_t *len)
+{
+    /* Begin synchronized update - terminal buffers all output until sync_end */
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, ESC "?2026h"));
+}
+
+void tui_ansi_sync_end(char *buf, size_t *len)
+{
+    /* End synchronized update - terminal renders buffered content atomically */
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, ESC "?2026l"));
+}
+
+/* Hyperlinks (OSC 8) */
+
+void tui_ansi_hyperlink_start(char *buf, size_t buf_size, size_t *len, const char *url, const char *id)
+{
+    /*
+     * OSC 8 hyperlink format: ESC ] 8 ; params ; URI ST
+     * Where ST is ESC \ (String Terminator)
+     * params can include id=<id> for grouping links
+     */
+    if (!url) {
+        *len = 0;
+        return;
+    }
+
+    int result;
+    if (id && id[0] != '\0') {
+        result = snprintf(buf, buf_size, "\x1b]8;id=%s;%s\x1b\\", id, url);
+    } else {
+        result = snprintf(buf, buf_size, "\x1b]8;;%s\x1b\\", url);
+    }
+
+    if (result < 0) {
+        *len = 0;
+        if (buf_size > 0) buf[0] = '\0';
+    } else if ((size_t)result >= buf_size) {
+        *len = buf_size - 1;
+    } else {
+        *len = (size_t)result;
+    }
+}
+
+void tui_ansi_hyperlink_end(char *buf, size_t *len)
+{
+    /* End hyperlink: ESC ] 8 ; ; ST */
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, "\x1b]8;;\x1b\\"));
+}
