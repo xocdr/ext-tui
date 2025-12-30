@@ -13,7 +13,12 @@ A PHP C extension for building terminal user interfaces with component-based arc
 - **Full UTF-8 Support**: Proper handling of Unicode text including CJK wide characters
 - **Rich Text Styling**: Bold, italic, underline, colors (RGB), and more
 - **Keyboard Input**: Full keyboard event handling with modifiers (Ctrl, Alt, Shift)
+- **Mouse Support**: Click, scroll, and drag events with hit testing
 - **Terminal Resize**: Automatic layout recalculation on terminal resize
+- **Clipboard**: OSC 52 clipboard read/write (works over SSH)
+- **Hyperlinks**: Clickable OSC 8 terminal hyperlinks
+- **Bracketed Paste**: Detect and handle pasted text
+- **Focus Management**: Tab navigation, focus groups, focus traps
 - **Drawing Primitives**: Lines, rectangles, circles, ellipses, triangles
 - **Canvas Graphics**: High-resolution drawing with Braille, block, or ASCII modes
 - **Animation**: Easing functions, interpolation, color gradients
@@ -396,7 +401,6 @@ $key->shift         // bool
 ## Known Limitations
 
 - **macOS/Linux only**: Uses POSIX APIs (termios, poll, signals)
-- **No mouse support**: Keyboard input only (planned for future)
 - **No Windows support**: Consider WSL for Windows users
 
 See [docs/limitations.md](docs/limitations.md) for full details.
