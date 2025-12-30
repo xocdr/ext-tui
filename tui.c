@@ -22,6 +22,7 @@ int le_tui_test_renderer;
 int le_tui_history;
 int le_tui_virtual_list;
 int le_tui_scroll_animation;
+int le_tui_image;
 
 /* Resource destructors */
 static void tui_canvas_dtor(zend_resource *res)
@@ -3059,6 +3060,49 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_scroll_destroy, 0, 1, IS_VOI
 ZEND_END_ARG_INFO()
 /* }}} */
 
+/* {{{ Graphics arginfo */
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_image_load, 0, 0, 1)
+    ZEND_ARG_TYPE_INFO(0, path, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_tui_image_create, 0, 0, 3)
+    ZEND_ARG_TYPE_INFO(0, data, IS_STRING, 0)
+    ZEND_ARG_TYPE_INFO(0, width, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, height, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, format, IS_STRING, 0, "\"rgba\"")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_image_transmit, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, image)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_image_display, 0, 3, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, image)
+    ZEND_ARG_TYPE_INFO(0, x, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO(0, y, IS_LONG, 0)
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, cols, IS_LONG, 0, "0")
+    ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, rows, IS_LONG, 0, "0")
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_image_delete, 0, 1, _IS_BOOL, 0)
+    ZEND_ARG_INFO(0, image)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_image_clear, 0, 0, IS_VOID, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_image_destroy, 0, 1, IS_VOID, 0)
+    ZEND_ARG_INFO(0, image)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_image_get_info, 0, 1, IS_ARRAY, 1)
+    ZEND_ARG_INFO(0, image)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_graphics_supported, 0, 0, _IS_BOOL, 0)
+ZEND_END_ARG_INFO()
+/* }}} */
+
 /* {{{ tui_functions[] */
 static const zend_function_entry tui_functions[] = {
     /* Terminal info */
@@ -3250,6 +3294,17 @@ static const zend_function_entry tui_functions[] = {
     PHP_FE(tui_scroll_progress, arginfo_tui_scroll_progress)
     PHP_FE(tui_scroll_destroy, arginfo_tui_scroll_destroy)
 
+    /* Graphics (Kitty protocol) */
+    PHP_FE(tui_image_load, arginfo_tui_image_load)
+    PHP_FE(tui_image_create, arginfo_tui_image_create)
+    PHP_FE(tui_image_transmit, arginfo_tui_image_transmit)
+    PHP_FE(tui_image_display, arginfo_tui_image_display)
+    PHP_FE(tui_image_delete, arginfo_tui_image_delete)
+    PHP_FE(tui_image_clear, arginfo_tui_image_clear)
+    PHP_FE(tui_image_destroy, arginfo_tui_image_destroy)
+    PHP_FE(tui_image_get_info, arginfo_tui_image_get_info)
+    PHP_FE(tui_graphics_supported, arginfo_tui_graphics_supported)
+
     PHP_FE_END
 };
 /* }}} */
@@ -3327,6 +3382,7 @@ static PHP_MINIT_FUNCTION(tui)
     le_tui_history = zend_register_list_destructors_ex(tui_history_dtor, NULL, TUI_HISTORY_RES_NAME, module_number);
     le_tui_virtual_list = zend_register_list_destructors_ex(tui_virtual_list_dtor, NULL, TUI_VIRTUAL_LIST_RES_NAME, module_number);
     le_tui_scroll_animation = zend_register_list_destructors_ex(tui_scroll_animation_dtor, NULL, TUI_SCROLL_ANIM_RES_NAME, module_number);
+    le_tui_image = zend_register_list_destructors_ex(tui_image_dtor, NULL, TUI_IMAGE_RES_NAME, module_number);
 
     /* Register mouse mode constants */
     REGISTER_LONG_CONSTANT("TUI_MOUSE_MODE_OFF", TUI_MOUSE_MODE_OFF, CONST_CS | CONST_PERSISTENT);

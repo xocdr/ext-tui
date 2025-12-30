@@ -1021,3 +1021,157 @@ tui_scroll_destroy(resource $anim): void
 ```
 
 Destroys scroll animation resource.
+
+---
+
+## Graphics (Kitty Protocol)
+
+Display images in terminals that support the Kitty graphics protocol (Kitty, WezTerm).
+
+### tui_graphics_supported
+
+```php
+tui_graphics_supported(): bool
+```
+
+Check if the terminal supports Kitty graphics protocol.
+
+**Returns:** `true` if Kitty graphics is supported, `false` otherwise.
+
+### tui_image_load
+
+```php
+tui_image_load(string $path): resource
+```
+
+Load an image from a file path. Automatically detects PNG format.
+
+**Parameters:**
+- `$path`: Path to image file (PNG supported)
+
+**Returns:** Image resource
+
+**Throws:** `Exception` if file cannot be loaded
+
+### tui_image_create
+
+```php
+tui_image_create(string $data, int $width, int $height, string $format = 'rgba'): resource
+```
+
+Create an image from raw pixel data.
+
+**Parameters:**
+- `$data`: Raw pixel data
+- `$width`: Image width in pixels
+- `$height`: Image height in pixels
+- `$format`: `'rgba'` (4 bytes/pixel), `'rgb'` (3 bytes/pixel), or `'png'`
+
+**Returns:** Image resource
+
+**Throws:** `ValueError` if dimensions or format are invalid, or data length doesn't match
+
+### tui_image_transmit
+
+```php
+tui_image_transmit(resource $image): bool
+```
+
+Transmit image to terminal memory. Uses chunked transmission for large images.
+
+**Parameters:**
+- `$image`: Image resource
+
+**Returns:** `true` on success, `false` on failure
+
+### tui_image_display
+
+```php
+tui_image_display(resource $image, int $x, int $y, int $cols = 0, int $rows = 0): bool
+```
+
+Display an image at the specified position. Automatically transmits if not already transmitted.
+
+**Parameters:**
+- `$image`: Image resource
+- `$x`: Column position (0-based)
+- `$y`: Row position (0-based)
+- `$cols`: Display width in cells (0 = auto)
+- `$rows`: Display height in cells (0 = auto)
+
+**Returns:** `true` on success, `false` on failure
+
+### tui_image_delete
+
+```php
+tui_image_delete(resource $image): bool
+```
+
+Delete image from terminal memory.
+
+**Parameters:**
+- `$image`: Image resource
+
+**Returns:** `true` on success, `false` on failure
+
+### tui_image_clear
+
+```php
+tui_image_clear(): void
+```
+
+Clear all images from terminal.
+
+### tui_image_destroy
+
+```php
+tui_image_destroy(resource $image): void
+```
+
+Destroy image resource and free memory. If the image was transmitted, it's also deleted from the terminal.
+
+### tui_image_get_info
+
+```php
+tui_image_get_info(resource $image): array
+```
+
+Get image metadata.
+
+**Returns:** Array with:
+- `width`: Image width in pixels
+- `height`: Image height in pixels
+- `format`: `'png'`, `'rgb'`, or `'rgba'`
+- `state`: `'empty'`, `'loaded'`, `'transmitted'`, or `'displayed'`
+- `data_size`: Size of image data in bytes
+- `image_id`: Terminal-assigned image ID (0 if not transmitted)
+
+### Example Usage
+
+```php
+<?php
+// Check if graphics is supported
+if (!tui_graphics_supported()) {
+    die("Kitty graphics not supported in this terminal\n");
+}
+
+// Load and display an image
+$image = tui_image_load('/path/to/image.png');
+tui_image_display($image, 0, 0, 40, 20);
+
+// Wait for input
+fgets(STDIN);
+
+// Clean up
+tui_image_destroy($image);
+```
+
+### Terminal Compatibility
+
+| Terminal | Support |
+|----------|---------|
+| Kitty | Full |
+| WezTerm | Full |
+| Konsole | Partial |
+| iTerm2 | No (uses different protocol) |
+| Apple Terminal | No |

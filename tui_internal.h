@@ -58,6 +58,7 @@
 #define TUI_HISTORY_RES_NAME "TuiHistory"
 #define TUI_VIRTUAL_LIST_RES_NAME "TuiVirtualList"
 #define TUI_SCROLL_ANIM_RES_NAME "TuiScrollAnimation"
+#define TUI_IMAGE_RES_NAME "TuiImage"
 
 /* ----------------------------------------------------------------
  * Shared class entries
@@ -89,6 +90,7 @@ extern int le_tui_test_renderer;
 extern int le_tui_history;
 extern int le_tui_virtual_list;
 extern int le_tui_scroll_animation;
+extern int le_tui_image;
 
 /* ----------------------------------------------------------------
  * TuiInstance custom object structure
@@ -355,5 +357,19 @@ PHP_FUNCTION(tui_scroll_destroy);
 
 /* Resource destructor for scroll animation */
 void tui_scroll_animation_dtor(zend_resource *res);
+
+/* Graphics functions (tui_graphics.c) */
+PHP_FUNCTION(tui_image_load);
+PHP_FUNCTION(tui_image_create);
+PHP_FUNCTION(tui_image_transmit);
+PHP_FUNCTION(tui_image_display);
+PHP_FUNCTION(tui_image_delete);
+PHP_FUNCTION(tui_image_clear);
+PHP_FUNCTION(tui_image_destroy);
+PHP_FUNCTION(tui_image_get_info);
+PHP_FUNCTION(tui_graphics_supported);
+
+/* Resource destructor for image */
+void tui_image_dtor(zend_resource *res);
 
 #endif /* TUI_INTERNAL_H */
