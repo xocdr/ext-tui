@@ -303,3 +303,150 @@ void tui_ansi_bracketed_paste_disable(char *buf, size_t *len)
     /* Disable bracketed paste: ESC [ ? 2004 l */
     safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, ESC "?2004l"));
 }
+
+/* Clipboard (OSC 52) */
+
+/* Base64 encoding table */
+static const char b64_encode_table[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/* Base64 decoding table (-1 = invalid, -2 = whitespace) */
+static const signed char b64_decode_table[256] = {
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-2,-2,-1,-1,-2,-1,-1,  /* 0-15 */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 16-31 */
+    -2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,62,-1,-1,-1,63,  /* 32-47: space, +, / */
+    52,53,54,55,56,57,58,59,60,61,-1,-1,-1,-1,-1,-1,  /* 48-63: 0-9 */
+    -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,  /* 64-79: A-O */
+    15,16,17,18,19,20,21,22,23,24,25,-1,-1,-1,-1,-1,  /* 80-95: P-Z */
+    -1,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,  /* 96-111: a-o */
+    41,42,43,44,45,46,47,48,49,50,51,-1,-1,-1,-1,-1,  /* 112-127: p-z */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 128-143 */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 144-159 */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 160-175 */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 176-191 */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 192-207 */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 208-223 */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,  /* 224-239 */
+    -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1   /* 240-255 */
+};
+
+size_t tui_base64_encode_len(size_t src_len)
+{
+    /* Base64 produces 4 bytes for every 3 input bytes, rounded up */
+    return ((src_len + 2) / 3) * 4;
+}
+
+int tui_base64_encode(const char *src, size_t src_len, char *dst, size_t dst_size)
+{
+    size_t needed = tui_base64_encode_len(src_len);
+    if (dst_size < needed + 1) return -1;  /* +1 for null terminator */
+
+    const unsigned char *in = (const unsigned char *)src;
+    char *out = dst;
+
+    while (src_len >= 3) {
+        *out++ = b64_encode_table[in[0] >> 2];
+        *out++ = b64_encode_table[((in[0] & 0x03) << 4) | (in[1] >> 4)];
+        *out++ = b64_encode_table[((in[1] & 0x0f) << 2) | (in[2] >> 6)];
+        *out++ = b64_encode_table[in[2] & 0x3f];
+        in += 3;
+        src_len -= 3;
+    }
+
+    if (src_len > 0) {
+        *out++ = b64_encode_table[in[0] >> 2];
+        if (src_len == 1) {
+            *out++ = b64_encode_table[(in[0] & 0x03) << 4];
+            *out++ = '=';
+        } else {
+            *out++ = b64_encode_table[((in[0] & 0x03) << 4) | (in[1] >> 4)];
+            *out++ = b64_encode_table[(in[1] & 0x0f) << 2];
+        }
+        *out++ = '=';
+    }
+
+    *out = '\0';
+    return (int)(out - dst);
+}
+
+size_t tui_base64_decode_len(size_t src_len)
+{
+    /* Decoded length is at most 3/4 of encoded length */
+    return (src_len * 3) / 4;
+}
+
+int tui_base64_decode(const char *src, size_t src_len, char *dst, size_t dst_size)
+{
+    const unsigned char *in = (const unsigned char *)src;
+    unsigned char *out = (unsigned char *)dst;
+    unsigned char *out_end = out + dst_size;
+    int val = 0, valb = -8;
+
+    for (size_t i = 0; i < src_len && out < out_end; i++) {
+        signed char c = b64_decode_table[in[i]];
+        if (c == -2) continue;  /* Skip whitespace */
+        if (c == -1) break;     /* Invalid or padding */
+
+        val = (val << 6) + c;
+        valb += 6;
+        if (valb >= 0) {
+            *out++ = (unsigned char)((val >> valb) & 0xFF);
+            valb -= 8;
+        }
+    }
+
+    return (int)(out - (unsigned char *)dst);
+}
+
+static char clipboard_target_char(tui_clipboard_target target)
+{
+    switch (target) {
+        case TUI_CLIPBOARD_PRIMARY: return 'p';
+        case TUI_CLIPBOARD_SECONDARY: return 's';
+        default: return 'c';
+    }
+}
+
+int tui_ansi_clipboard_write(char *buf, size_t buf_size, const char *text, size_t text_len,
+                              tui_clipboard_target target)
+{
+    if (!text || text_len == 0) return -1;
+
+    /* Calculate required size: \033]52;X;<base64>\007 */
+    size_t b64_len = tui_base64_encode_len(text_len);
+    size_t prefix_len = 6;  /* \033]52;X; */
+    size_t suffix_len = 1;  /* \007 */
+    size_t total = prefix_len + b64_len + suffix_len + 1;
+
+    if (buf_size < total) return -1;
+
+    /* Build the sequence */
+    char tgt = clipboard_target_char(target);
+    int prefix = snprintf(buf, buf_size, "\x1b]52;%c;", tgt);
+    if (prefix < 0 || (size_t)prefix >= buf_size) return -1;
+
+    int b64_result = tui_base64_encode(text, text_len, buf + prefix, buf_size - prefix);
+    if (b64_result < 0) return -1;
+
+    size_t pos = prefix + b64_result;
+    if (pos + 2 > buf_size) return -1;
+
+    buf[pos++] = '\x07';  /* BEL terminator */
+    buf[pos] = '\0';
+
+    return (int)pos;
+}
+
+void tui_ansi_clipboard_request(char *buf, size_t *len, tui_clipboard_target target)
+{
+    char tgt = clipboard_target_char(target);
+    int result = snprintf(buf, ANSI_BUF_SIZE, "\x1b]52;%c;?\x07", tgt);
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, result);
+}
+
+void tui_ansi_clipboard_clear(char *buf, size_t *len, tui_clipboard_target target)
+{
+    char tgt = clipboard_target_char(target);
+    int result = snprintf(buf, ANSI_BUF_SIZE, "\x1b]52;%c;!\x07", tgt);
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, result);
+}

@@ -64,4 +64,38 @@ void tui_ansi_hyperlink_end(char *buf, size_t *len);
 void tui_ansi_bracketed_paste_enable(char *buf, size_t *len);
 void tui_ansi_bracketed_paste_disable(char *buf, size_t *len);
 
+/* Clipboard (OSC 52) */
+typedef enum {
+    TUI_CLIPBOARD_CLIPBOARD,   /* System clipboard 'c' */
+    TUI_CLIPBOARD_PRIMARY,     /* Primary selection 'p' (X11) */
+    TUI_CLIPBOARD_SECONDARY    /* Secondary selection 's' (X11) */
+} tui_clipboard_target;
+
+/**
+ * Write to clipboard using OSC 52.
+ * Generates: \033]52;c;<base64-data>\007
+ * Caller must provide buffer large enough for base64 encoding.
+ * Returns bytes written to buf, or -1 on error.
+ */
+int tui_ansi_clipboard_write(char *buf, size_t buf_size, const char *text, size_t text_len,
+                              tui_clipboard_target target);
+
+/**
+ * Request clipboard contents using OSC 52.
+ * Generates: \033]52;c;?\007
+ */
+void tui_ansi_clipboard_request(char *buf, size_t *len, tui_clipboard_target target);
+
+/**
+ * Clear clipboard using OSC 52.
+ * Generates: \033]52;c;!\007
+ */
+void tui_ansi_clipboard_clear(char *buf, size_t *len, tui_clipboard_target target);
+
+/* Base64 utilities for clipboard */
+size_t tui_base64_encode_len(size_t src_len);
+int tui_base64_encode(const char *src, size_t src_len, char *dst, size_t dst_size);
+size_t tui_base64_decode_len(size_t src_len);
+int tui_base64_decode(const char *src, size_t src_len, char *dst, size_t dst_size);
+
 #endif /* TUI_ANSI_H */
