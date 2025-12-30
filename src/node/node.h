@@ -69,6 +69,10 @@ typedef struct tui_node {
     /* Focus management */
     int focusable;
     int focused;
+    int tab_index;               /* -1 = skip in tab order, 0+ = explicit order */
+    char *focus_group;           /* Group name for scoped tabbing */
+    int auto_focus;              /* Focus on mount */
+    int focus_trap;              /* Trap focus within this container */
 
     /* Hyperlink (OSC 8) */
     char *hyperlink_url;
@@ -157,5 +161,14 @@ void tui_node_calculate_layout(tui_node *root, float width, float height);
 
 /* Yoga configuration */
 YGConfigRef tui_get_yoga_config(void);
+
+/* Focus management */
+int tui_node_set_focus_group(tui_node *node, const char *group);
+tui_node* tui_focus_find_next(tui_node *root, tui_node *current);
+tui_node* tui_focus_find_prev(tui_node *root, tui_node *current);
+tui_node* tui_focus_find_next_in_group(tui_node *root, tui_node *current, const char *group);
+tui_node* tui_focus_find_by_id(tui_node *root, const char *id);
+tui_node* tui_focus_find_first(tui_node *root);
+tui_node* tui_focus_find_trap_container(tui_node *node);
 
 #endif /* TUI_NODE_H */

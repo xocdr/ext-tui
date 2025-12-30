@@ -316,6 +316,7 @@ void tui_node_destroy(tui_node *node)
     free(node->id);
     free(node->hyperlink_url);
     free(node->hyperlink_id);
+    free(node->focus_group);
     free(node);
 }
 
@@ -626,4 +627,251 @@ static int copy_layout_recursive(tui_node *node)
     }
 
     return had_changes;
+}
+
+/* ----------------------------------------------------------------
+ * Focus Management
+ * ---------------------------------------------------------------- */
+
+int tui_node_set_focus_group(tui_node *node, const char *group)
+{
+    if (!node) return -1;
+
+    free(node->focus_group);
+    if (group) {
+        node->focus_group = strdup(group);
+        if (!node->focus_group) return -1;
+    } else {
+        node->focus_group = NULL;
+    }
+    return 0;
+}
+
+/* Helper: collect all focusable nodes in tree order */
+typedef struct {
+    tui_node **nodes;
+    int count;
+    int capacity;
+} focus_list;
+
+static int focus_list_add(focus_list *list, tui_node *node)
+{
+    if (list->count >= list->capacity) {
+        int new_cap = list->capacity * 2;
+        if (new_cap < 16) new_cap = 16;
+        tui_node **new_nodes = realloc(list->nodes, new_cap * sizeof(tui_node*));
+        if (!new_nodes) return -1;
+        list->nodes = new_nodes;
+        list->capacity = new_cap;
+    }
+    list->nodes[list->count++] = node;
+    return 0;
+}
+
+static void collect_focusable_nodes(tui_node *node, focus_list *list, const char *group, tui_node *trap_root)
+{
+    if (!node) return;
+
+    /* Skip if we have a trap but this node is outside it */
+    if (trap_root && node != trap_root) {
+        /* Check if node is a descendant of trap_root */
+        tui_node *p = node->parent;
+        int inside_trap = 0;
+        while (p) {
+            if (p == trap_root) { inside_trap = 1; break; }
+            p = p->parent;
+        }
+        if (!inside_trap) return;
+    }
+
+    /* If focusable and tab_index >= 0, add to list */
+    if (node->focusable && node->tab_index >= 0) {
+        /* If group filter specified, only add matching group */
+        if (!group || (node->focus_group && strcmp(node->focus_group, group) == 0)) {
+            focus_list_add(list, node);
+        }
+    }
+
+    /* Recurse to children */
+    for (int i = 0; i < node->child_count; i++) {
+        collect_focusable_nodes(node->children[i], list, group, trap_root);
+    }
+}
+
+/* Compare function for sorting by tab_index */
+static int compare_tab_index(const void *a, const void *b)
+{
+    tui_node *na = *(tui_node **)a;
+    tui_node *nb = *(tui_node **)b;
+
+    /* Nodes with tab_index 0 should come before explicit indices in DOM order */
+    if (na->tab_index == 0 && nb->tab_index == 0) return 0;
+    if (na->tab_index == 0) return 1;  /* DOM order items after explicit */
+    if (nb->tab_index == 0) return -1;
+    return na->tab_index - nb->tab_index;
+}
+
+tui_node* tui_focus_find_trap_container(tui_node *node)
+{
+    if (!node) return NULL;
+
+    tui_node *p = node;
+    while (p) {
+        if (p->focus_trap) return p;
+        p = p->parent;
+    }
+    return NULL;  /* No trap active */
+}
+
+tui_node* tui_focus_find_next(tui_node *root, tui_node *current)
+{
+    if (!root) return NULL;
+
+    /* Check for focus trap */
+    tui_node *trap = current ? tui_focus_find_trap_container(current) : NULL;
+    tui_node *search_root = trap ? trap : root;
+
+    /* Collect focusable nodes */
+    focus_list list = {NULL, 0, 0};
+    collect_focusable_nodes(search_root, &list, NULL, trap);
+
+    if (list.count == 0) {
+        free(list.nodes);
+        return NULL;
+    }
+
+    /* Sort by tab_index (stable for DOM order when tab_index == 0) */
+    /* Note: using simple sort; for true stability would need merge sort */
+    qsort(list.nodes, list.count, sizeof(tui_node*), compare_tab_index);
+
+    /* Find current position and return next (or first if at end/not found) */
+    int cur_idx = -1;
+    for (int i = 0; i < list.count; i++) {
+        if (list.nodes[i] == current) {
+            cur_idx = i;
+            break;
+        }
+    }
+
+    tui_node *result;
+    if (cur_idx < 0 || cur_idx >= list.count - 1) {
+        result = list.nodes[0];  /* Wrap to first */
+    } else {
+        result = list.nodes[cur_idx + 1];
+    }
+
+    free(list.nodes);
+    return result;
+}
+
+tui_node* tui_focus_find_prev(tui_node *root, tui_node *current)
+{
+    if (!root) return NULL;
+
+    /* Check for focus trap */
+    tui_node *trap = current ? tui_focus_find_trap_container(current) : NULL;
+    tui_node *search_root = trap ? trap : root;
+
+    /* Collect focusable nodes */
+    focus_list list = {NULL, 0, 0};
+    collect_focusable_nodes(search_root, &list, NULL, trap);
+
+    if (list.count == 0) {
+        free(list.nodes);
+        return NULL;
+    }
+
+    qsort(list.nodes, list.count, sizeof(tui_node*), compare_tab_index);
+
+    /* Find current position and return prev (or last if at start/not found) */
+    int cur_idx = -1;
+    for (int i = 0; i < list.count; i++) {
+        if (list.nodes[i] == current) {
+            cur_idx = i;
+            break;
+        }
+    }
+
+    tui_node *result;
+    if (cur_idx <= 0) {
+        result = list.nodes[list.count - 1];  /* Wrap to last */
+    } else {
+        result = list.nodes[cur_idx - 1];
+    }
+
+    free(list.nodes);
+    return result;
+}
+
+tui_node* tui_focus_find_next_in_group(tui_node *root, tui_node *current, const char *group)
+{
+    if (!root || !group) return NULL;
+
+    focus_list list = {NULL, 0, 0};
+    collect_focusable_nodes(root, &list, group, NULL);
+
+    if (list.count == 0) {
+        free(list.nodes);
+        return NULL;
+    }
+
+    qsort(list.nodes, list.count, sizeof(tui_node*), compare_tab_index);
+
+    int cur_idx = -1;
+    for (int i = 0; i < list.count; i++) {
+        if (list.nodes[i] == current) {
+            cur_idx = i;
+            break;
+        }
+    }
+
+    tui_node *result;
+    if (cur_idx < 0 || cur_idx >= list.count - 1) {
+        result = list.nodes[0];
+    } else {
+        result = list.nodes[cur_idx + 1];
+    }
+
+    free(list.nodes);
+    return result;
+}
+
+static tui_node* find_by_id_recursive(tui_node *node, const char *id)
+{
+    if (!node || !id) return NULL;
+
+    if (node->id && strcmp(node->id, id) == 0) {
+        return node;
+    }
+
+    for (int i = 0; i < node->child_count; i++) {
+        tui_node *found = find_by_id_recursive(node->children[i], id);
+        if (found) return found;
+    }
+
+    return NULL;
+}
+
+tui_node* tui_focus_find_by_id(tui_node *root, const char *id)
+{
+    return find_by_id_recursive(root, id);
+}
+
+tui_node* tui_focus_find_first(tui_node *root)
+{
+    if (!root) return NULL;
+
+    focus_list list = {NULL, 0, 0};
+    collect_focusable_nodes(root, &list, NULL, NULL);
+
+    if (list.count == 0) {
+        free(list.nodes);
+        return NULL;
+    }
+
+    qsort(list.nodes, list.count, sizeof(tui_node*), compare_tab_index);
+
+    tui_node *result = list.nodes[0];
+    free(list.nodes);
+    return result;
 }
