@@ -24,13 +24,26 @@ if test "$PHP_TUI" != "no"; then
   AC_CHECK_HEADERS([sys/ioctl.h])
 
   dnl Define C sources (our extension code)
+  dnl Split into logical modules for maintainability
   TUI_SOURCES="tui.c \
+     tui_terminal.c \
+     tui_text.c \
+     tui_buffer.c \
+     tui_canvas.c \
+     tui_animation.c \
+     tui_table.c \
+     tui_progress.c \
+     tui_sprite.c \
+     tui_render.c \
+     tui_testing.c \
+     tui_metrics.c \
      src/terminal/terminal.c \
      src/terminal/ansi.c \
      src/event/loop.c \
      src/event/input.c \
      src/node/node.c \
      src/node/reconciler.c \
+     src/node/keymap.c \
      src/render/buffer.c \
      src/render/output.c \
      src/text/measure.c \

@@ -5,6 +5,7 @@
 */
 
 #include "../node/node.h"
+#include "../debug.h"
 #include "pool.h"
 #include <stdlib.h>
 #include <string.h>
@@ -109,12 +110,14 @@ struct tui_node** tui_children_pool_alloc(tui_pools *pools, int capacity, int *a
         *actual_capacity = 32;
     } else {
         /* Too large for pool */
+        TUI_DEBUG_PRINT("Pool: children array too large (%d), using malloc\n", capacity);
         *actual_capacity = capacity;
         pools->children_misses++;
         return calloc(capacity, sizeof(struct tui_node*));
     }
 
-    /* Need to allocate new array */
+    /* Need to allocate new array - no slot available */
+    TUI_DEBUG_PRINT("Pool: no slot available for size %d, using malloc\n", *actual_capacity);
     pools->children_misses++;
     return calloc(*actual_capacity, sizeof(struct tui_node*));
 }
@@ -167,6 +170,7 @@ void* tui_key_map_pool_acquire(tui_pools *pools, int initial_capacity, size_t en
 
     if (pools->key_map.in_use) {
         /* Already in use (nested reconciliation), allocate new one */
+        TUI_DEBUG_PRINT("Pool: key map in use (nested reconciliation), allocating separate\n");
         pools->key_map_misses++;
         *from_pool = 0;
         return calloc(initial_capacity, entry_size);

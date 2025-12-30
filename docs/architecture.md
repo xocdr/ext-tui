@@ -45,7 +45,19 @@ ext-tui is a PHP C extension that provides terminal UI capabilities. It follows 
 
 ```
 ext-tui/
-├── tui.c                  # PHP extension entry point
+├── tui.c                  # Core: module init, class definitions, globals
+├── tui_internal.h         # Shared declarations for split modules
+├── tui_terminal.c         # Terminal functions (raw mode, mouse, clipboard)
+├── tui_text.c             # Text utilities (string_width, wrap, truncate, pad)
+├── tui_buffer.c           # Buffer creation, drawing primitives
+├── tui_canvas.c           # Canvas (braille/block/ascii) functions
+├── tui_animation.c        # Easing, lerp, gradients
+├── tui_table.c            # Table functions
+├── tui_progress.c         # Progress bars, spinners
+├── tui_sprite.c           # Sprite functions
+├── tui_render.c           # tui_render, rerender, unmount, handlers
+├── tui_testing.c          # Test renderer framework
+├── tui_metrics.c          # Metrics collection and exposure
 ├── php_tui.h              # Extension header
 ├── config.m4              # Build configuration
 ├── src/
@@ -60,8 +72,13 @@ ext-tui/
 │   ├── node/
 │   │   ├── node.c         # Virtual DOM nodes
 │   │   ├── node.h
-│   │   ├── reconciler.c   # Tree diff/patch
-│   │   └── reconciler.h
+│   │   ├── reconciler.c   # Tree diff/patch (uses hash-based key map)
+│   │   ├── reconciler.h
+│   │   ├── keymap.c       # O(1) hash-based key lookup
+│   │   └── keymap.h
+│   ├── pool/
+│   │   ├── pool.c         # Object pooling with debug logging
+│   │   └── pool.h
 │   ├── render/
 │   │   ├── buffer.c       # Cell buffer
 │   │   ├── buffer.h
@@ -79,15 +96,33 @@ ext-tui/
 │   │   └── wrap.h
 │   └── yoga/              # Facebook Yoga layout engine
 │       └── ...            # Vendored C++ source
-├── tests/                 # PHP test files (.phpt)
+├── tests/                 # PHP test files (.phpt) - 60 tests
 └── docs/                  # Documentation
 ```
 
 ## Core Components
 
-### 1. tui.c - PHP Binding Layer
+### 1. PHP Binding Layer (Split Modules)
 
-The main extension file that bridges PHP and C:
+The PHP-C binding is split across multiple files for maintainability:
+
+| File | Purpose |
+|------|---------|
+| `tui.c` | Core: module init/shutdown, class definitions, globals |
+| `tui_internal.h` | Shared declarations (extern class entries, functions) |
+| `tui_terminal.c` | Terminal control functions |
+| `tui_text.c` | Text utilities (width, wrap, truncate) |
+| `tui_buffer.c` | Buffer and drawing functions |
+| `tui_canvas.c` | Canvas (braille/block/ascii) |
+| `tui_animation.c` | Animation and easing |
+| `tui_table.c` | Table formatting |
+| `tui_progress.c` | Progress bars and spinners |
+| `tui_sprite.c` | Sprite handling |
+| `tui_render.c` | Render lifecycle functions |
+| `tui_testing.c` | Test renderer framework |
+| `tui_metrics.c` | Performance metrics |
+
+Key responsibilities:
 
 - **Class Definitions**: Box, Text, Instance, Key (in `Xocdr\Tui\Ext` namespace)
 - **Function Exports**: tui_render(), tui_set_input_handler(), etc.

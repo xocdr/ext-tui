@@ -619,74 +619,7 @@ int tui_pad_n(const char *text, int width, char align, char pad_char,
     return (int)pos;
 }
 
-/**
- * Pad string to specified display width (legacy version without size check).
- *
- * WARNING: Caller must ensure output buffer is large enough.
- * Use tui_pad_n() for safer operation.
- *
- * @param text Input text
- * @param width Target display width
- * @param align Alignment: 'l'=left, 'r'=right, 'c'=center
- * @param pad_char Padding character
- * @param output Output buffer (must be at least width + strlen(text) + 1 bytes)
- * @return Number of bytes written
- */
-int tui_pad(const char *text, int width, char align, char pad_char, char *output)
-{
-    if (!output) return 0;
-
-    const char *src = text ? text : "";
-    size_t text_len = strlen(src);
-    int text_width = tui_string_width_n(src, (int)text_len);
-
-    /* If text is already wider than target, just copy it */
-    if (text_width >= width) {
-        memcpy(output, src, text_len);
-        output[text_len] = '\0';
-        return (int)text_len;
-    }
-
-    int padding = width - text_width;
-    int left_pad = 0;
-    int right_pad = 0;
-
-    switch (align) {
-        case 'r':
-        case 'R':
-            left_pad = padding;
-            break;
-        case 'c':
-        case 'C':
-            left_pad = padding / 2;
-            right_pad = padding - left_pad;
-            break;
-        case 'l':
-        case 'L':
-        default:
-            right_pad = padding;
-            break;
-    }
-
-    int pos = 0;
-
-    /* Left padding */
-    for (int i = 0; i < left_pad; i++) {
-        output[pos++] = pad_char;
-    }
-
-    /* Text */
-    memcpy(output + pos, src, text_len);
-    pos += (int)text_len;
-
-    /* Right padding */
-    for (int i = 0; i < right_pad; i++) {
-        output[pos++] = pad_char;
-    }
-
-    output[pos] = '\0';
-    return pos;
-}
+/* Note: tui_pad() removed - use tui_pad_n() which has buffer overflow protection */
 
 /* ----------------------------------------------------------------
  * ANSI escape code handling

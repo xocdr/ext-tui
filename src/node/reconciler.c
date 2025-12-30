@@ -6,6 +6,7 @@
 */
 
 #include "reconciler.h"
+#include "keymap.h"
 #include "../pool/pool.h"
 #include "php.h"
 #include "php_tui.h"
@@ -14,109 +15,7 @@
 #include <limits.h>
 
 #define INITIAL_DIFF_CAPACITY 16
-#define KEY_MAP_INITIAL_SIZE 32
 #define MAX_RECONCILE_DEPTH 100  /* Prevent stack overflow on deep trees */
-
-/* Simple hash map for key -> node lookups */
-typedef struct {
-    char *key;
-    tui_node *node;
-    int old_index;
-    int matched;  /* 1 if matched with new node */
-} key_map_entry;
-
-typedef struct {
-    key_map_entry *entries;
-    int count;
-    int capacity;
-    int from_pool;  /* 1 if entries came from pool (and haven't been reallocated) */
-} key_map;
-
-static key_map* key_map_create(int initial_capacity)
-{
-    key_map *map = calloc(1, sizeof(key_map));
-    if (!map) return NULL;
-
-    map->capacity = initial_capacity > 0 ? initial_capacity : KEY_MAP_INITIAL_SIZE;
-    map->from_pool = 0;
-
-    /* Try to get entries from pool */
-    if (TUI_G(pools)) {
-        map->entries = tui_key_map_pool_acquire(TUI_G(pools), map->capacity, sizeof(key_map_entry), &map->from_pool);
-    } else {
-        map->entries = calloc(map->capacity, sizeof(key_map_entry));
-        map->from_pool = 0;
-    }
-    if (!map->entries) {
-        free(map);
-        return NULL;
-    }
-    return map;
-}
-
-static void key_map_destroy(key_map *map)
-{
-    if (map) {
-        if (map->from_pool && TUI_G(pools)) {
-            /* Entries are from pool - release back to pool */
-            tui_key_map_pool_release(TUI_G(pools));
-        } else {
-            /* Entries were malloc'd (or reallocated from pool) - free them */
-            free(map->entries);
-        }
-        free(map);
-    }
-}
-
-static int key_map_add(key_map *map, const char *key, tui_node *node, int index)
-{
-    if (!map || !key) return 0;
-
-    /* Grow if needed */
-    if (map->count >= map->capacity) {
-        /* Check for overflow before doubling */
-        if (map->capacity > INT_MAX / 2) return 0;
-        int new_capacity = map->capacity * 2;
-
-        if (map->from_pool) {
-            /* Can't realloc pooled memory - allocate new and copy */
-            key_map_entry *new_entries = calloc(new_capacity, sizeof(key_map_entry));
-            if (!new_entries) return 0;
-            memcpy(new_entries, map->entries, map->count * sizeof(key_map_entry));
-            /* Release pool buffer */
-            if (TUI_G(pools)) {
-                tui_key_map_pool_release(TUI_G(pools));
-            }
-            map->entries = new_entries;
-            map->from_pool = 0;  /* Now using malloc'd memory */
-        } else {
-            key_map_entry *new_entries = realloc(map->entries,
-                new_capacity * sizeof(key_map_entry));
-            if (!new_entries) return 0;
-            map->entries = new_entries;
-        }
-        map->capacity = new_capacity;
-    }
-
-    key_map_entry *entry = &map->entries[map->count++];
-    entry->key = (char *)key;  /* Don't copy, just reference */
-    entry->node = node;
-    entry->old_index = index;
-    entry->matched = 0;
-    return 1;
-}
-
-static key_map_entry* key_map_find(key_map *map, const char *key)
-{
-    if (!map || !key) return NULL;
-
-    for (int i = 0; i < map->count; i++) {
-        if (map->entries[i].key && strcmp(map->entries[i].key, key) == 0) {
-            return &map->entries[i];
-        }
-    }
-    return NULL;
-}
 
 static tui_diff_result* diff_result_create(void)
 {
@@ -222,21 +121,21 @@ static void diff_children_keyed_with_depth(tui_diff_result *result,
     int old_count = old_node ? old_node->child_count : 0;
     int new_count = new_node ? new_node->child_count : 0;
 
-    /* Build key map for old children */
-    key_map *old_keys = key_map_create(old_count > 0 ? old_count : 1);
+    /* Build hash-based key map for old children (O(1) lookup) */
+    tui_keymap *old_keys = tui_keymap_create(old_count > 0 ? old_count : 1);
     if (!old_keys) return;
 
     for (int i = 0; i < old_count; i++) {
         tui_node *child = old_node->children[i];
         if (child && child->key) {
-            key_map_add(old_keys, child->key, child, i);
+            tui_keymap_insert(old_keys, child->key, child, i);
         }
     }
 
     /* Track which old indices have been matched (for non-keyed fallback) */
     int *old_matched = calloc(old_count > 0 ? old_count : 1, sizeof(int));
     if (!old_matched) {
-        key_map_destroy(old_keys);
+        tui_keymap_destroy(old_keys);
         return;
     }
 
@@ -255,12 +154,12 @@ static void diff_children_keyed_with_depth(tui_diff_result *result,
         int matched_old_idx = -1;
 
         if (new_child->key) {
-            /* Keyed child: look up by key */
-            key_map_entry *entry = key_map_find(old_keys, new_child->key);
+            /* Keyed child: O(1) hash lookup */
+            tui_keymap_entry *entry = tui_keymap_find(old_keys, new_child->key);
             if (entry && !entry->matched) {
                 matched_old = entry->node;
                 matched_old_idx = entry->old_index;
-                entry->matched = 1;
+                tui_keymap_mark_matched(entry);
                 old_matched[matched_old_idx] = 1;
             }
         } else {
@@ -315,7 +214,7 @@ static void diff_children_keyed_with_depth(tui_diff_result *result,
     }
 
     free(old_matched);
-    key_map_destroy(old_keys);
+    tui_keymap_destroy(old_keys);
 }
 
 /*
