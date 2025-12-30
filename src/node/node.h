@@ -171,4 +171,25 @@ tui_node* tui_focus_find_by_id(tui_node *root, const char *id);
 tui_node* tui_focus_find_first(tui_node *root);
 tui_node* tui_focus_find_trap_container(tui_node *node);
 
+/* Hit testing for mouse events */
+/**
+ * Find the deepest node at the given coordinates.
+ * Returns NULL if no node contains the point.
+ * Coordinates are 0-based screen positions.
+ */
+tui_node* tui_node_hit_test(tui_node *root, int x, int y);
+
+/**
+ * Find all nodes at the given coordinates (from root to leaf).
+ * Returns array of nodes in depth order (root first, deepest last).
+ * Caller must free the returned array (but not the nodes).
+ * Sets *count to number of nodes in array.
+ */
+tui_node** tui_node_hit_test_all(tui_node *root, int x, int y, int *count);
+
+/**
+ * Check if a point is inside a node's bounding box.
+ */
+int tui_node_contains_point(tui_node *node, int x, int y);
+
 #endif /* TUI_NODE_H */

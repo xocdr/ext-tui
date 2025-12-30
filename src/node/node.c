@@ -875,3 +875,124 @@ tui_node* tui_focus_find_first(tui_node *root)
     free(list.nodes);
     return result;
 }
+
+/* ----------------------------------------------------------------
+ * Hit Testing for Mouse Events
+ * ---------------------------------------------------------------- */
+
+int tui_node_contains_point(tui_node *node, int x, int y)
+{
+    if (!node) return 0;
+
+    /* Get absolute position by walking up parent chain */
+    float abs_x = 0, abs_y = 0;
+    tui_node *p = node;
+    while (p) {
+        abs_x += p->x;
+        abs_y += p->y;
+        p = p->parent;
+    }
+    /* Subtract node's own position since we added it in the loop */
+    abs_x -= node->x;
+    abs_y -= node->y;
+
+    /* Add node's position to get its absolute bounds */
+    float node_left = abs_x + node->x;
+    float node_top = abs_y + node->y;
+    float node_right = node_left + node->width;
+    float node_bottom = node_top + node->height;
+
+    return (x >= node_left && x < node_right &&
+            y >= node_top && y < node_bottom);
+}
+
+/*
+ * Recursive helper for hit testing.
+ * Returns the deepest node containing the point, or NULL.
+ */
+static tui_node* hit_test_recursive(tui_node *node, int x, int y, float parent_x, float parent_y)
+{
+    if (!node) return NULL;
+
+    /* Calculate absolute position of this node */
+    float abs_x = parent_x + node->x;
+    float abs_y = parent_y + node->y;
+
+    /* Check if point is in this node's bounds */
+    if (x < abs_x || x >= abs_x + node->width ||
+        y < abs_y || y >= abs_y + node->height) {
+        return NULL;  /* Point not in this node */
+    }
+
+    /* Point is in this node - check children (deeper first) */
+    /* Children are rendered in order, so later children appear on top */
+    /* Search in reverse order to find topmost child first */
+    for (int i = node->child_count - 1; i >= 0; i--) {
+        tui_node *hit = hit_test_recursive(node->children[i], x, y, abs_x, abs_y);
+        if (hit) return hit;
+    }
+
+    /* No child contains the point, return this node */
+    return node;
+}
+
+tui_node* tui_node_hit_test(tui_node *root, int x, int y)
+{
+    if (!root) return NULL;
+    return hit_test_recursive(root, x, y, 0, 0);
+}
+
+/*
+ * Helper: collect all nodes containing a point (from root to leaf)
+ */
+static void collect_hit_nodes(tui_node *node, int x, int y, float parent_x, float parent_y,
+                              tui_node ***nodes, int *count, int *capacity)
+{
+    if (!node) return;
+
+    float abs_x = parent_x + node->x;
+    float abs_y = parent_y + node->y;
+
+    /* Check if point is in this node's bounds */
+    if (x < abs_x || x >= abs_x + node->width ||
+        y < abs_y || y >= abs_y + node->height) {
+        return;  /* Point not in this node */
+    }
+
+    /* Add this node to the list */
+    if (*count >= *capacity) {
+        int new_cap = *capacity * 2;
+        if (new_cap < 16) new_cap = 16;
+        tui_node **new_nodes = realloc(*nodes, new_cap * sizeof(tui_node*));
+        if (!new_nodes) return;  /* Allocation failure, just stop */
+        *nodes = new_nodes;
+        *capacity = new_cap;
+    }
+    (*nodes)[(*count)++] = node;
+
+    /* Recurse to children */
+    for (int i = 0; i < node->child_count; i++) {
+        collect_hit_nodes(node->children[i], x, y, abs_x, abs_y, nodes, count, capacity);
+    }
+}
+
+tui_node** tui_node_hit_test_all(tui_node *root, int x, int y, int *count)
+{
+    if (!root || !count) {
+        if (count) *count = 0;
+        return NULL;
+    }
+
+    tui_node **nodes = NULL;
+    int capacity = 0;
+    *count = 0;
+
+    collect_hit_nodes(root, x, y, 0, 0, &nodes, count, &capacity);
+
+    if (*count == 0) {
+        free(nodes);
+        return NULL;
+    }
+
+    return nodes;
+}

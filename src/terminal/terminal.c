@@ -136,3 +136,77 @@ int tui_terminal_is_bracketed_paste_enabled(void)
 {
     return bracketed_paste_enabled;
 }
+
+/* Mouse tracking */
+
+static tui_mouse_mode current_mouse_mode = TUI_MOUSE_MODE_OFF;
+
+int tui_terminal_enable_mouse(tui_mouse_mode mode)
+{
+    if (mode == TUI_MOUSE_MODE_OFF) {
+        return tui_terminal_disable_mouse();
+    }
+
+    if (current_mouse_mode == mode) return 0;
+    if (!tui_terminal_is_tty()) return -1;
+
+    char buf[64];
+    size_t len;
+    size_t total_len = 0;
+
+    /* First disable any existing mode */
+    if (current_mouse_mode != TUI_MOUSE_MODE_OFF) {
+        tui_ansi_mouse_disable(buf, &len);
+        total_len = len;
+        tui_ansi_mouse_sgr_disable(buf + total_len, &len);
+        total_len += len;
+        if (write(STDOUT_FILENO, buf, total_len) != (ssize_t)total_len) {
+            return -1;
+        }
+        total_len = 0;
+    }
+
+    /* Enable new mode */
+    tui_ansi_mouse_enable(buf, &len, mode);
+    total_len = len;
+
+    /* Always enable SGR mode for extended coordinate support */
+    tui_ansi_mouse_sgr_enable(buf + total_len, &len);
+    total_len += len;
+
+    if (write(STDOUT_FILENO, buf, total_len) != (ssize_t)total_len) {
+        return -1;
+    }
+
+    current_mouse_mode = mode;
+    return 0;
+}
+
+int tui_terminal_disable_mouse(void)
+{
+    if (current_mouse_mode == TUI_MOUSE_MODE_OFF) return 0;
+
+    char buf[64];
+    size_t len;
+    size_t total_len = 0;
+
+    /* Disable SGR mode */
+    tui_ansi_mouse_sgr_disable(buf, &len);
+    total_len = len;
+
+    /* Disable mouse tracking */
+    tui_ansi_mouse_disable(buf + total_len, &len);
+    total_len += len;
+
+    if (write(STDOUT_FILENO, buf, total_len) != (ssize_t)total_len) {
+        return -1;
+    }
+
+    current_mouse_mode = TUI_MOUSE_MODE_OFF;
+    return 0;
+}
+
+tui_mouse_mode tui_terminal_get_mouse_mode(void)
+{
+    return current_mouse_mode;
+}

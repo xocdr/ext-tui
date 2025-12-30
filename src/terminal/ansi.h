@@ -64,6 +64,19 @@ void tui_ansi_hyperlink_end(char *buf, size_t *len);
 void tui_ansi_bracketed_paste_enable(char *buf, size_t *len);
 void tui_ansi_bracketed_paste_disable(char *buf, size_t *len);
 
+/* Mouse tracking modes */
+typedef enum {
+    TUI_MOUSE_MODE_OFF,         /* Disable all mouse tracking */
+    TUI_MOUSE_MODE_CLICK,       /* Basic click tracking (1000) */
+    TUI_MOUSE_MODE_BUTTON,      /* Button events (1002) - press/release */
+    TUI_MOUSE_MODE_ALL          /* All motion tracking (1003) - includes hover */
+} tui_mouse_mode;
+
+void tui_ansi_mouse_enable(char *buf, size_t *len, tui_mouse_mode mode);
+void tui_ansi_mouse_disable(char *buf, size_t *len);
+void tui_ansi_mouse_sgr_enable(char *buf, size_t *len);   /* SGR extended mode (1006) */
+void tui_ansi_mouse_sgr_disable(char *buf, size_t *len);
+
 /* Clipboard (OSC 52) */
 typedef enum {
     TUI_CLIPBOARD_CLIPBOARD,   /* System clipboard 'c' */

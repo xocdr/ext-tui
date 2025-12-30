@@ -304,6 +304,49 @@ void tui_ansi_bracketed_paste_disable(char *buf, size_t *len)
     safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, ESC "?2004l"));
 }
 
+/* Mouse tracking modes */
+
+void tui_ansi_mouse_enable(char *buf, size_t *len, tui_mouse_mode mode)
+{
+    int result;
+    switch (mode) {
+        case TUI_MOUSE_MODE_CLICK:
+            /* Basic mouse tracking (1000) - clicks only */
+            result = snprintf(buf, ANSI_BUF_SIZE, ESC "?1000h");
+            break;
+        case TUI_MOUSE_MODE_BUTTON:
+            /* Button event tracking (1002) - press/release */
+            result = snprintf(buf, ANSI_BUF_SIZE, ESC "?1002h");
+            break;
+        case TUI_MOUSE_MODE_ALL:
+            /* All motion tracking (1003) - includes hover/movement */
+            result = snprintf(buf, ANSI_BUF_SIZE, ESC "?1003h");
+            break;
+        default:
+            *len = 0;
+            return;
+    }
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, result);
+}
+
+void tui_ansi_mouse_disable(char *buf, size_t *len)
+{
+    /* Disable all mouse modes */
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len,
+        snprintf(buf, ANSI_BUF_SIZE, ESC "?1000l" ESC "?1002l" ESC "?1003l"));
+}
+
+void tui_ansi_mouse_sgr_enable(char *buf, size_t *len)
+{
+    /* Enable SGR extended mouse mode (1006) - better for coordinates > 223 */
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, ESC "?1006h"));
+}
+
+void tui_ansi_mouse_sgr_disable(char *buf, size_t *len)
+{
+    safe_snprintf_len(buf, ANSI_BUF_SIZE, len, snprintf(buf, ANSI_BUF_SIZE, ESC "?1006l"));
+}
+
 /* Clipboard (OSC 52) */
 
 /* Base64 encoding table */

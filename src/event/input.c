@@ -7,6 +7,112 @@
 #include "input.h"
 #include "../text/measure.h"  /* For tui_utf8_decode_n() */
 #include <string.h>
+#include <stdlib.h>
+
+/* ----------------------------------------------------------------
+ * Mouse Event Parsing
+ * ---------------------------------------------------------------- */
+
+/**
+ * Parse SGR mouse sequence: ESC [ < button ; x ; y M/m
+ * Where M = press, m = release
+ * Returns bytes consumed if valid, 0 otherwise.
+ */
+int tui_input_parse_mouse(const char *buf, int len, tui_mouse_event *event)
+{
+    if (!buf || len < 9 || !event) return 0;
+
+    memset(event, 0, sizeof(tui_mouse_event));
+
+    /* Check for SGR mouse prefix: ESC [ < */
+    if (buf[0] != '\x1b' || buf[1] != '[' || buf[2] != '<') {
+        return 0;
+    }
+
+    /* Parse: <button>;<x>;<y>M or <button>;<x>;<y>m */
+    int button = 0, x = 0, y = 0;
+    int i = 3;
+    char terminator = 0;
+
+    /* Parse button code */
+    while (i < len && buf[i] >= '0' && buf[i] <= '9') {
+        button = button * 10 + (buf[i] - '0');
+        i++;
+    }
+    if (i >= len || buf[i] != ';') return 0;
+    i++;
+
+    /* Parse x coordinate */
+    while (i < len && buf[i] >= '0' && buf[i] <= '9') {
+        x = x * 10 + (buf[i] - '0');
+        i++;
+    }
+    if (i >= len || buf[i] != ';') return 0;
+    i++;
+
+    /* Parse y coordinate */
+    while (i < len && buf[i] >= '0' && buf[i] <= '9') {
+        y = y * 10 + (buf[i] - '0');
+        i++;
+    }
+    if (i >= len) return 0;
+
+    terminator = buf[i];
+    if (terminator != 'M' && terminator != 'm') return 0;
+    i++;
+
+    /* Convert to 0-based coordinates */
+    event->x = x - 1;
+    event->y = y - 1;
+
+    /* Decode button and modifiers from button code */
+    /* Button code format: (modifiers << 2) | button_code */
+    /* Modifiers: 4=Shift, 8=Meta, 16=Ctrl */
+    /* Button: 0=left, 1=middle, 2=right, 32=motion, 64=scroll */
+    event->shift = (button & 4) != 0;
+    event->meta = (button & 8) != 0;
+    event->ctrl = (button & 16) != 0;
+
+    int btn = button & 3;
+    int motion = (button & 32) != 0;
+    int scroll = (button & 64) != 0;
+
+    if (scroll) {
+        /* Scroll events */
+        event->action = TUI_MOUSE_PRESS;  /* Scroll is always a "press" event */
+        if (btn == 0) {
+            event->button = TUI_MOUSE_SCROLL_UP;
+        } else if (btn == 1) {
+            event->button = TUI_MOUSE_SCROLL_DOWN;
+        } else if (btn == 2) {
+            event->button = TUI_MOUSE_SCROLL_LEFT;
+        } else {
+            event->button = TUI_MOUSE_SCROLL_RIGHT;
+        }
+    } else if (motion && btn == 3) {
+        /* Motion without button (btn==3 means no button) */
+        event->action = TUI_MOUSE_MOVE;
+        event->button = TUI_MOUSE_NONE;
+    } else if (motion) {
+        /* Drag with button held */
+        event->action = TUI_MOUSE_DRAG;
+        event->button = (btn == 0) ? TUI_MOUSE_LEFT :
+                        (btn == 1) ? TUI_MOUSE_MIDDLE :
+                        (btn == 2) ? TUI_MOUSE_RIGHT : TUI_MOUSE_NONE;
+    } else {
+        /* Click/release */
+        event->action = (terminator == 'M') ? TUI_MOUSE_PRESS : TUI_MOUSE_RELEASE;
+        event->button = (btn == 0) ? TUI_MOUSE_LEFT :
+                        (btn == 1) ? TUI_MOUSE_MIDDLE :
+                        (btn == 2) ? TUI_MOUSE_RIGHT : TUI_MOUSE_NONE;
+    }
+
+    return i;  /* Bytes consumed */
+}
+
+/* ----------------------------------------------------------------
+ * Keyboard Event Parsing
+ * ---------------------------------------------------------------- */
 
 /* Maximum ANSI numeric parameter value to parse (prevents overflow).
    Valid key codes are all <= 24, so any higher value is invalid. */
