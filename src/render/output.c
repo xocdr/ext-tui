@@ -281,16 +281,24 @@ void tui_output_render(tui_output *out, tui_buffer *buf)
     }
 
     /* Reset style at end */
-    if (output_len > 0) {
-        tui_ansi_reset(ansi, &ansi_len);
-        /* Flush buffer if it would overflow */
-        if (output_len + ansi_len >= OUTPUT_BUFFER_SIZE) {
-            write_all(STDOUT_FILENO, output, output_len);
-            output_len = 0;
-        }
-        memcpy(output + output_len, ansi, ansi_len);
-        output_len += ansi_len;
+    tui_ansi_reset(ansi, &ansi_len);
+    if (output_len + ansi_len >= OUTPUT_BUFFER_SIZE) {
+        write_all(STDOUT_FILENO, output, output_len);
+        output_len = 0;
     }
+    memcpy(output + output_len, ansi, ansi_len);
+    output_len += ansi_len;
+
+    /* Re-assert cursor hide at end of frame. Some terminals (iTerm2, Terminal.app)
+     * may briefly show cursor during screen updates despite DECTCEM being off.
+     * Sending hide again ensures cursor stays invisible. */
+    tui_ansi_cursor_hide(ansi, &ansi_len);
+    if (output_len + ansi_len >= OUTPUT_BUFFER_SIZE) {
+        write_all(STDOUT_FILENO, output, output_len);
+        output_len = 0;
+    }
+    memcpy(output + output_len, ansi, ansi_len);
+    output_len += ansi_len;
 
     /* End synchronized output (DEC mode 2026) - terminal renders atomically */
     tui_ansi_sync_end(ansi, &ansi_len);
