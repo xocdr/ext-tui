@@ -1611,20 +1611,41 @@ tui_node* php_to_tui_node(zval *obj, int depth)
             node->show_cursor = 1;
         }
 
-        /* key - for reconciliation */
+        /* key - for reconciliation (with length limit) */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "key", sizeof("key")-1, 1, &rv);
         if (prop && Z_TYPE_P(prop) == IS_STRING) {
-            node->key = strdup(Z_STRVAL_P(prop));
+            size_t key_len = Z_STRLEN_P(prop);
+            if (key_len > TUI_MAX_KEY_LENGTH) {
+                php_error_docref(NULL, E_WARNING,
+                    "Box key exceeds maximum length (%d), truncating",
+                    TUI_MAX_KEY_LENGTH);
+                key_len = TUI_MAX_KEY_LENGTH;
+            }
+            /* Use malloc+memcpy for compatibility with free() in tui_node_destroy */
+            node->key = malloc(key_len + 1);
             if (!node->key) {
                 tui_node_destroy(node);
                 return NULL;
             }
+            memcpy(node->key, Z_STRVAL_P(prop), key_len);
+            node->key[key_len] = '\0';
         }
 
-        /* id - for focus-by-id */
+        /* id - for focus-by-id (with length limit) */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "id", sizeof("id")-1, 1, &rv);
         if (prop && Z_TYPE_P(prop) == IS_STRING) {
-            if (tui_node_set_id(node, Z_STRVAL_P(prop)) < 0) {
+            size_t id_len = Z_STRLEN_P(prop);
+            if (id_len > TUI_MAX_ID_LENGTH) {
+                php_error_docref(NULL, E_WARNING,
+                    "Box id exceeds maximum length (%d), truncating",
+                    TUI_MAX_ID_LENGTH);
+                id_len = TUI_MAX_ID_LENGTH;
+            }
+            /* Use stack buffer - tui_node_set_id will strdup internally */
+            char truncated_id[TUI_MAX_ID_LENGTH + 1];
+            memcpy(truncated_id, Z_STRVAL_P(prop), id_len);
+            truncated_id[id_len] = '\0';
+            if (tui_node_set_id(node, truncated_id) < 0) {
                 tui_node_destroy(node);
                 return NULL;
             }
@@ -1668,16 +1689,33 @@ tui_node* php_to_tui_node(zval *obj, int depth)
         }
 
     } else if (instanceof_function(ce, tui_text_ce)) {
-        /* Get text content */
+        /* Get text content (with length limit) */
         zval *prop = zend_read_property(ce, Z_OBJ_P(obj), "content", sizeof("content")-1, 1, &rv);
         const char *text = "";
+        size_t text_len = 0;
         if (prop && Z_TYPE_P(prop) == IS_STRING) {
             text = Z_STRVAL_P(prop);
+            text_len = Z_STRLEN_P(prop);
+            if (text_len > TUI_MAX_TEXT_LENGTH) {
+                php_error_docref(NULL, E_WARNING,
+                    "Text content exceeds maximum length (%d), truncating",
+                    TUI_MAX_TEXT_LENGTH);
+                /* Create a truncated copy using malloc (freed after strdup in tui_node_create_text) */
+                char *truncated = malloc(TUI_MAX_TEXT_LENGTH + 1);
+                if (!truncated) return NULL;
+                memcpy(truncated, text, TUI_MAX_TEXT_LENGTH);
+                truncated[TUI_MAX_TEXT_LENGTH] = '\0';
+                node = tui_node_create_text(truncated);
+                free(truncated);
+                if (!node) return NULL;
+                goto text_node_created;
+            }
         }
 
         /* Create text node */
         node = tui_node_create_text(text);
         if (!node) return NULL;
+text_node_created:
 
         /* Apply style properties */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "color", sizeof("color")-1, 1, &rv);
@@ -1735,20 +1773,41 @@ tui_node* php_to_tui_node(zval *obj, int depth)
             }
         }
 
-        /* key - for reconciliation */
+        /* key - for reconciliation (with length limit) */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "key", sizeof("key")-1, 1, &rv);
         if (prop && Z_TYPE_P(prop) == IS_STRING) {
-            node->key = strdup(Z_STRVAL_P(prop));
+            size_t key_len = Z_STRLEN_P(prop);
+            if (key_len > TUI_MAX_KEY_LENGTH) {
+                php_error_docref(NULL, E_WARNING,
+                    "Text key exceeds maximum length (%d), truncating",
+                    TUI_MAX_KEY_LENGTH);
+                key_len = TUI_MAX_KEY_LENGTH;
+            }
+            /* Use malloc+memcpy for compatibility with free() in tui_node_destroy */
+            node->key = malloc(key_len + 1);
             if (!node->key) {
                 tui_node_destroy(node);
                 return NULL;
             }
+            memcpy(node->key, Z_STRVAL_P(prop), key_len);
+            node->key[key_len] = '\0';
         }
 
-        /* id - for focus-by-id and measureElement */
+        /* id - for focus-by-id and measureElement (with length limit) */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "id", sizeof("id")-1, 1, &rv);
         if (prop && Z_TYPE_P(prop) == IS_STRING) {
-            if (tui_node_set_id(node, Z_STRVAL_P(prop)) < 0) {
+            size_t id_len = Z_STRLEN_P(prop);
+            if (id_len > TUI_MAX_ID_LENGTH) {
+                php_error_docref(NULL, E_WARNING,
+                    "Text id exceeds maximum length (%d), truncating",
+                    TUI_MAX_ID_LENGTH);
+                id_len = TUI_MAX_ID_LENGTH;
+            }
+            /* Use stack buffer - tui_node_set_id will strdup internally */
+            char truncated_id[TUI_MAX_ID_LENGTH + 1];
+            memcpy(truncated_id, Z_STRVAL_P(prop), id_len);
+            truncated_id[id_len] = '\0';
+            if (tui_node_set_id(node, truncated_id) < 0) {
                 tui_node_destroy(node);
                 return NULL;
             }

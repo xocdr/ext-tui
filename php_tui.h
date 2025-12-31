@@ -35,6 +35,11 @@ extern zend_module_entry tui_module_entry;
 #define PHP_TUI_VERSION "0.2.11"
 #define PHP_TUI_VERSION_ID 211  /* major * 10000 + minor * 100 + patch */
 
+/* Security limits for string properties */
+#define TUI_MAX_KEY_LENGTH 256      /* Maximum key string length */
+#define TUI_MAX_ID_LENGTH 256       /* Maximum id string length */
+#define TUI_MAX_TEXT_LENGTH 1048576 /* Maximum text content (1MB) */
+
 #ifdef PHP_WIN32
 #   define PHP_TUI_API __declspec(dllexport)
 #elif defined(__GNUC__) && __GNUC__ >= 4
