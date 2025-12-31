@@ -295,3 +295,8 @@ void tui_loop_tick_timers(tui_loop *loop, int ms)
         }
     }
 }
+
+int tui_loop_is_stdin_valid(void)
+{
+    return isatty(STDIN_FILENO) ? 1 : 0;
+}

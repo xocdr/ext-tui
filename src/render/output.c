@@ -26,11 +26,17 @@
  *
  * This function is exposed publicly as tui_write_all() for use by other
  * modules that need reliable terminal output (e.g., tui_terminal.c).
+ *
+ * FD validation: Callers must ensure fd is valid before calling.
+ * For terminal output, use tui_output_is_valid() to check STDOUT_FILENO.
  */
 int tui_write_all(int fd, const void *buf, size_t len)
 {
     const char *p = buf;
     size_t remaining = len;
+
+    /* Validate file descriptor before writing */
+    if (fd < 0) return -1;
 
     while (remaining > 0) {
         ssize_t written = write(fd, p, remaining);
@@ -42,6 +48,15 @@ int tui_write_all(int fd, const void *buf, size_t len)
         remaining -= (size_t)written;
     }
     return 0;
+}
+
+/**
+ * Check if terminal output is available and valid.
+ * Returns 1 if STDOUT_FILENO is a valid TTY, 0 otherwise.
+ */
+int tui_output_is_valid(void)
+{
+    return isatty(STDOUT_FILENO) ? 1 : 0;
 }
 
 /* Internal alias for backward compatibility within this file */

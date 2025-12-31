@@ -123,11 +123,18 @@ void tui_output_move_cursor(tui_output *out, int x, int y);
 
 /**
  * Write all bytes to file descriptor, handling partial writes and EINTR.
- * @param fd  File descriptor to write to
+ * @param fd  File descriptor to write to (must be >= 0)
  * @param buf Data buffer
  * @param len Number of bytes to write
  * @return 0 on success, -1 on error (sets errno)
  */
 int tui_write_all(int fd, const void *buf, size_t len);
+
+/**
+ * Check if terminal output is available and valid.
+ * Use before operations that require a terminal.
+ * @return 1 if STDOUT is a valid TTY, 0 otherwise
+ */
+int tui_output_is_valid(void);
 
 #endif /* TUI_OUTPUT_H */

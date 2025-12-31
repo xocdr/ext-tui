@@ -137,4 +137,11 @@ void tui_loop_remove_timer(tui_loop *loop, int timer_id);
  */
 void tui_loop_tick_timers(tui_loop *loop, int ms);
 
+/**
+ * Check if input is available from a valid TTY.
+ * Use before starting the event loop to verify stdin is usable.
+ * @return 1 if STDIN is a valid TTY, 0 otherwise
+ */
+int tui_loop_is_stdin_valid(void);
+
 #endif /* TUI_LOOP_H */
