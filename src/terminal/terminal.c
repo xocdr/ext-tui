@@ -2,6 +2,12 @@
   +----------------------------------------------------------------------+
   | ext-tui: Terminal handling                                          |
   +----------------------------------------------------------------------+
+  | Thread Safety: These globals are INTENTIONALLY process-global, not  |
+  | per-thread (via TUI_G module globals). Terminal state (termios) is  |
+  | inherently shared across all threads in a process. Only the thread  |
+  | owning the terminal (typically main thread) should call these.      |
+  | See docs/thread-safety.md for details.                              |
+  +----------------------------------------------------------------------+
 */
 
 #include "terminal.h"
@@ -9,6 +15,12 @@
 #include <sys/ioctl.h>
 #include <stdlib.h>
 
+/* Process-global terminal state.
+ * These are NOT in TUI_G module globals because:
+ * 1. Terminal settings (termios) affect the entire process
+ * 2. Only one terminal exists per process (stdin/stdout)
+ * 3. Making these thread-local would cause incorrect behavior
+ */
 struct termios tui_original_termios;
 static int raw_mode_enabled = 0;
 
@@ -95,7 +107,10 @@ int tui_terminal_is_tty(void)
     return isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
 }
 
-/* Bracketed paste mode */
+/* Bracketed paste mode
+ *
+ * Process-global: bracketed paste affects the terminal, not individual threads.
+ */
 
 #include "ansi.h"
 #include <stdio.h>
@@ -138,8 +153,10 @@ int tui_terminal_is_bracketed_paste_enabled(void)
     return bracketed_paste_enabled;
 }
 
-/* Mouse tracking */
-
+/* Mouse tracking
+ *
+ * Process-global: mouse mode affects the terminal, not individual threads.
+ */
 static tui_mouse_mode current_mouse_mode = TUI_MOUSE_MODE_OFF;
 
 int tui_terminal_enable_mouse(tui_mouse_mode mode)
@@ -214,7 +231,9 @@ tui_mouse_mode tui_terminal_get_mouse_mode(void)
 
 /* ================================================================
  * Emergency restoration (for crash recovery)
- * ================================================================ */
+ * ================================================================
+ * Process-global: atexit handler is per-process, not per-thread.
+ */
 
 static int emergency_handler_registered = 0;
 
