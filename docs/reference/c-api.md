@@ -107,29 +107,30 @@ Request graceful exit from event loop.
 
 ### State Functions
 
-#### `tui_app_allocate_state`
+#### `tui_app_get_or_create_state_slot`
 ```c
-int tui_app_allocate_state(tui_app *app);
+int tui_app_get_or_create_state_slot(tui_app *app, zval *initial, int *is_new);
 ```
-Allocate a new state slot for useState hook.
+Get or create a state slot for useState hook. Array grows dynamically as needed.
 
-**Returns:** State index, or -1 if limit reached.
+**Parameters:**
+- `app` - App instance
+- `initial` - Initial value (used only when creating new slot)
+- `is_new` - Output: set to 1 if new slot created, 0 if reused
 
-#### `tui_app_get_state`
+**Returns:** State index (>= 0), or -1 on allocation failure.
+
+#### `tui_app_reset_state_index`
 ```c
-zval* tui_app_get_state(tui_app *app, int index);
+void tui_app_reset_state_index(tui_app *app);
 ```
-Get state value at index.
+Reset state index for new render cycle. Called before each component render.
 
-**Returns:** Pointer to zval, or NULL if invalid index.
-
-#### `tui_app_set_state`
+#### `tui_app_cleanup_states`
 ```c
-int tui_app_set_state(tui_app *app, int index, zval *value);
+void tui_app_cleanup_states(tui_app *app);
 ```
-Set state value at index.
-
-**Returns:** 0 on success, -1 on error.
+Clean up all state slots and free PHP references. Called during app destruction.
 
 ### Timer Functions
 
@@ -520,8 +521,10 @@ See `docs/thread-safety.md` for detailed information.
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `TUI_MAX_STATES` | 64 | Maximum state slots per app |
-| `TUI_MAX_TIMERS` | 32 | Maximum timers per app |
+| `INITIAL_STATE_CAPACITY` | 8 | Initial state slots (grows dynamically) |
+| `INITIAL_TIMER_CAPACITY` | 4 | Initial timer slots (grows dynamically) |
 | `TUI_MAX_KEY_LENGTH` | 256 | Maximum key string length |
 | `TUI_MAX_ID_LENGTH` | 256 | Maximum id string length |
 | `TUI_MAX_TEXT_LENGTH` | 1MB | Maximum text content length |
+
+**Note**: State and timer arrays grow dynamically as needed, controlled by `tui.max_states` and `tui.max_timers` INI settings (defaults: 256 states, 64 timers).
