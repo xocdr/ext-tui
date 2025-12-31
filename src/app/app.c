@@ -353,7 +353,43 @@ void tui_app_set_tick_handler(tui_app *app, zend_fcall_info *fci, zend_fcall_inf
 /* Maximum tree depth to prevent stack overflow from circular references or very deep trees */
 #define MAX_TREE_DEPTH 256
 
-/* Helper: collect all focusable nodes with depth limit */
+/* ==========================================================================
+ * FOCUS TRAVERSAL ALGORITHM
+ *
+ * Focus management follows a depth-first tree order:
+ *
+ * 1. collect_focusable_nodes(): DFS traversal collecting all nodes where
+ *    node->focusable == true into a flat array. Order matches tree order
+ *    (parent before children, left-to-right siblings).
+ *
+ * 2. tui_app_focus_next(): Move to next focusable node in array (wrapping)
+ * 3. tui_app_focus_prev(): Move to previous focusable node (wrapping)
+ * 4. tui_app_focus_by_id(): Focus specific node by ID string
+ *
+ * Tab key navigation (in tui_app_on_input):
+ * - Tab: focus_next
+ * - Shift+Tab: focus_prev
+ *
+ * Focus changes trigger:
+ * - Old node: focused = false
+ * - New node: focused = true
+ * - Focus handler callback (if registered)
+ * - render_pending = 1 (triggers re-render)
+ *
+ * This gives predictable, accessibility-friendly focus order matching
+ * visual layout (top-to-bottom, left-to-right for LTR).
+ * ========================================================================== */
+
+/**
+ * Recursively collect all focusable nodes from the tree in DFS order.
+ *
+ * @param node     Current node to process
+ * @param nodes    Pointer to array of node pointers (may be reallocated)
+ * @param count    Pointer to current count of collected nodes
+ * @param capacity Pointer to current array capacity
+ * @param depth    Current recursion depth (for overflow protection)
+ * @return         0 on success, -1 on error
+ */
 static int collect_focusable_nodes_impl(tui_node *node, tui_node ***nodes, int *count, int *capacity, int depth)
 {
     if (!node) return 0;

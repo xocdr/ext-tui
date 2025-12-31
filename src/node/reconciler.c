@@ -3,6 +3,35 @@
   | ext-tui: Virtual DOM reconciler                                     |
   | Key-based reconciliation for efficient updates                      |
   +----------------------------------------------------------------------+
+  |                                                                      |
+  | RECONCILIATION ALGORITHM OVERVIEW                                    |
+  | =================================                                    |
+  |                                                                      |
+  | This module implements a React-like virtual DOM diffing algorithm   |
+  | that compares an old node tree with a new one and produces a        |
+  | minimal set of operations needed to transform old -> new.           |
+  |                                                                      |
+  | Key concepts:                                                        |
+  | 1. DIFF OPERATIONS: CREATE, UPDATE, DELETE, REPLACE, REORDER        |
+  | 2. KEY-BASED MATCHING: Nodes with same 'key' are considered same    |
+  | 3. lastPlacedIndex: Optimization to minimize move operations        |
+  |                                                                      |
+  | Algorithm flow:                                                      |
+  | 1. For keyed children: Build hash map of old keys -> (node, index)  |
+  | 2. Iterate new children, lookup by key in map                       |
+  | 3. If found: UPDATE (possibly REORDER using lastPlacedIndex)        |
+  | 4. If not found: CREATE new node                                    |
+  | 5. Unmatched old nodes: DELETE (batched for efficiency)             |
+  |                                                                      |
+  | For non-keyed children: Simple index-based matching with fallback   |
+  | to type comparison.                                                  |
+  |                                                                      |
+  | Time complexity: O(n) for keyed, O(n²) worst case for non-keyed     |
+  | Space complexity: O(n) for the key map and matched array            |
+  |                                                                      |
+  | The diff result is consumed by the renderer to update only the      |
+  | portions of the screen that actually changed.                       |
+  +----------------------------------------------------------------------+
 */
 
 #include "reconciler.h"

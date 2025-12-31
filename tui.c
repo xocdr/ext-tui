@@ -7,13 +7,49 @@
   | This source file is subject to the MIT license that is bundled with |
   | this package in the file LICENSE.                                    |
   +----------------------------------------------------------------------+
+  |                                                                      |
+  | Main extension source file implementing:                             |
+  |   - PHP class definitions (Box, Text, Instance, Key, Color, etc.)   |
+  |   - Global TUI functions (tui_render, tui_string_width, etc.)       |
+  |   - Resource management (buffer, canvas, history, test renderer)    |
+  |   - Yoga layout integration for flexbox-like terminal layouts       |
+  |   - Event handling (keyboard input, focus, timers)                  |
+  |                                                                      |
+  | Architecture Overview:                                               |
+  | ----------------------                                               |
+  | The TUI extension uses a virtual DOM approach similar to React:      |
+  |                                                                      |
+  | 1. USER CODE creates PHP objects (Box, Text) representing UI tree   |
+  | 2. tui_render() converts PHP tree to internal C node tree           |
+  | 3. Yoga layout engine calculates positions/dimensions               |
+  | 4. Reconciler diffs old and new trees, generating minimal updates   |
+  | 5. Renderer outputs ANSI escape sequences to terminal               |
+  | 6. Event loop polls for input and dispatches to handlers            |
+  |                                                                      |
+  | Key Components:                                                      |
+  | - tui_node: Internal representation of a UI element                 |
+  | - tui_app: Application state (render tree, focus, timers)           |
+  | - tui_buffer: 2D character buffer for efficient rendering           |
+  | - tui_output: ANSI escape sequence generator                        |
+  |                                                                      |
+  | Memory Management:                                                   |
+  | - Node pool with configurable limits (tui.max_states, tui.max_timers)|
+  | - Dynamic array growth for states/timers (double on resize)         |
+  | - PHP reference counting for proper lifecycle management            |
+  |                                                                      |
+  +----------------------------------------------------------------------+
 */
 
 #include "tui_internal.h"
 
 ZEND_DECLARE_MODULE_GLOBALS(tui)
 
-/* Resource type IDs (global, declared extern in tui_internal.h) */
+/* ==========================================================================
+ * RESOURCE TYPE IDS
+ *
+ * Resource types for PHP resources managed by this extension.
+ * These IDs are registered in PHP_MINIT and used for type checking.
+ * ========================================================================== */
 int le_tui_canvas;
 int le_tui_table;
 int le_tui_sprite;
@@ -24,7 +60,12 @@ int le_tui_virtual_list;
 int le_tui_scroll_animation;
 int le_tui_image;
 
-/* Resource destructors */
+/* ==========================================================================
+ * RESOURCE DESTRUCTORS
+ *
+ * Cleanup functions called when PHP resources are released.
+ * These free memory and perform any necessary cleanup for each resource type.
+ * ========================================================================== */
 static void tui_canvas_dtor(zend_resource *res)
 {
     tui_canvas *canvas = (tui_canvas *)res->ptr;
@@ -97,7 +138,12 @@ zend_class_entry *tui_transform_ce;
 zend_class_entry *tui_static_ce;
 zend_class_entry *tui_color_ce;
 
-/* Object handlers (global, declared extern in tui_internal.h) */
+/* ==========================================================================
+ * OBJECT HANDLERS
+ *
+ * Custom Zend object handlers for TUI extension classes.
+ * These enable proper memory management and object lifecycle handling.
+ * ========================================================================== */
 zend_object_handlers tui_instance_handlers;
 zend_object_handlers tui_focus_handlers;
 zend_object_handlers tui_focus_manager_handlers;
@@ -1103,17 +1149,41 @@ static int parse_color(zval *value, tui_color *color)
     return 0;
 }
 
-/* ------------------------------------------------------------------
- * PHP-to-C Node Tree Conversion
- * ------------------------------------------------------------------ */
-/* Convert PHP object tree to C node tree (exposed for split modules) */
+/* ==========================================================================
+ * PHP-TO-C NODE TREE CONVERSION
+ *
+ * Recursively converts a PHP object tree (Box/Text instances) into an
+ * internal C node tree that can be processed by the layout engine.
+ *
+ * The conversion process:
+ * 1. Identify the object type (Box or Text)
+ * 2. Create corresponding C node (tui_node_create_box/text)
+ * 3. Read all PHP properties and apply to the node
+ * 4. For Box nodes, recursively convert all children
+ * 5. Return the root of the converted tree
+ *
+ * Layout properties (flexDirection, alignItems, etc.) are translated
+ * to Yoga layout engine calls (YGNodeStyleSet*).
+ * ========================================================================== */
+
+/**
+ * Convert a PHP TuiBox/TuiText object to a C tui_node structure.
+ *
+ * @param obj   The PHP object (must be TuiBox or TuiText instance)
+ * @param depth Current recursion depth (for stack overflow protection)
+ * @return      Newly allocated tui_node, or NULL on error
+ *
+ * The returned node and its children must be freed with tui_node_destroy().
+ * This function is exposed for use by split modules (tui_render.c, etc.).
+ */
 tui_node* php_to_tui_node(zval *obj, int depth)
 {
     if (!obj || Z_TYPE_P(obj) != IS_OBJECT) {
         return NULL;
     }
 
-    /* Prevent stack overflow from deeply nested trees */
+    /* Prevent stack overflow from deeply nested trees.
+     * MAX_TREE_DEPTH is defined in tui_internal.h (default: 256) */
     if (depth > MAX_TREE_DEPTH) {
         php_error_docref(NULL, E_WARNING, "Maximum node tree depth exceeded (%d)", MAX_TREE_DEPTH);
         return NULL;
@@ -1856,11 +1926,33 @@ static const zend_function_entry tui_node_interface_methods[] = {
     PHP_FE_END
 };
 
-/* ------------------------------------------------------------------
- * TuiBox class
- * ------------------------------------------------------------------ */
+/* ==========================================================================
+ * TUIBOX CLASS
+ *
+ * TuiBox is the primary container element for building TUI layouts.
+ * It corresponds to a flex container and supports all Yoga layout properties.
+ *
+ * Key Properties:
+ * - Layout: flexDirection, alignItems, justifyContent, flexWrap
+ * - Sizing: width, height, minWidth, maxWidth, minHeight, maxHeight
+ * - Spacing: padding, paddingTop/Right/Bottom/Left, margin, gap
+ * - Appearance: borderStyle, borderColor
+ * - Behavior: focusable, focused, key, id
+ *
+ * Usage in PHP:
+ *   $box = new Box([
+ *       'flexDirection' => 'row',
+ *       'padding' => 2,
+ *       'borderStyle' => 'single',
+ *   ]);
+ *   $box->addChild(new Text('Hello'));
+ *
+ * Implements TuiNode interface for reconciler key/id matching.
+ * ========================================================================== */
 
-/* {{{ TuiBox::getKey(): ?string */
+/* {{{ TuiBox::getKey(): ?string
+ * Returns the reconciliation key for this node, used by the diff algorithm
+ * to match nodes between renders and minimize DOM mutations. */
 PHP_METHOD(TuiBox, getKey)
 {
     zval rv;
@@ -1995,11 +2087,31 @@ static const zend_function_entry tui_box_methods[] = {
     PHP_FE_END
 };
 
-/* ------------------------------------------------------------------
- * TuiText class
- * ------------------------------------------------------------------ */
+/* ==========================================================================
+ * TUITEXT CLASS
+ *
+ * TuiText represents text content within the TUI tree. Unlike Box, Text
+ * cannot contain children - it only renders its content string.
+ *
+ * Key Properties:
+ * - content: The text string to display
+ * - color: Foreground color (CSS name, hex, or RGB array)
+ * - backgroundColor: Background color
+ * - bold, dim, italic, underline, inverse, strikethrough: Text styles
+ * - wrap: Text wrapping mode ('wrap', 'truncate', 'truncate-start', etc.)
+ *
+ * Usage in PHP:
+ *   $text = new Text('Hello, World!', [
+ *       'color' => 'green',
+ *       'bold' => true,
+ *   ]);
+ *
+ * Text measurement is handled by the Yoga custom measure function,
+ * which calculates width based on Unicode character widths.
+ * ========================================================================== */
 
-/* {{{ TuiText::getKey(): ?string */
+/* {{{ TuiText::getKey(): ?string
+ * Returns the reconciliation key for this node. */
 PHP_METHOD(TuiText, getKey)
 {
     zval rv;
@@ -2074,11 +2186,51 @@ static const zend_function_entry tui_text_methods[] = {
     PHP_FE_END
 };
 
-/* ------------------------------------------------------------------
- * TuiInstance class
- * ------------------------------------------------------------------ */
+/* ==========================================================================
+ * TUIINSTANCE CLASS
+ *
+ * TuiInstance represents a running TUI application. It's returned by
+ * tui_render() and provides methods for controlling the render lifecycle,
+ * managing state, and handling events.
+ *
+ * Lifecycle Methods:
+ * - rerender(): Force a re-render of the UI tree
+ * - unmount(): Stop and clean up the application
+ * - waitUntilExit(): Block until the application exits
+ * - exit(code): Request application exit with optional exit code
+ *
+ * State Management (React-like hooks):
+ * - state(initial): Create a state slot, returns [value, index]
+ * - setState(index, value): Update state at given index
+ *
+ * Event Handling:
+ * - onInput(handler): Register keyboard input handler
+ * - setInputHandler(handler): Legacy input handler (deprecated)
+ * - setFocusHandler(handler): Handle focus changes
+ * - setResizeHandler(handler): Handle terminal resize
+ * - setTickHandler(handler): Called on each event loop tick
+ *
+ * Focus Management:
+ * - focus(): Get Focus helper for programmatic focus
+ * - focusManager(): Get FocusManager for navigation
+ * - focusNext(), focusPrev(): Navigate focus
+ *
+ * Timers:
+ * - addTimer(intervalMs, callback): Add recurring timer
+ * - removeTimer(timerId): Remove a timer
+ *
+ * The Instance wraps an internal tui_app structure that holds:
+ * - The current node tree
+ * - State slots (dynamic array, max: tui.max_states)
+ * - Timer callbacks (dynamic array, max: tui.max_timers)
+ * - Focus state and navigation
+ * - Output buffer and terminal state
+ * ========================================================================== */
 
-/* {{{ TuiInstance::rerender(): void */
+/* {{{ TuiInstance::rerender(): void
+ * Triggers a complete re-render of the UI tree. This calls the original
+ * render callback with the Instance, rebuilds the C node tree, runs
+ * layout calculation, and outputs the result. */
 PHP_METHOD(TuiInstance, rerender)
 {
     ZEND_PARSE_PARAMETERS_NONE();
