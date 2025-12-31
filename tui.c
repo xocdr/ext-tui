@@ -1979,7 +1979,9 @@ PHP_METHOD(TuiInstance, useState)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (!obj->app) {
-        RETURN_NULL();
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
 
     tui_app *app = obj->app;
@@ -1987,7 +1989,9 @@ PHP_METHOD(TuiInstance, useState)
     int index = tui_app_get_or_create_state_slot(app, initial, &is_new);
 
     if (index < 0) {
-        RETURN_NULL();
+        zend_throw_exception(zend_ce_exception,
+            "Failed to allocate state slot: maximum states exceeded", 0);
+        RETURN_THROWS();
     }
 
     /* Create setter closure if this is a new state slot */
@@ -2038,7 +2042,9 @@ PHP_METHOD(TuiInstance, useInput)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (!obj->app) {
-        RETURN_NULL();
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
 
     /* Check isActive option */
@@ -2068,7 +2074,9 @@ PHP_METHOD(TuiInstance, useFocus)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (!obj->app) {
-        RETURN_NULL();
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
 
     /* Create Focus object */
@@ -2099,7 +2107,9 @@ PHP_METHOD(TuiInstance, useFocusManager)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (!obj->app) {
-        RETURN_NULL();
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
 
     /* Create FocusManager object */
@@ -2116,7 +2126,9 @@ PHP_METHOD(TuiInstance, useStdin)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (!obj->app) {
-        RETURN_NULL();
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
 
     /* Create StdinContext object */
@@ -2135,7 +2147,9 @@ PHP_METHOD(TuiInstance, useStdout)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (!obj->app) {
-        RETURN_NULL();
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
 
     /* Create StdoutContext object */
@@ -2158,7 +2172,9 @@ PHP_METHOD(TuiInstance, useStderr)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (!obj->app) {
-        RETURN_NULL();
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
 
     /* Create StderrContext object */
@@ -2181,7 +2197,9 @@ PHP_METHOD(TuiInstance, getTerminalSize)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (!obj->app) {
-        RETURN_NULL();
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
 
     array_init(return_value);
@@ -2197,7 +2215,9 @@ PHP_METHOD(TuiInstance, getSize)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (!obj->app) {
-        RETURN_NULL();
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
 
     array_init(return_value);
@@ -2220,8 +2240,15 @@ PHP_METHOD(TuiInstance, setState)
     ZEND_PARSE_PARAMETERS_END();
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
-    if (!obj->app || index < 0 || index >= obj->app->state_count) {
-        RETURN_NULL();
+    if (!obj->app) {
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
+    }
+    if (index < 0 || index >= obj->app->state_count) {
+        zend_throw_exception(zend_ce_exception,
+            "Invalid state index", 0);
+        RETURN_THROWS();
     }
 
     /* Update state value */
@@ -2293,7 +2320,9 @@ PHP_METHOD(TuiInstance, measureElement)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (!obj->app || !obj->app->root_node) {
-        RETURN_NULL();
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
 
     tui_node *node = find_node_by_id_in_tree(obj->app->root_node, ZSTR_VAL(id));
@@ -2321,9 +2350,12 @@ PHP_METHOD(TuiInstance, setInputHandler)
     ZEND_PARSE_PARAMETERS_END();
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
-    if (obj->app) {
-        tui_app_set_input_handler(obj->app, &fci, &fcc);
+    if (!obj->app) {
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
+    tui_app_set_input_handler(obj->app, &fci, &fcc);
 }
 /* }}} */
 
@@ -2338,9 +2370,12 @@ PHP_METHOD(TuiInstance, setFocusHandler)
     ZEND_PARSE_PARAMETERS_END();
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
-    if (obj->app) {
-        tui_app_set_focus_handler(obj->app, &fci, &fcc);
+    if (!obj->app) {
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
+    tui_app_set_focus_handler(obj->app, &fci, &fcc);
 }
 /* }}} */
 
@@ -2355,9 +2390,12 @@ PHP_METHOD(TuiInstance, setResizeHandler)
     ZEND_PARSE_PARAMETERS_END();
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
-    if (obj->app) {
-        tui_app_set_resize_handler(obj->app, &fci, &fcc);
+    if (!obj->app) {
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
+    tui_app_set_resize_handler(obj->app, &fci, &fcc);
 }
 /* }}} */
 
@@ -2372,9 +2410,12 @@ PHP_METHOD(TuiInstance, setTickHandler)
     ZEND_PARSE_PARAMETERS_END();
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
-    if (obj->app) {
-        tui_app_set_tick_handler(obj->app, &fci, &fcc);
+    if (!obj->app) {
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
+    tui_app_set_tick_handler(obj->app, &fci, &fcc);
 }
 /* }}} */
 
@@ -2392,7 +2433,9 @@ PHP_METHOD(TuiInstance, addTimer)
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
     if (!obj->app) {
-        RETURN_LONG(-1);
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
 
     int timer_id = tui_app_add_timer(obj->app, (int)interval_ms, &fci, &fcc);
@@ -2410,9 +2453,12 @@ PHP_METHOD(TuiInstance, removeTimer)
     ZEND_PARSE_PARAMETERS_END();
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
-    if (obj->app) {
-        tui_app_remove_timer(obj->app, (int)timer_id);
+    if (!obj->app) {
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
     }
+    tui_app_remove_timer(obj->app, (int)timer_id);
 }
 /* }}} */
 
@@ -2422,7 +2468,12 @@ PHP_METHOD(TuiInstance, clear)
     ZEND_PARSE_PARAMETERS_NONE();
 
     tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
-    if (obj->app && obj->app->buffer) {
+    if (!obj->app) {
+        zend_throw_exception(zend_ce_exception,
+            "TuiInstance has been destroyed or unmounted", 0);
+        RETURN_THROWS();
+    }
+    if (obj->app->buffer) {
         tui_buffer_clear(obj->app->buffer);
         tui_output_flush(obj->app->output);
     }
