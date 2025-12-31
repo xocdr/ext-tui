@@ -66,8 +66,7 @@ jobs:
           lcov --capture --directory . --output-file coverage/coverage.info \
             --exclude '/usr/*' \
             --exclude '*/src/yoga/*' \
-            --exclude '*/php-src/*' \
-            --ignore-errors inconsistent
+            --ignore-errors inconsistent,unused
           lcov --list coverage/coverage.info
 
       - name: Upload coverage to Codecov
