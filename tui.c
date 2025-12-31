@@ -4653,14 +4653,16 @@ static PHP_MSHUTDOWN_FUNCTION(tui)
 {
     UNREGISTER_INI_ENTRIES();
 
-    /* Free object pools */
+    /* Free object pools FIRST - nodes reference pooled memory.
+     * See src/pool/pool.h for shutdown ordering requirements. */
     if (TUI_G(pools)) {
         tui_pools_shutdown(TUI_G(pools));
         free(TUI_G(pools));
         TUI_G(pools) = NULL;
     }
 
-    /* Free shared Yoga configuration */
+    /* Free shared Yoga configuration AFTER pools.
+     * Pools don't depend on yoga, but order is consistent with MINIT. */
     if (TUI_G(yoga_config)) {
         YGConfigFree(TUI_G(yoga_config));
         TUI_G(yoga_config) = NULL;

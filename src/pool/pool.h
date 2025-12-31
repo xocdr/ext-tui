@@ -5,6 +5,21 @@
   | Reduces malloc/free churn by reusing frequently allocated objects.  |
   | Pools are thread-local in ZTS builds via module globals.            |
   +----------------------------------------------------------------------+
+  | Shutdown Ordering:                                                    |
+  | Pools must be shut down BEFORE other subsystems that use them:       |
+  |   1. All nodes must be destroyed before pool shutdown                |
+  |   2. Pool shutdown happens in PHP_MSHUTDOWN_FUNCTION                 |
+  |   3. Yoga config is freed AFTER pools (pools don't depend on yoga)   |
+  |                                                                       |
+  | Lifecycle (in tui.c):                                                 |
+  |   MINIT:  yoga_config -> pools (pools initialized last)              |
+  |   RINIT:  pools_reset (clear between requests)                        |
+  |   MSHUTDOWN: pools_shutdown -> yoga_config_free (pools freed first)   |
+  |                                                                       |
+  | This ordering ensures:                                                |
+  |   - No dangling references to pooled memory                          |
+  |   - Safe cleanup even if request ends abnormally                     |
+  +----------------------------------------------------------------------+
 */
 
 #ifndef TUI_POOL_H
