@@ -1069,6 +1069,8 @@ PHP_METHOD(Color, fromName)
         }
     }
 
+    /* Color name not found - log a notice to help debugging */
+    php_error_docref(NULL, E_NOTICE, "Unknown color name '%s'", ZSTR_VAL(name));
     RETURN_NULL();
 }
 

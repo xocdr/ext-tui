@@ -412,6 +412,7 @@ PHP_FUNCTION(tui_get_size)
         add_assoc_long(return_value, "columns", app->width);
         add_assoc_long(return_value, "rows", app->height);
     } else {
+        php_error_docref(NULL, E_WARNING, "TuiInstance has been destroyed or unmounted");
         RETURN_NULL();
     }
 }
@@ -427,7 +428,11 @@ PHP_FUNCTION(tui_get_focused_node)
     ZEND_PARSE_PARAMETERS_END();
 
     tui_app *app = get_app_from_instance(instance);
-    if (app && app->focused_node) {
+    if (!app) {
+        php_error_docref(NULL, E_WARNING, "TuiInstance has been destroyed or unmounted");
+        RETURN_NULL();
+    }
+    if (app->focused_node) {
         array_init(return_value);
         add_assoc_bool(return_value, "focusable", app->focused_node->focusable);
         add_assoc_bool(return_value, "focused", app->focused_node->focused);
@@ -442,6 +447,7 @@ PHP_FUNCTION(tui_get_focused_node)
             add_assoc_string(return_value, "type", "box");
         }
     } else {
+        /* No focused node - this is valid, not an error */
         RETURN_NULL();
     }
 }

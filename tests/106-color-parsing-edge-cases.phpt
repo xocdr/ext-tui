@@ -132,6 +132,8 @@ Black value: #%s
 === Color::fromName() ===
 fromName('red'): #%s
 fromName('coral'): #%s
+
+Notice: %s::fromName(): Unknown color name 'notacolor' in %s on line %d
 fromName('notacolor'): null
 
 === Color::toRgb() ===
