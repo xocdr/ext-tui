@@ -6,6 +6,12 @@ PHP_ARG_ENABLE([tui],
     [Enable tui support])],
   [no])
 
+PHP_ARG_ENABLE([tui-gcov],
+  [whether to enable code coverage for tui],
+  [AS_HELP_STRING([--enable-tui-gcov],
+    [Enable code coverage (gcov) for tui extension])],
+  [no])
+
 if test "$PHP_TUI" != "no"; then
   dnl Require C++ for Yoga layout engine
   PHP_REQUIRE_CXX()
@@ -116,6 +122,21 @@ if test "$PHP_TUI" != "no"; then
 
   dnl Add C++ warnings (no strict-prototypes for C++)
   CXXFLAGS="$CXXFLAGS $TUI_CFLAGS"
+
+  dnl Code coverage support (gcov)
+  if test "$PHP_TUI_GCOV" = "yes"; then
+    AC_MSG_NOTICE([Enabling code coverage for tui extension])
+    TUI_GCOV_CFLAGS="-fprofile-arcs -ftest-coverage -O0 -g"
+    CFLAGS="$CFLAGS $TUI_GCOV_CFLAGS"
+    CXXFLAGS="$CXXFLAGS $TUI_GCOV_CFLAGS"
+    dnl On Linux with GCC, link gcov library. On macOS with clang, not needed.
+    case $host_os in
+      linux*)
+        LDFLAGS="$LDFLAGS -lgcov"
+        ;;
+    esac
+    PHP_SUBST(TUI_GCOV_CFLAGS)
+  fi
 
   dnl Create extension with all sources (C and C++)
   PHP_NEW_EXTENSION([tui],
