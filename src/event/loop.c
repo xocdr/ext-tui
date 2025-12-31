@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <limits.h>
+#include <errno.h>
 
 /* Constants for configuration */
 #define DEFAULT_POLL_TIMEOUT_MS 100
@@ -40,6 +41,8 @@ struct tui_loop {
     tui_timer timers[MAX_TIMERS];
     int timer_count;
     int next_timer_id;
+    struct sigaction old_sigwinch;  /* Saved SIGWINCH handler for restoration */
+    int sigwinch_installed;          /* Whether we installed a handler */
 };
 
 /* Use C11 atomic for async-signal-safe resize detection
@@ -61,12 +64,14 @@ tui_loop* tui_loop_create(void)
 
     loop->next_timer_id = 1;
 
-    /* Set up SIGWINCH handler */
+    /* Set up SIGWINCH handler, saving old handler for restoration */
     struct sigaction sa;
     sa.sa_handler = sigwinch_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
-    sigaction(SIGWINCH, &sa, NULL);
+    if (sigaction(SIGWINCH, &sa, &loop->old_sigwinch) == 0) {
+        loop->sigwinch_installed = 1;
+    }
 
     return loop;
 }
@@ -74,6 +79,10 @@ tui_loop* tui_loop_create(void)
 void tui_loop_destroy(tui_loop *loop)
 {
     if (loop) {
+        /* Restore original SIGWINCH handler if we installed one */
+        if (loop->sigwinch_installed) {
+            sigaction(SIGWINCH, &loop->old_sigwinch, NULL);
+        }
         free(loop);
     }
 }
@@ -187,6 +196,17 @@ int tui_loop_run(tui_loop *loop)
     if (timeout <= 0) timeout = MIN_POLL_TIMEOUT_MS;
 
     int ret = poll(fds, 1, timeout);
+
+    /* Handle poll errors */
+    if (ret < 0) {
+        if (errno == EINTR) {
+            /* Interrupted by signal - this is normal, continue processing
+             * (resize signal handling will happen below) */
+        } else {
+            /* Real error - log but continue (best effort for TUI) */
+            TUI_METRIC_INC(poll_errors);
+        }
+    }
 
     /* Check for resize using sig_atomic_t flag.
      * We atomically test-and-clear to avoid race conditions:

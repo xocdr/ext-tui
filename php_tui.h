@@ -95,6 +95,7 @@ typedef struct {
     int64_t input_events;
     int64_t resize_events;
     int64_t timer_fires;
+    int64_t poll_errors;
 
     /* Pool metrics */
     int64_t pool_diff_allocs;

@@ -61,12 +61,16 @@ void tui_keymap_destroy(tui_keymap *map)
 {
     if (!map) return;
 
-    if (map->from_pool && TUI_G(pools)) {
-        /* Return to pool */
-        tui_key_map_pool_release(TUI_G(pools));
-    } else {
-        /* Free malloc'd memory */
-        free(map->buckets);
+    /* Prevent double-free: check if buckets already freed */
+    if (map->buckets) {
+        if (map->from_pool && TUI_G(pools)) {
+            /* Return to pool */
+            tui_key_map_pool_release(TUI_G(pools));
+        } else {
+            /* Free malloc'd memory */
+            free(map->buckets);
+        }
+        map->buckets = NULL;  /* Mark as freed */
     }
     free(map);
 }

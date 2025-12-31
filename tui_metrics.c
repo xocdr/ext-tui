@@ -100,6 +100,7 @@ PHP_FUNCTION(tui_get_metrics)
     add_assoc_long(return_value, "input_events", (zend_long)m->input_events);
     add_assoc_long(return_value, "resize_events", (zend_long)m->resize_events);
     add_assoc_long(return_value, "timer_fires", (zend_long)m->timer_fires);
+    add_assoc_long(return_value, "poll_errors", (zend_long)m->poll_errors);
 
     /* Pool metrics */
     if (TUI_G(pools)) {
@@ -190,6 +191,7 @@ PHP_FUNCTION(tui_get_loop_metrics)
     add_assoc_long(return_value, "input_events", (zend_long)m->input_events);
     add_assoc_long(return_value, "resize_events", (zend_long)m->resize_events);
     add_assoc_long(return_value, "timer_fires", (zend_long)m->timer_fires);
+    add_assoc_long(return_value, "poll_errors", (zend_long)m->poll_errors);
 }
 /* }}} */
 
