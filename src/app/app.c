@@ -36,12 +36,28 @@ tui_app* tui_app_create(void)
     /* Get terminal size */
     tui_terminal_get_size(&app->width, &app->height);
 
-    /* Create output system */
+    /* Create output system with proper cleanup on failure */
     app->output = tui_output_create(app->width, app->height);
+    if (!app->output) {
+        free(app);
+        return NULL;
+    }
+
     app->buffer = tui_buffer_create(app->width, app->height);
+    if (!app->buffer) {
+        tui_output_destroy(app->output);
+        free(app);
+        return NULL;
+    }
 
     /* Create event loop */
     app->loop = tui_loop_create();
+    if (!app->loop) {
+        tui_buffer_destroy(app->buffer);
+        tui_output_destroy(app->output);
+        free(app);
+        return NULL;
+    }
 
     return app;
 }
