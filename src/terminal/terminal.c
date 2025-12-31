@@ -7,6 +7,7 @@
 #include "terminal.h"
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <stdlib.h>
 
 struct termios tui_original_termios;
 static int raw_mode_enabled = 0;
@@ -209,4 +210,42 @@ int tui_terminal_disable_mouse(void)
 tui_mouse_mode tui_terminal_get_mouse_mode(void)
 {
     return current_mouse_mode;
+}
+
+/* ================================================================
+ * Emergency restoration (for crash recovery)
+ * ================================================================ */
+
+static int emergency_handler_registered = 0;
+
+void tui_terminal_emergency_restore(void)
+{
+    /* This function may be called from atexit() or signal handlers.
+     * It must be safe to call multiple times and must not allocate memory.
+     * We directly restore termios without going through the normal API
+     * to avoid any potential issues with state tracking. */
+
+    if (raw_mode_enabled) {
+        /* Restore original terminal settings - ignore errors as we're crashing anyway */
+        tcsetattr(STDIN_FILENO, TCSANOW, &tui_original_termios);
+        raw_mode_enabled = 0;
+    }
+
+    /* Try to exit alternate screen and show cursor - best effort */
+    if (isatty(STDOUT_FILENO)) {
+        /* Exit alternate screen: ESC[?1049l */
+        /* Show cursor: ESC[?25h */
+        /* Reset attributes: ESC[0m */
+        const char *restore_seq = "\033[?1049l\033[?25h\033[0m";
+        /* Ignore return value - we're in emergency cleanup */
+        (void)write(STDOUT_FILENO, restore_seq, 22);
+    }
+}
+
+void tui_terminal_register_emergency_handler(void)
+{
+    if (!emergency_handler_registered) {
+        atexit(tui_terminal_emergency_restore);
+        emergency_handler_registered = 1;
+    }
 }

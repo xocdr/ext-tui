@@ -4352,6 +4352,11 @@ static PHP_MINIT_FUNCTION(tui)
         }
     }
 
+    /* Register emergency terminal restore handler for crash recovery.
+     * This ensures the terminal is restored to a usable state even if
+     * PHP crashes or exits abnormally while in raw mode. */
+    tui_terminal_register_emergency_handler();
+
     /* Register resource types for canvas, table, sprite, buffer, test renderer */
     le_tui_canvas = zend_register_list_destructors_ex(tui_canvas_dtor, NULL, TUI_CANVAS_RES_NAME, module_number);
     le_tui_table = zend_register_list_destructors_ex(tui_table_dtor, NULL, TUI_TABLE_RES_NAME, module_number);

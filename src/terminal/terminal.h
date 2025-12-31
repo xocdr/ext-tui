@@ -114,4 +114,21 @@ tui_mouse_mode tui_terminal_get_mouse_mode(void);
 /** Original terminal settings (saved before raw mode) */
 extern struct termios tui_original_termios;
 
+/* ================================================================
+ * Emergency restoration (for crash recovery)
+ * ================================================================ */
+
+/**
+ * Emergency terminal restore for atexit() handler.
+ * Restores terminal to cooked mode if in raw mode.
+ * Safe to call multiple times or from signal handlers.
+ */
+void tui_terminal_emergency_restore(void);
+
+/**
+ * Register the emergency restore handler with atexit().
+ * Should be called once during module initialization.
+ */
+void tui_terminal_register_emergency_handler(void);
+
 #endif /* TUI_TERMINAL_H */
