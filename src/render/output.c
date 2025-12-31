@@ -201,7 +201,7 @@ static size_t apply_style_diff(char *buf, const tui_style *old_style, const tui_
 /* Maximum size for a single ANSI escape sequence (generous for RGB colors + attributes) */
 #define ANSI_BUFFER_SIZE 256
 
-void tui_output_render(tui_output *out, tui_buffer *buf)
+void tui_output_render_with_cursor(tui_output *out, tui_buffer *buf, int show_cursor)
 {
     if (!out || !buf) return;
 
@@ -289,10 +289,13 @@ void tui_output_render(tui_output *out, tui_buffer *buf)
     memcpy(output + output_len, ansi, ansi_len);
     output_len += ansi_len;
 
-    /* Re-assert cursor hide at end of frame. Some terminals (iTerm2, Terminal.app)
-     * may briefly show cursor during screen updates despite DECTCEM being off.
-     * Sending hide again ensures cursor stays invisible. */
-    tui_ansi_cursor_hide(ansi, &ansi_len);
+    /* Show or hide cursor based on focused element's showCursor property.
+     * This is inside the sync block so it happens atomically with the render. */
+    if (show_cursor) {
+        tui_ansi_cursor_show(ansi, &ansi_len);
+    } else {
+        tui_ansi_cursor_hide(ansi, &ansi_len);
+    }
     if (output_len + ansi_len >= OUTPUT_BUFFER_SIZE) {
         write_all(STDOUT_FILENO, output, output_len);
         output_len = 0;
@@ -313,6 +316,12 @@ void tui_output_render(tui_output *out, tui_buffer *buf)
     if (output_len > 0) {
         write_all(STDOUT_FILENO, output, output_len);
     }
+}
+
+void tui_output_render(tui_output *out, tui_buffer *buf)
+{
+    /* Default: hide cursor */
+    tui_output_render_with_cursor(out, buf, 0);
 }
 
 void tui_output_flush(tui_output *out)

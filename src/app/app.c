@@ -449,13 +449,6 @@ void tui_app_focus_next(tui_app *app)
     app->focused_node = nodes[next];
     app->focused_node->focused = 1;
 
-    /* Manage terminal cursor based on focused node's show_cursor flag */
-    if (app->focused_node->show_cursor) {
-        tui_output_show_cursor(app->output);
-    } else {
-        tui_output_hide_cursor(app->output);
-    }
-
     /* Call focus change handler */
     call_focus_handler(app, old_node, app->focused_node, "next");
 
@@ -504,13 +497,6 @@ void tui_app_focus_prev(tui_app *app)
     app->focused_node = nodes[prev];
     app->focused_node->focused = 1;
 
-    /* Manage terminal cursor based on focused node's show_cursor flag */
-    if (app->focused_node->show_cursor) {
-        tui_output_show_cursor(app->output);
-    } else {
-        tui_output_hide_cursor(app->output);
-    }
-
     /* Call focus change handler */
     call_focus_handler(app, old_node, app->focused_node, "prev");
 
@@ -533,17 +519,8 @@ void tui_app_set_focus(tui_app *app, tui_node *node)
     if (node && node->focusable) {
         app->focused_node = node;
         node->focused = 1;
-
-        /* Manage terminal cursor based on focused node's show_cursor flag */
-        if (node->show_cursor) {
-            tui_output_show_cursor(app->output);
-        } else {
-            tui_output_hide_cursor(app->output);
-        }
     } else {
         app->focused_node = NULL;
-        /* No focus, hide cursor */
-        tui_output_hide_cursor(app->output);
     }
 
     /* Call focus change handler */
@@ -633,8 +610,11 @@ void tui_app_render_tree(tui_app *app)
         buffer_end_ns = start_ns;
     }
 
+    /* Determine if cursor should be shown based on focused node's showCursor property */
+    int show_cursor = (app->focused_node && app->focused_node->show_cursor) ? 1 : 0;
+
     /* Output to terminal */
-    tui_output_render(app->output, app->buffer);
+    tui_output_render_with_cursor(app->output, app->buffer, show_cursor);
 
     if (TUI_G(metrics_enabled)) {
         output_end_ns = get_time_ns();

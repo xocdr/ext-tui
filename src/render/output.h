@@ -35,6 +35,7 @@ void tui_output_exit_alternate(tui_output *out);
 
 /* Rendering */
 void tui_output_render(tui_output *out, tui_buffer *buf);
+void tui_output_render_with_cursor(tui_output *out, tui_buffer *buf, int show_cursor);
 void tui_output_flush(tui_output *out);
 
 /* Cursor */
