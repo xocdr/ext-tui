@@ -104,6 +104,27 @@ zend_object_handlers tui_focus_manager_handlers;
 /* Note: Object structures (tui_instance_object, tui_focus_object, etc.)
  * and their helper macros are defined in tui_internal.h */
 
+/**
+ * Validate a dimension value for Yoga layout.
+ * Returns 1 if valid, 0 if invalid.
+ * Valid values are non-negative finite numbers.
+ */
+static inline int tui_validate_dimension(double val, const char *prop_name)
+{
+    if (!isfinite(val)) {
+        php_error_docref(NULL, E_WARNING,
+            "%s must be a finite number, got %s",
+            prop_name, isnan(val) ? "NaN" : "Infinity");
+        return 0;
+    }
+    if (val < 0) {
+        php_error_docref(NULL, E_WARNING,
+            "%s must be non-negative, got %g", prop_name, val);
+        return 0;
+    }
+    return 1;
+}
+
 zend_object *tui_instance_create_object(zend_class_entry *ce)
 {
     tui_instance_object *intern = zend_object_alloc(sizeof(tui_instance_object), ce);
@@ -1210,7 +1231,10 @@ tui_node* php_to_tui_node(zval *obj, int depth)
         /* width */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "width", sizeof("width")-1, 1, &rv);
         if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
-            YGNodeStyleSetWidth(node->yoga_node, (float)zval_get_double(prop));
+            double w = zval_get_double(prop);
+            if (tui_validate_dimension(w, "width")) {
+                YGNodeStyleSetWidth(node->yoga_node, (float)w);
+            }
         } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
             const char *w = Z_STRVAL_P(prop);
             if (strcmp(w, "100%") == 0) {
@@ -1226,7 +1250,10 @@ tui_node* php_to_tui_node(zval *obj, int depth)
         /* height */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "height", sizeof("height")-1, 1, &rv);
         if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
-            YGNodeStyleSetHeight(node->yoga_node, (float)zval_get_double(prop));
+            double h = zval_get_double(prop);
+            if (tui_validate_dimension(h, "height")) {
+                YGNodeStyleSetHeight(node->yoga_node, (float)h);
+            }
         } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
             const char *h = Z_STRVAL_P(prop);
             if (strcmp(h, "100%") == 0) {
@@ -1400,7 +1427,10 @@ tui_node* php_to_tui_node(zval *obj, int depth)
         /* minWidth */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "minWidth", sizeof("minWidth")-1, 1, &rv);
         if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
-            YGNodeStyleSetMinWidth(node->yoga_node, (float)zval_get_double(prop));
+            double mw = zval_get_double(prop);
+            if (tui_validate_dimension(mw, "minWidth")) {
+                YGNodeStyleSetMinWidth(node->yoga_node, (float)mw);
+            }
         } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
             int pct;
             if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1 && pct >= 0 && pct <= 100) {
@@ -1411,7 +1441,10 @@ tui_node* php_to_tui_node(zval *obj, int depth)
         /* minHeight */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "minHeight", sizeof("minHeight")-1, 1, &rv);
         if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
-            YGNodeStyleSetMinHeight(node->yoga_node, (float)zval_get_double(prop));
+            double mh = zval_get_double(prop);
+            if (tui_validate_dimension(mh, "minHeight")) {
+                YGNodeStyleSetMinHeight(node->yoga_node, (float)mh);
+            }
         } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
             int pct;
             if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1 && pct >= 0 && pct <= 100) {
@@ -1422,7 +1455,10 @@ tui_node* php_to_tui_node(zval *obj, int depth)
         /* maxWidth */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "maxWidth", sizeof("maxWidth")-1, 1, &rv);
         if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
-            YGNodeStyleSetMaxWidth(node->yoga_node, (float)zval_get_double(prop));
+            double maxw = zval_get_double(prop);
+            if (tui_validate_dimension(maxw, "maxWidth")) {
+                YGNodeStyleSetMaxWidth(node->yoga_node, (float)maxw);
+            }
         } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
             int pct;
             if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1 && pct >= 0 && pct <= 100) {
@@ -1433,7 +1469,10 @@ tui_node* php_to_tui_node(zval *obj, int depth)
         /* maxHeight */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "maxHeight", sizeof("maxHeight")-1, 1, &rv);
         if (prop && (Z_TYPE_P(prop) == IS_LONG || Z_TYPE_P(prop) == IS_DOUBLE)) {
-            YGNodeStyleSetMaxHeight(node->yoga_node, (float)zval_get_double(prop));
+            double maxh = zval_get_double(prop);
+            if (tui_validate_dimension(maxh, "maxHeight")) {
+                YGNodeStyleSetMaxHeight(node->yoga_node, (float)maxh);
+            }
         } else if (prop && Z_TYPE_P(prop) == IS_STRING) {
             int pct;
             if (sscanf(Z_STRVAL_P(prop), "%d%%", &pct) == 1 && pct >= 0 && pct <= 100) {
