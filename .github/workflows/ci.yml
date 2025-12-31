@@ -33,6 +33,81 @@ jobs:
       - name: Run tests
         run: make test TESTS='-q --show-diff'
 
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: none
+          tools: phpize
+
+      - name: Build extension with coverage
+        run: |
+          phpize
+          ./configure --enable-tui --enable-tui-gcov
+          make -j$(nproc)
+
+      - name: Run tests
+        run: make test TESTS='-q'
+
+      - name: Generate coverage report
+        run: |
+          mkdir -p coverage
+          lcov --capture --directory . --output-file coverage/coverage.info \
+            --exclude '/usr/*' \
+            --exclude '*/src/yoga/*' \
+            --exclude '*/php-src/*' \
+            --ignore-errors inconsistent
+          lcov --list coverage/coverage.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage/coverage.info
+          fail_ci_if_error: false
+
+  static-analysis:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-tidy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: none
+          tools: phpize
+
+      - name: Configure (for compile_commands.json context)
+        run: |
+          phpize
+          ./configure --enable-tui
+
+      - name: Run clang-tidy
+        run: |
+          PHP_INCLUDE=$(php-config --include-dir)
+          clang-tidy tui.c \
+            --quiet \
+            -- -I. -I./src -I$PHP_INCLUDE -I$PHP_INCLUDE/main \
+            -I$PHP_INCLUDE/TSRM -I$PHP_INCLUDE/Zend -I$PHP_INCLUDE/ext \
+            -DHAVE_CONFIG_H 2>/dev/null || true
+
   valgrind:
     runs-on: ubuntu-latest
 
