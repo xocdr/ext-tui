@@ -29,8 +29,8 @@ typedef struct {
     int index;            /* State slot index */
 } tui_state_slot;
 
-/* Maximum state slots per app (compile-time limit) */
-#define TUI_MAX_STATES 64
+/* Initial capacity for dynamic state array */
+#define INITIAL_STATE_CAPACITY 8
 
 /* Forward declaration for callback pointer */
 typedef struct tui_app tui_app;
@@ -98,15 +98,16 @@ struct tui_app {
     size_t captured_output_len;
 
     /* ---- Timer callbacks ---- */
-    #define TUI_MAX_TIMERS 32
+    #define INITIAL_TIMER_CAPACITY 4
     struct tui_timer_callback {
         int id;                   /* Timer ID from event loop */
         zend_fcall_info fci;
         zend_fcall_info_cache fcc;
         int active;               /* Whether timer is active */
         struct tui_app *app;      /* Back-pointer for safe invocation */
-    } timer_callbacks[TUI_MAX_TIMERS];
-    int timer_callback_count;
+    } *timer_callbacks;           /* Dynamic timer array */
+    int timer_capacity;           /* Current allocated capacity */
+    int timer_callback_count;     /* Number of used slots */
 
     /* ---- Cleanup state ---- */
     int destroyed;                /* Prevent double-free */
@@ -116,7 +117,8 @@ struct tui_app {
     int rerender_requested;       /* Rerender requested during render */
 
     /* ---- useState hook state ---- */
-    tui_state_slot states[TUI_MAX_STATES];
+    tui_state_slot *states;       /* Dynamic state slot array */
+    int state_capacity;           /* Current allocated capacity */
     int state_count;              /* Number of allocated state slots */
     int state_index;              /* Current hook index (reset each render) */
 

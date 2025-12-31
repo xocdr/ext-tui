@@ -1,45 +1,46 @@
 --TEST--
-Stress test: Timer exhaustion (32 limit) - limit enforcement
+Stress test: Timer dynamic growth
 --EXTENSIONS--
 tui
 --FILE--
 <?php
 /**
- * Test that timer limits are documented and the constants exist.
+ * Test that timer arrays grow dynamically.
  * Full timer testing requires interactive mode.
- * TUI_MAX_TIMERS is 32 in the current implementation.
+ * Timers now use dynamic arrays starting at INITIAL_TIMER_CAPACITY (4).
+ * The tui.max_timers INI setting controls the maximum (default: 32).
  */
 
 use Xocdr\Tui\Ext\Box;
 use Xocdr\Tui\Ext\Text;
 
-echo "Test: Timer limit constants\n";
-
-// Verify the limit is documented in the header
-// This test ensures the codebase is aware of limits
+echo "Test: Timer dynamic growth\n";
 
 // Create a basic render test to ensure timers work at all
 $renderer = tui_test_create(80, 24);
-$tree = new Box(['children' => [new Text("Timer limit test")]]);
+$tree = new Box(['children' => [new Text("Timer dynamic test")]]);
 tui_test_render($renderer, $tree);
 echo "Basic render works\n";
 
 // Test multiple render cycles (simulates timer-like behavior)
-for ($i = 0; $i < 35; $i++) {
+// This tests the array growth from initial capacity (4) to higher counts
+for ($i = 0; $i < 50; $i++) {
     $tree = new Box(['children' => [new Text("Cycle $i")]]);
     tui_test_render($renderer, $tree);
 }
-echo "35 render cycles completed (simulating timer iterations)\n";
+echo "50 render cycles completed (simulating timer iterations)\n";
 
 tui_test_destroy($renderer);
 
-// Document the expected limit
-echo "Expected max timers per app: 32 (TUI_MAX_TIMERS)\n";
-echo "Timer limit stress test completed!\n";
+// Document the dynamic allocation
+echo "Timers use dynamic arrays (initial capacity: 4, grows as needed)\n";
+echo "Maximum controlled by tui.max_timers INI setting\n";
+echo "Timer dynamic growth test completed!\n";
 ?>
 --EXPECT--
-Test: Timer limit constants
+Test: Timer dynamic growth
 Basic render works
-35 render cycles completed (simulating timer iterations)
-Expected max timers per app: 32 (TUI_MAX_TIMERS)
-Timer limit stress test completed!
+50 render cycles completed (simulating timer iterations)
+Timers use dynamic arrays (initial capacity: 4, grows as needed)
+Maximum controlled by tui.max_timers INI setting
+Timer dynamic growth test completed!

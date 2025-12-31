@@ -33,12 +33,31 @@ tui_app* tui_app_create(void)
     app->exit_on_ctrl_c = 1;
     app->min_render_interval_ms = 16;  /* 60fps */
 
+    /* Allocate initial state array */
+    app->states = calloc(INITIAL_STATE_CAPACITY, sizeof(tui_state_slot));
+    if (!app->states) {
+        free(app);
+        return NULL;
+    }
+    app->state_capacity = INITIAL_STATE_CAPACITY;
+
+    /* Allocate initial timer array */
+    app->timer_callbacks = calloc(INITIAL_TIMER_CAPACITY, sizeof(struct tui_timer_callback));
+    if (!app->timer_callbacks) {
+        free(app->states);
+        free(app);
+        return NULL;
+    }
+    app->timer_capacity = INITIAL_TIMER_CAPACITY;
+
     /* Get terminal size */
     tui_terminal_get_size(&app->width, &app->height);
 
     /* Create output system with proper cleanup on failure */
     app->output = tui_output_create(app->width, app->height);
     if (!app->output) {
+        free(app->timer_callbacks);
+        free(app->states);
         free(app);
         return NULL;
     }
@@ -46,6 +65,8 @@ tui_app* tui_app_create(void)
     app->buffer = tui_buffer_create(app->width, app->height);
     if (!app->buffer) {
         tui_output_destroy(app->output);
+        free(app->timer_callbacks);
+        free(app->states);
         free(app);
         return NULL;
     }
@@ -55,6 +76,8 @@ tui_app* tui_app_create(void)
     if (!app->loop) {
         tui_buffer_destroy(app->buffer);
         tui_output_destroy(app->output);
+        free(app->timer_callbacks);
+        free(app->states);
         free(app);
         return NULL;
     }
@@ -133,9 +156,20 @@ void tui_app_destroy(tui_app *app)
             }
         }
     }
+    /* Free dynamic timer array */
+    if (app->timer_callbacks) {
+        free(app->timer_callbacks);
+        app->timer_callbacks = NULL;
+    }
 
     /* Clean up useState slots */
     tui_app_cleanup_states(app);
+
+    /* Free dynamic state array */
+    if (app->states) {
+        free(app->states);
+        app->states = NULL;
+    }
 
     /* Clean up instance_zval if set (added refcount in tui_render.c) */
     if (app->instance_zval_set) {
@@ -720,6 +754,52 @@ void tui_app_exit(tui_app *app, int code)
     }
 }
 
+/**
+ * Ensure timer_callbacks array has room for at least one more timer.
+ * Doubles capacity on growth with overflow protection.
+ * @return 0 on success, -1 on failure
+ */
+static int ensure_timer_capacity(tui_app *app)
+{
+    if (app->timer_callback_count < app->timer_capacity) {
+        return 0;  /* Already have room */
+    }
+
+    /* Check INI limit */
+    zend_long max_timers = TUI_G(max_timers);
+    if (app->timer_callback_count >= (int)max_timers) {
+        php_error_docref(NULL, E_WARNING,
+            "Maximum number of timers (%d) exceeded. "
+            "Increase tui.max_timers in php.ini",
+            (int)max_timers);
+        return -1;
+    }
+
+    /* Check for overflow before doubling */
+    if (app->timer_capacity > INT_MAX / 2) return -1;
+    int new_capacity = app->timer_capacity * 2;
+
+    /* Respect INI limit */
+    if (new_capacity > (int)max_timers) {
+        new_capacity = (int)max_timers;
+    }
+
+    /* Check for size_t overflow */
+    if ((size_t)new_capacity > SIZE_MAX / sizeof(struct tui_timer_callback)) return -1;
+
+    struct tui_timer_callback *new_timers = realloc(app->timer_callbacks,
+        (size_t)new_capacity * sizeof(struct tui_timer_callback));
+    if (!new_timers) return -1;
+
+    /* Zero-initialize new slots */
+    memset(&new_timers[app->timer_capacity], 0,
+        (new_capacity - app->timer_capacity) * sizeof(struct tui_timer_callback));
+
+    app->timer_callbacks = new_timers;
+    app->timer_capacity = new_capacity;
+    return 0;
+}
+
 /* Timer callback wrapper - called from event loop, invokes PHP callback */
 static void timer_callback_wrapper(void *userdata)
 {
@@ -746,14 +826,8 @@ int tui_app_add_timer(tui_app *app, int interval_ms, zend_fcall_info *fci, zend_
 {
     if (!app || !fci || !fcc) return -1;
 
-    /* Check against both compile-time max and runtime INI setting */
-    zend_long max_timers = TUI_G(max_timers);
-    if (max_timers > TUI_MAX_TIMERS) max_timers = TUI_MAX_TIMERS;
-    if (app->timer_callback_count >= (int)max_timers) {
-        php_error_docref(NULL, E_WARNING,
-            "Maximum number of timers (%d) exceeded. "
-            "Increase tui.max_timers in php.ini (max: %d)",
-            (int)max_timers, TUI_MAX_TIMERS);
+    /* Ensure capacity (handles INI limit check internally) */
+    if (ensure_timer_capacity(app) < 0) {
         return -1;
     }
 
@@ -1101,6 +1175,52 @@ void tui_app_cleanup_states(tui_app *app)
     app->state_index = 0;
 }
 
+/**
+ * Ensure states array has room for at least one more slot.
+ * Doubles capacity on growth with overflow protection.
+ * @return 0 on success, -1 on failure
+ */
+static int ensure_state_capacity(tui_app *app)
+{
+    if (app->state_count < app->state_capacity) {
+        return 0;  /* Already have room */
+    }
+
+    /* Check INI limit */
+    zend_long max_states = TUI_G(max_states);
+    if (app->state_count >= (int)max_states) {
+        php_error_docref(NULL, E_WARNING,
+            "Maximum number of useState hooks (%d) exceeded. "
+            "Increase tui.max_states in php.ini",
+            (int)max_states);
+        return -1;
+    }
+
+    /* Check for overflow before doubling */
+    if (app->state_capacity > INT_MAX / 2) return -1;
+    int new_capacity = app->state_capacity * 2;
+
+    /* Respect INI limit */
+    if (new_capacity > (int)max_states) {
+        new_capacity = (int)max_states;
+    }
+
+    /* Check for size_t overflow */
+    if ((size_t)new_capacity > SIZE_MAX / sizeof(tui_state_slot)) return -1;
+
+    tui_state_slot *new_states = realloc(app->states,
+        (size_t)new_capacity * sizeof(tui_state_slot));
+    if (!new_states) return -1;
+
+    /* Zero-initialize new slots */
+    memset(&new_states[app->state_capacity], 0,
+        (new_capacity - app->state_capacity) * sizeof(tui_state_slot));
+
+    app->states = new_states;
+    app->state_capacity = new_capacity;
+    return 0;
+}
+
 /* Note: The actual useState implementation with closure creation is in tui.c
  * because it requires access to the PHP class entries and closure mechanisms.
  * This function provides the C-level state slot management. */
@@ -1111,15 +1231,11 @@ int tui_app_get_or_create_state_slot(tui_app *app, zval *initial, int *is_new)
 
     int index = app->state_index++;
 
-    /* Check against both compile-time max and runtime INI setting */
-    zend_long max_states = TUI_G(max_states);
-    if (max_states > TUI_MAX_STATES) max_states = TUI_MAX_STATES;
-    if (index >= (int)max_states) {
-        php_error_docref(NULL, E_WARNING,
-            "Maximum number of useState hooks (%d) exceeded. "
-            "Increase tui.max_states in php.ini (max: %d)",
-            (int)max_states, TUI_MAX_STATES);
-        return -1;
+    /* Ensure capacity before accessing (handles INI limit check internally) */
+    if (index >= app->state_capacity) {
+        if (ensure_state_capacity(app) < 0) {
+            return -1;
+        }
     }
 
     if (index >= app->state_count) {
