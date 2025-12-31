@@ -10,6 +10,7 @@
 #include "php.h"
 #include "php_tui.h"
 #include <stdlib.h>
+#include <string.h>
 #include <poll.h>
 #include <unistd.h>
 #include <signal.h>
@@ -203,8 +204,16 @@ int tui_loop_run(tui_loop *loop)
             /* Interrupted by signal - this is normal, continue processing
              * (resize signal handling will happen below) */
         } else {
-            /* Real error - log but continue (best effort for TUI) */
+            /* Real error - log with php_error_docref and continue.
+             * We don't abort the event loop on poll errors to maintain
+             * best-effort TUI operation. Common causes:
+             * - EBADF: fd became invalid (unlikely for stdin)
+             * - ENOMEM: out of memory for poll internals
+             * - EINVAL: timeout overflow (handled by MIN_POLL_TIMEOUT_MS) */
             TUI_METRIC_INC(poll_errors);
+            php_error_docref(NULL, E_WARNING,
+                "poll() failed with errno %d: %s",
+                errno, strerror(errno));
         }
     }
 
