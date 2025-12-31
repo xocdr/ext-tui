@@ -80,6 +80,7 @@ YGConfigRef tui_get_yoga_config(void)
 }
 
 /* Class entries */
+zend_class_entry *tui_node_interface_ce;  /* TuiNode interface */
 zend_class_entry *tui_box_ce;
 zend_class_entry *tui_text_ce;
 zend_class_entry *tui_instance_ce;
@@ -1838,8 +1839,50 @@ text_node_created:
 }
 
 /* ------------------------------------------------------------------
+ * TuiNode interface - common interface for Box and Text nodes
+ * ------------------------------------------------------------------ */
+
+/* Interface arginfo definitions */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuinode_getkey, 0, 0, IS_STRING, 1)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuinode_getid, 0, 0, IS_STRING, 1)
+ZEND_END_ARG_INFO()
+
+/* TuiNode interface methods - abstract, implementations in Box/Text */
+static const zend_function_entry tui_node_interface_methods[] = {
+    PHP_ABSTRACT_ME(TuiNode, getKey, arginfo_tuinode_getkey)
+    PHP_ABSTRACT_ME(TuiNode, getId, arginfo_tuinode_getid)
+    PHP_FE_END
+};
+
+/* ------------------------------------------------------------------
  * TuiBox class
  * ------------------------------------------------------------------ */
+
+/* {{{ TuiBox::getKey(): ?string */
+PHP_METHOD(TuiBox, getKey)
+{
+    zval rv;
+    zval *key = zend_read_property(tui_box_ce, Z_OBJ_P(ZEND_THIS), "key", sizeof("key")-1, 1, &rv);
+    if (Z_TYPE_P(key) == IS_STRING) {
+        RETURN_STR(zend_string_copy(Z_STR_P(key)));
+    }
+    RETURN_NULL();
+}
+/* }}} */
+
+/* {{{ TuiBox::getId(): ?string */
+PHP_METHOD(TuiBox, getId)
+{
+    zval rv;
+    zval *id = zend_read_property(tui_box_ce, Z_OBJ_P(ZEND_THIS), "id", sizeof("id")-1, 1, &rv);
+    if (Z_TYPE_P(id) == IS_STRING) {
+        RETURN_STR(zend_string_copy(Z_STR_P(id)));
+    }
+    RETURN_NULL();
+}
+/* }}} */
 
 /* {{{ TuiBox::__construct(array $props = []) */
 PHP_METHOD(TuiBox, __construct)
@@ -1947,12 +1990,38 @@ ZEND_END_ARG_INFO()
 static const zend_function_entry tui_box_methods[] = {
     PHP_ME(TuiBox, __construct, arginfo_tuibox_construct, ZEND_ACC_PUBLIC)
     PHP_ME(TuiBox, addChild, arginfo_tuibox_addchild, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiBox, getKey, arginfo_tuinode_getkey, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiBox, getId, arginfo_tuinode_getid, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
 /* ------------------------------------------------------------------
  * TuiText class
  * ------------------------------------------------------------------ */
+
+/* {{{ TuiText::getKey(): ?string */
+PHP_METHOD(TuiText, getKey)
+{
+    zval rv;
+    zval *key = zend_read_property(tui_text_ce, Z_OBJ_P(ZEND_THIS), "key", sizeof("key")-1, 1, &rv);
+    if (Z_TYPE_P(key) == IS_STRING) {
+        RETURN_STR(zend_string_copy(Z_STR_P(key)));
+    }
+    RETURN_NULL();
+}
+/* }}} */
+
+/* {{{ TuiText::getId(): ?string */
+PHP_METHOD(TuiText, getId)
+{
+    zval rv;
+    zval *id = zend_read_property(tui_text_ce, Z_OBJ_P(ZEND_THIS), "id", sizeof("id")-1, 1, &rv);
+    if (Z_TYPE_P(id) == IS_STRING) {
+        RETURN_STR(zend_string_copy(Z_STR_P(id)));
+    }
+    RETURN_NULL();
+}
+/* }}} */
 
 /* {{{ TuiText::__construct(string $content = '', array $props = []) */
 PHP_METHOD(TuiText, __construct)
@@ -2000,6 +2069,8 @@ ZEND_END_ARG_INFO()
 
 static const zend_function_entry tui_text_methods[] = {
     PHP_ME(TuiText, __construct, arginfo_tuitext_construct, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiText, getKey, arginfo_tuinode_getkey, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiText, getId, arginfo_tuinode_getid, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -4165,9 +4236,14 @@ static PHP_MINIT_FUNCTION(tui)
     REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_ALERT", 29, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT("TUI_ARIA_ROLE_STATUS", 22, CONST_CS | CONST_PERSISTENT);
 
+    /* Register Xocdr\Tui\Ext\TuiNode interface */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\TuiNode", tui_node_interface_methods);
+    tui_node_interface_ce = zend_register_internal_interface(&ce);
+
     /* Register Xocdr\Tui\Ext\Box class with methods */
     INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Box", tui_box_methods);
     tui_box_ce = zend_register_internal_class(&ce);
+    zend_class_implements(tui_box_ce, 1, tui_node_interface_ce);
 
     /* TuiBox properties */
     zend_declare_property_string(tui_box_ce, "flexDirection", sizeof("flexDirection")-1, "column", ZEND_ACC_PUBLIC);
@@ -4234,6 +4310,7 @@ static PHP_MINIT_FUNCTION(tui)
     /* Register Xocdr\Tui\Ext\Text class with methods */
     INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Text", tui_text_methods);
     tui_text_ce = zend_register_internal_class(&ce);
+    zend_class_implements(tui_text_ce, 1, tui_node_interface_ce);
 
     /* TuiText properties */
     zend_declare_property_string(tui_text_ce, "content", sizeof("content")-1, "", ZEND_ACC_PUBLIC);
