@@ -972,12 +972,14 @@ PHP_METHOD(Color, toRgb)
 
     zval *value = zend_enum_fetch_case_value(Z_OBJ_P(ZEND_THIS));
     if (!value || Z_TYPE_P(value) != IS_STRING) {
-        RETURN_NULL();
+        zend_throw_exception(NULL, "Color enum value is not a valid hex string", 0);
+        RETURN_THROWS();
     }
 
     int idx = get_color_index_from_hex(Z_STRVAL_P(value));
     if (idx < 0) {
-        RETURN_NULL();
+        zend_throw_exception(NULL, "Color hex value not found in color table", 0);
+        RETURN_THROWS();
     }
 
     array_init(return_value);
