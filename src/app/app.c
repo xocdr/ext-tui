@@ -729,7 +729,17 @@ static void timer_callback_wrapper(void *userdata)
 int tui_app_add_timer(tui_app *app, int interval_ms, zend_fcall_info *fci, zend_fcall_info_cache *fcc)
 {
     if (!app || !fci || !fcc) return -1;
-    if (app->timer_callback_count >= TUI_MAX_TIMERS) return -1;
+
+    /* Check against both compile-time max and runtime INI setting */
+    zend_long max_timers = TUI_G(max_timers);
+    if (max_timers > TUI_MAX_TIMERS) max_timers = TUI_MAX_TIMERS;
+    if (app->timer_callback_count >= (int)max_timers) {
+        php_error_docref(NULL, E_WARNING,
+            "Maximum number of timers (%d) exceeded. "
+            "Increase tui.max_timers in php.ini (max: %d)",
+            (int)max_timers, TUI_MAX_TIMERS);
+        return -1;
+    }
 
     int index = app->timer_callback_count++;
 
@@ -1085,8 +1095,14 @@ int tui_app_get_or_create_state_slot(tui_app *app, zval *initial, int *is_new)
 
     int index = app->state_index++;
 
-    if (index >= TUI_MAX_STATES) {
-        php_error_docref(NULL, E_WARNING, "Maximum number of useState hooks (%d) exceeded", TUI_MAX_STATES);
+    /* Check against both compile-time max and runtime INI setting */
+    zend_long max_states = TUI_G(max_states);
+    if (max_states > TUI_MAX_STATES) max_states = TUI_MAX_STATES;
+    if (index >= (int)max_states) {
+        php_error_docref(NULL, E_WARNING,
+            "Maximum number of useState hooks (%d) exceeded. "
+            "Increase tui.max_states in php.ini (max: %d)",
+            (int)max_states, TUI_MAX_STATES);
         return -1;
     }
 

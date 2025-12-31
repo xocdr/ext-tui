@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        php-version: ['8.1', '8.2', '8.3', '8.4']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: none
+          tools: phpize
+
+      - name: Build extension
+        run: |
+          phpize
+          ./configure --enable-tui
+          make -j$(nproc)
+
+      - name: Run tests
+        run: make test TESTS='-q --show-diff'
+
+  valgrind:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y valgrind
+
+      - name: Setup PHP with debug
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: none
+          tools: phpize
+          # Debug build for better valgrind output
+          ini-values: memory_limit=512M
+
+      - name: Build extension
+        run: |
+          phpize
+          ./configure --enable-tui
+          make -j$(nproc)
+
+      - name: Run valgrind memory leak tests
+        run: |
+          # Run a subset of tests under valgrind
+          USE_ZEND_ALLOC=0 valgrind --leak-check=full --show-reachable=yes \
+            --suppressions=/usr/share/php/.supp 2>&1 \
+            php -d extension=modules/tui.so -r '
+              // Basic smoke test for memory leaks
+              $width = tui_string_width("Hello");
+              $wrapped = tui_wrap_text("Hello World", 5);
+              $truncated = tui_truncate("Hello World", 8);
+              echo "Memory test passed\n";
+            ' | tee valgrind.log
+
+          # Check for definite leaks (exit non-zero if found)
+          if grep -q "definitely lost: [^0]" valgrind.log; then
+            echo "Memory leaks detected!"
+            exit 1
+          fi
+
+  macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: none
+          tools: phpize
+
+      - name: Build extension
+        run: |
+          phpize
+          ./configure --enable-tui
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Run tests
+        run: make test TESTS='-q --show-diff'

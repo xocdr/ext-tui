@@ -12,6 +12,10 @@
 #include "tui_internal.h"
 #include "src/terminal/capabilities.h"
 #include "src/terminal/notify.h"
+#include "src/render/output.h"
+
+/* Maximum title length to prevent excessive memory allocation */
+#define TUI_MAX_TITLE_LENGTH 4064
 
 /* ------------------------------------------------------------------
  * Terminal Info Functions
@@ -107,7 +111,7 @@ PHP_FUNCTION(tui_cursor_shape)
     char buf[32];
     size_t len;
     tui_ansi_cursor_shape(buf, &len, cursor_shape);
-    write(STDOUT_FILENO, buf, len);
+    tui_write_all(STDOUT_FILENO, buf, len);
 }
 /* }}} */
 
@@ -119,7 +123,7 @@ PHP_FUNCTION(tui_cursor_show)
     char buf[32];
     size_t len;
     tui_ansi_cursor_show(buf, &len);
-    write(STDOUT_FILENO, buf, len);
+    tui_write_all(STDOUT_FILENO, buf, len);
 }
 /* }}} */
 
@@ -131,7 +135,7 @@ PHP_FUNCTION(tui_cursor_hide)
     char buf[32];
     size_t len;
     tui_ansi_cursor_hide(buf, &len);
-    write(STDOUT_FILENO, buf, len);
+    tui_write_all(STDOUT_FILENO, buf, len);
 }
 /* }}} */
 
@@ -148,16 +152,19 @@ PHP_FUNCTION(tui_set_title)
         Z_PARAM_STR(title)
     ZEND_PARSE_PARAMETERS_END();
 
-    /* Limit title size to prevent buffer overflow */
-    size_t buf_size = ZSTR_LEN(title) + 32;
-    if (buf_size > 4096) buf_size = 4096;
+    /* Calculate buffer size: title length + ANSI overhead, capped at max */
+    size_t title_len = ZSTR_LEN(title);
+    if (title_len > TUI_MAX_TITLE_LENGTH) {
+        title_len = TUI_MAX_TITLE_LENGTH;
+    }
+    size_t buf_size = title_len + 32;
 
     char *buf = emalloc(buf_size);
     size_t len;
     tui_ansi_set_title(buf, buf_size, &len, ZSTR_VAL(title));
 
     if (len > 0) {
-        write(STDOUT_FILENO, buf, len);
+        tui_write_all(STDOUT_FILENO, buf, len);
     }
     efree(buf);
 }
@@ -171,7 +178,7 @@ PHP_FUNCTION(tui_reset_title)
     char buf[32];
     size_t len;
     tui_ansi_reset_title(buf, &len);
-    write(STDOUT_FILENO, buf, len);
+    tui_write_all(STDOUT_FILENO, buf, len);
 }
 /* }}} */
 
@@ -319,7 +326,7 @@ PHP_FUNCTION(tui_clipboard_request)
     char buf[32];
     size_t len;
     tui_ansi_clipboard_request(buf, &len, clipboard_target);
-    write(STDOUT_FILENO, buf, len);
+    tui_write_all(STDOUT_FILENO, buf, len);
 }
 /* }}} */
 
@@ -349,7 +356,7 @@ PHP_FUNCTION(tui_clipboard_clear)
     char buf[32];
     size_t len;
     tui_ansi_clipboard_clear(buf, &len, clipboard_target);
-    write(STDOUT_FILENO, buf, len);
+    tui_write_all(STDOUT_FILENO, buf, len);
 }
 /* }}} */
 

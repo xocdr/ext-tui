@@ -2,6 +2,30 @@
   +----------------------------------------------------------------------+
   | ext-tui: Virtual DOM node                                           |
   +----------------------------------------------------------------------+
+  |                                                                      |
+  | MEMORY ALLOCATION STRATEGY                                           |
+  | ==========================                                           |
+  |                                                                      |
+  | This module uses a hybrid allocation strategy for children arrays:   |
+  |                                                                      |
+  | 1. POOL ALLOCATION (preferred):                                      |
+  |    When TUI_G(pools) is available, children arrays are allocated     |
+  |    from a pre-sized pool. This reduces malloc overhead during the    |
+  |    hot path of reconciliation and tree building.                     |
+  |                                                                      |
+  | 2. STANDARD MALLOC (fallback):                                       |
+  |    When pools aren't available (early init or pool exhausted),       |
+  |    standard calloc/realloc is used.                                  |
+  |                                                                      |
+  | 3. TRANSITION HANDLING:                                              |
+  |    - children_from_pool flag tracks the source of each array         |
+  |    - When growing, we may transition from malloc to pool             |
+  |    - Free operations check the flag to call the correct deallocator  |
+  |                                                                      |
+  | Node structs themselves always use standard malloc/free.             |
+  | Text strings (node->text, node->key) use strdup/free.                |
+  |                                                                      |
+  +----------------------------------------------------------------------+
 */
 
 #include "node.h"

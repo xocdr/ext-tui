@@ -43,4 +43,7 @@ void tui_output_show_cursor(tui_output *out);
 void tui_output_hide_cursor(tui_output *out);
 void tui_output_move_cursor(tui_output *out, int x, int y);
 
+/* Low-level I/O utilities */
+int tui_write_all(int fd, const void *buf, size_t len);
+
 #endif /* TUI_OUTPUT_H */

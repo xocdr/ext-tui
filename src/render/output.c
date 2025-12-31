@@ -23,8 +23,11 @@
 /**
  * Write all bytes to file descriptor, handling partial writes and EINTR.
  * Returns 0 on success, -1 on error.
+ *
+ * This function is exposed publicly as tui_write_all() for use by other
+ * modules that need reliable terminal output (e.g., tui_terminal.c).
  */
-static int write_all(int fd, const void *buf, size_t len)
+int tui_write_all(int fd, const void *buf, size_t len)
 {
     const char *p = buf;
     size_t remaining = len;
@@ -40,6 +43,9 @@ static int write_all(int fd, const void *buf, size_t len)
     }
     return 0;
 }
+
+/* Internal alias for backward compatibility within this file */
+#define write_all tui_write_all
 
 tui_output* tui_output_create(int width, int height)
 {

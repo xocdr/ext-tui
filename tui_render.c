@@ -143,7 +143,8 @@ PHP_FUNCTION(tui_render)
     /* Create app instance */
     tui_app *app = tui_app_create();
     if (!app) {
-        php_error_docref(NULL, E_ERROR, "Failed to create TUI application");
+        php_error_docref(NULL, E_ERROR,
+            "Failed to create TUI application: memory allocation failed");
         RETURN_NULL();
     }
 
@@ -243,7 +244,9 @@ PHP_FUNCTION(tui_render)
         app->instance_zval_set = 0;
         instance_obj->app = NULL;
         tui_app_destroy(app);
-        php_error_docref(NULL, E_ERROR, "Failed to start TUI application");
+        php_error_docref(NULL, E_ERROR,
+            "Failed to start TUI application: could not enable raw terminal mode "
+            "(terminal may not be interactive or stdin is not a TTY)");
         RETURN_NULL();
     }
 
