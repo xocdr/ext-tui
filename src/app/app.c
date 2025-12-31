@@ -33,6 +33,17 @@ tui_app* tui_app_create(void)
     app->exit_on_ctrl_c = 1;
     app->min_render_interval_ms = 16;  /* 60fps */
 
+    /* Initialize all zvals to UNDEF for safe cleanup.
+     * This ensures zval_ptr_dtor checks in tui_app_destroy() work correctly
+     * even if callbacks were never set. calloc zeros memory but that's not
+     * the same as ZVAL_UNDEF which has IS_UNDEF type. */
+    ZVAL_UNDEF(&app->component_fci.function_name);
+    ZVAL_UNDEF(&app->input_fci.function_name);
+    ZVAL_UNDEF(&app->focus_fci.function_name);
+    ZVAL_UNDEF(&app->resize_fci.function_name);
+    ZVAL_UNDEF(&app->tick_fci.function_name);
+    ZVAL_UNDEF(&app->instance_zval);
+
     /* Allocate initial state array */
     app->states = calloc(INITIAL_STATE_CAPACITY, sizeof(tui_state_slot));
     if (!app->states) {
