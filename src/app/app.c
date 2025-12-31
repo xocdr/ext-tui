@@ -1069,7 +1069,9 @@ void tui_app_on_resize(int width, int height, void *userdata)
     app->rerender_pending = 1;
 }
 
-/* Border characters for different styles */
+/* Border characters for different styles.
+ * Index: [style][char] where char is: 0=TL 1=TR 2=BL 3=BR 4=H 5=V
+ * Shared by both app and external rendering functions. */
 static const char* border_chars[6][6] = {
     /* NONE: no borders */
     {"", "", "", "", "", ""},
@@ -1085,10 +1087,11 @@ static const char* border_chars[6][6] = {
     {"┌", "┐", "└", "┘", "┄", "┆"}
 };
 
-/* Render border around a box */
-static void render_border(tui_app *app, tui_node *node, int x, int y, int w, int h)
+/* Render border around a box to any buffer.
+ * Single implementation used by both app rendering and external buffer rendering. */
+static void render_border_to_buffer(tui_buffer *buffer, tui_node *node, int x, int y, int w, int h)
 {
-    if (!app || !node || node->border_style == TUI_BORDER_NONE || w < 2 || h < 2) return;
+    if (!buffer || !node || node->border_style == TUI_BORDER_NONE || w < 2 || h < 2) return;
 
     const char **chars = border_chars[node->border_style];
     tui_style border_style = {0};
@@ -1096,25 +1099,22 @@ static void render_border(tui_app *app, tui_node *node, int x, int y, int w, int
         border_style.fg = node->border_color;
     }
 
-    /* Top-left corner */
-    tui_buffer_write_text(app->buffer, x, y, chars[0], &border_style);
-    /* Top-right corner */
-    tui_buffer_write_text(app->buffer, x + w - 1, y, chars[1], &border_style);
-    /* Bottom-left corner */
-    tui_buffer_write_text(app->buffer, x, y + h - 1, chars[2], &border_style);
-    /* Bottom-right corner */
-    tui_buffer_write_text(app->buffer, x + w - 1, y + h - 1, chars[3], &border_style);
+    /* Corners: TL, TR, BL, BR */
+    tui_buffer_write_text(buffer, x, y, chars[0], &border_style);
+    tui_buffer_write_text(buffer, x + w - 1, y, chars[1], &border_style);
+    tui_buffer_write_text(buffer, x, y + h - 1, chars[2], &border_style);
+    tui_buffer_write_text(buffer, x + w - 1, y + h - 1, chars[3], &border_style);
 
-    /* Top and bottom edges */
+    /* Horizontal edges (top and bottom) */
     for (int i = 1; i < w - 1; i++) {
-        tui_buffer_write_text(app->buffer, x + i, y, chars[4], &border_style);
-        tui_buffer_write_text(app->buffer, x + i, y + h - 1, chars[4], &border_style);
+        tui_buffer_write_text(buffer, x + i, y, chars[4], &border_style);
+        tui_buffer_write_text(buffer, x + i, y + h - 1, chars[4], &border_style);
     }
 
-    /* Left and right edges */
+    /* Vertical edges (left and right) */
     for (int i = 1; i < h - 1; i++) {
-        tui_buffer_write_text(app->buffer, x, y + i, chars[5], &border_style);
-        tui_buffer_write_text(app->buffer, x + w - 1, y + i, chars[5], &border_style);
+        tui_buffer_write_text(buffer, x, y + i, chars[5], &border_style);
+        tui_buffer_write_text(buffer, x + w - 1, y + i, chars[5], &border_style);
     }
 }
 
@@ -1183,7 +1183,7 @@ static void render_node_to_buffer(tui_app *app, tui_node *node, int offset_x, in
 
         /* Render border if set */
         if (node->border_style != TUI_BORDER_NONE) {
-            render_border(app, node, x, y, w, h);
+            render_border_to_buffer(app->buffer, node, x, y, w, h);
         }
     }
 
@@ -1406,42 +1406,6 @@ static void render_wrapped_text_external(tui_buffer *buffer, tui_node *node, int
     }
 }
 
-/* Render border to external buffer */
-static void render_border_external(tui_buffer *buffer, tui_node *node, int x, int y, int w, int h)
-{
-    if (!buffer || !node || node->border_style == TUI_BORDER_NONE || w < 2 || h < 2) return;
-
-    static const char* border_chars_ext[6][6] = {
-        {"", "", "", "", "", ""},
-        {"┌", "┐", "└", "┘", "─", "│"},
-        {"╔", "╗", "╚", "╝", "═", "║"},
-        {"╭", "╮", "╰", "╯", "─", "│"},
-        {"┏", "┓", "┗", "┛", "━", "┃"},
-        {"┌", "┐", "└", "┘", "┄", "┆"}
-    };
-
-    const char **chars = border_chars_ext[node->border_style];
-    tui_style border_style = {0};
-    if (node->border_color.is_set) {
-        border_style.fg = node->border_color;
-    }
-
-    tui_buffer_write_text(buffer, x, y, chars[0], &border_style);
-    tui_buffer_write_text(buffer, x + w - 1, y, chars[1], &border_style);
-    tui_buffer_write_text(buffer, x, y + h - 1, chars[2], &border_style);
-    tui_buffer_write_text(buffer, x + w - 1, y + h - 1, chars[3], &border_style);
-
-    for (int i = 1; i < w - 1; i++) {
-        tui_buffer_write_text(buffer, x + i, y, chars[4], &border_style);
-        tui_buffer_write_text(buffer, x + i, y + h - 1, chars[4], &border_style);
-    }
-
-    for (int i = 1; i < h - 1; i++) {
-        tui_buffer_write_text(buffer, x, y + i, chars[5], &border_style);
-        tui_buffer_write_text(buffer, x + w - 1, y + i, chars[5], &border_style);
-    }
-}
-
 static void render_node_to_buffer_external(tui_buffer *buffer, tui_node *node, int offset_x, int offset_y)
 {
     if (!buffer || !node) return;
@@ -1458,7 +1422,7 @@ static void render_node_to_buffer_external(tui_buffer *buffer, tui_node *node, i
             tui_buffer_fill_rect(buffer, x, y, w, h, ' ', &node->style);
         }
         if (node->border_style != TUI_BORDER_NONE) {
-            render_border_external(buffer, node, x, y, w, h);
+            render_border_to_buffer(buffer, node, x, y, w, h);
         }
     }
 
