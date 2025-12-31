@@ -16,31 +16,102 @@
 
 #include <termios.h>
 
-/*
- * Terminal mode management
- * Thread Safety: MAIN-THREAD-ONLY (modifies process-global termios)
+/* ================================================================
+ * Raw mode (for unbuffered input)
+ * ================================================================ */
+
+/**
+ * Enable terminal raw mode.
+ * Disables canonical mode, echo, and signal processing.
+ * Must be paired with tui_terminal_disable_raw_mode().
+ * @return 0 on success, -1 on failure
  */
 int tui_terminal_enable_raw_mode(void);
+
+/**
+ * Disable terminal raw mode.
+ * Restores original terminal settings.
+ * @return 0 on success, -1 on failure
+ */
 int tui_terminal_disable_raw_mode(void);
+
+/**
+ * Check if terminal is in raw mode.
+ * @return 1 if raw mode is enabled, 0 otherwise
+ */
 int tui_terminal_is_raw_mode(void);
 
-/* Terminal info */
+/* ================================================================
+ * Terminal information
+ * ================================================================ */
+
+/**
+ * Get terminal dimensions.
+ * @param width  Output: terminal width in columns
+ * @param height Output: terminal height in rows
+ * @return 0 on success, -1 on failure
+ */
 int tui_terminal_get_size(int *width, int *height);
+
+/**
+ * Check if stdin is a terminal.
+ * @return 1 if stdin is a TTY, 0 otherwise
+ */
 int tui_terminal_is_tty(void);
 
-/* Bracketed paste mode */
+/* ================================================================
+ * Bracketed paste mode
+ * ================================================================ */
+
+/**
+ * Enable bracketed paste mode.
+ * Pasted text will be wrapped in escape sequences.
+ * @return 0 on success, -1 on failure
+ */
 int tui_terminal_enable_bracketed_paste(void);
+
+/**
+ * Disable bracketed paste mode.
+ * @return 0 on success, -1 on failure
+ */
 int tui_terminal_disable_bracketed_paste(void);
+
+/**
+ * Check if bracketed paste mode is enabled.
+ * @return 1 if enabled, 0 otherwise
+ */
 int tui_terminal_is_bracketed_paste_enabled(void);
 
-/* Mouse tracking */
+/* ================================================================
+ * Mouse tracking
+ * ================================================================ */
+
 #include "ansi.h"  /* For tui_mouse_mode */
 
+/**
+ * Enable mouse tracking with specified mode.
+ * @param mode Mouse tracking mode (see ansi.h)
+ * @return 0 on success, -1 on failure
+ */
 int tui_terminal_enable_mouse(tui_mouse_mode mode);
+
+/**
+ * Disable mouse tracking.
+ * @return 0 on success, -1 on failure
+ */
 int tui_terminal_disable_mouse(void);
+
+/**
+ * Get current mouse tracking mode.
+ * @return Current mouse mode
+ */
 tui_mouse_mode tui_terminal_get_mouse_mode(void);
 
-/* Original termios storage */
+/* ================================================================
+ * Internal state (for save/restore)
+ * ================================================================ */
+
+/** Original terminal settings (saved before raw mode) */
 extern struct termios tui_original_termios;
 
 #endif /* TUI_TERMINAL_H */
