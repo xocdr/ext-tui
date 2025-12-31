@@ -1,0 +1,44 @@
+# Clang-Tidy configuration for ext-tui
+# Run with: clang-tidy tui.c src/**/*.c -- -I. -I./src -I$(php-config --include-dir)
+
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-macro-parentheses,
+  cert-*,
+  -cert-err33-c,
+  clang-analyzer-*,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  misc-*,
+  -misc-no-recursion,
+  -misc-unused-parameters,
+  performance-*,
+  portability-*,
+  readability-*,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -readability-function-cognitive-complexity,
+  -readability-else-after-return
+
+# Header filter - only check our own headers
+HeaderFilterRegex: '(tui\.c|tui_.*\.c|src/.*\.c|php_tui\.h|tui_internal\.h)'
+
+# Check options
+CheckOptions:
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+  - key: bugprone-suspicious-string-compare.WarnOnLogicalNotComparison
+    value: true
+  - key: cert-dcl16-c.NewSuffixes
+    value: 'L;LL;LU;LLU'
+  - key: misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+    value: true
+
+# Performance tuning
+WarningsAsErrors: ''
+FormatStyle: file

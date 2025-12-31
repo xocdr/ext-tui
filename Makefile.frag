@@ -51,4 +51,30 @@ coverage-summary:
 	@echo ""
 	@echo "Run 'make coverage' for full HTML report (requires lcov)"
 
-.PHONY: coverage coverage-clean coverage-summary
+# Static analysis with clang-tidy
+# Requires: clang-tidy, compile_commands.json (generate with bear or cmake)
+lint:
+	@command -v clang-tidy >/dev/null 2>&1 || { echo "Error: clang-tidy not installed"; exit 1; }
+	@echo "Running clang-tidy on main source files..."
+	@PHP_INCLUDE=$$(php-config --include-dir) && \
+	clang-tidy tui.c \
+		-p . \
+		--quiet \
+		-- -I. -I./src -I$$PHP_INCLUDE -I$$PHP_INCLUDE/main \
+		-I$$PHP_INCLUDE/TSRM -I$$PHP_INCLUDE/Zend -I$$PHP_INCLUDE/ext \
+		-DHAVE_CONFIG_H 2>/dev/null || true
+
+# Quick lint (only show errors, not warnings)
+lint-errors:
+	@command -v clang-tidy >/dev/null 2>&1 || { echo "Error: clang-tidy not installed"; exit 1; }
+	@echo "Running clang-tidy (errors only)..."
+	@PHP_INCLUDE=$$(php-config --include-dir) && \
+	clang-tidy tui.c \
+		-p . \
+		--warnings-as-errors='*' \
+		--quiet \
+		-- -I. -I./src -I$$PHP_INCLUDE -I$$PHP_INCLUDE/main \
+		-I$$PHP_INCLUDE/TSRM -I$$PHP_INCLUDE/Zend -I$$PHP_INCLUDE/ext \
+		-DHAVE_CONFIG_H 2>/dev/null || true
+
+.PHONY: coverage coverage-clean coverage-summary lint lint-errors
