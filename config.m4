@@ -6,11 +6,13 @@ PHP_ARG_ENABLE([tui],
     [Enable tui support])],
   [no])
 
-PHP_ARG_ENABLE([tui-gcov],
-  [whether to enable code coverage for tui],
+dnl Use AC_ARG_ENABLE directly instead of PHP_ARG_ENABLE to avoid
+dnl the PHP_ALWAYS_SHARED logic that would force this to "yes"
+AC_ARG_ENABLE([tui-gcov],
   [AS_HELP_STRING([--enable-tui-gcov],
     [Enable code coverage (gcov) for tui extension])],
-  [no])
+  [PHP_TUI_GCOV=$enableval],
+  [PHP_TUI_GCOV=no])
 
 if test "$PHP_TUI" != "no"; then
   dnl Require PHP 8.4.0 or later
