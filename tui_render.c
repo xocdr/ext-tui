@@ -240,13 +240,14 @@ PHP_FUNCTION(tui_render)
 
     /* Start the app */
     if (tui_app_start(app) != 0) {
+        const char *term_error = tui_terminal_get_last_error();
         zval_ptr_dtor(&app->instance_zval);
         app->instance_zval_set = 0;
         instance_obj->app = NULL;
         tui_app_destroy(app);
         php_error_docref(NULL, E_ERROR,
-            "Failed to start TUI application: could not enable raw terminal mode "
-            "(terminal may not be interactive or stdin is not a TTY)");
+            "Failed to start TUI application: %s",
+            term_error[0] ? term_error : "could not enable raw terminal mode");
         RETURN_NULL();
     }
 

@@ -115,6 +115,17 @@ tui_mouse_mode tui_terminal_get_mouse_mode(void);
 extern struct termios tui_original_termios;
 
 /* ================================================================
+ * Error handling
+ * ================================================================ */
+
+/**
+ * Get description of last terminal error.
+ * Returns a static buffer with the error message - do not free.
+ * @return Error message string, or empty string if no error
+ */
+const char* tui_terminal_get_last_error(void);
+
+/* ================================================================
  * Emergency restoration (for crash recovery)
  * ================================================================ */
 

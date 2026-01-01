@@ -14,6 +14,9 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <stdio.h>
 
 /* Process-global terminal state.
  * These are NOT in TUI_G module globals because:
@@ -24,6 +27,22 @@
 struct termios tui_original_termios;
 static int raw_mode_enabled = 0;
 
+/* Error message buffer for tui_terminal_get_last_error() */
+static char terminal_error_buf[256] = "";
+
+/* Helper to set error message with errno context */
+static void set_terminal_error(const char *operation)
+{
+    int saved_errno = errno;
+    snprintf(terminal_error_buf, sizeof(terminal_error_buf),
+        "%s: %s (errno=%d)", operation, strerror(saved_errno), saved_errno);
+}
+
+const char* tui_terminal_get_last_error(void)
+{
+    return terminal_error_buf;
+}
+
 int tui_terminal_enable_raw_mode(void)
 {
     struct termios raw;
@@ -33,10 +52,13 @@ int tui_terminal_enable_raw_mode(void)
     }
 
     if (!isatty(STDIN_FILENO)) {
+        snprintf(terminal_error_buf, sizeof(terminal_error_buf),
+            "stdin is not a TTY (not an interactive terminal)");
         return -1;
     }
 
     if (tcgetattr(STDIN_FILENO, &tui_original_termios) == -1) {
+        set_terminal_error("tcgetattr() failed");
         return -1;
     }
 
@@ -61,10 +83,12 @@ int tui_terminal_enable_raw_mode(void)
     raw.c_cc[VTIME] = 1; /* 100 ms timeout (unit is tenths of a second). */
 
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
+        set_terminal_error("tcsetattr() failed");
         return -1;
     }
 
     raw_mode_enabled = 1;
+    terminal_error_buf[0] = '\0';  /* Clear any previous error */
     return 0;
 }
 
