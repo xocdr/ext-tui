@@ -116,8 +116,8 @@ int tui_terminal_get_size(int *width, int *height)
     struct winsize ws;
 
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
-        *width = 80;
-        *height = 24;
+        *width = TUI_DEFAULT_TERM_WIDTH;
+        *height = TUI_DEFAULT_TERM_HEIGHT;
         return -1;
     }
 

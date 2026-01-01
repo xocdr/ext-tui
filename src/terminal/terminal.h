@@ -45,11 +45,15 @@ int tui_terminal_is_raw_mode(void);
  * Terminal information
  * ================================================================ */
 
+/* Default terminal dimensions (fallback when detection fails) */
+#define TUI_DEFAULT_TERM_WIDTH  80
+#define TUI_DEFAULT_TERM_HEIGHT 24
+
 /**
  * Get terminal dimensions.
  * @param width  Output: terminal width in columns
  * @param height Output: terminal height in rows
- * @return 0 on success, -1 on failure
+ * @return 0 on success, -1 on failure (uses defaults 80x24)
  */
 int tui_terminal_get_size(int *width, int *height);
 

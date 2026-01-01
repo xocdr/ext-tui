@@ -10,11 +10,15 @@
 */
 
 #include "recorder.h"
+#include "../terminal/terminal.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
 #include <sys/time.h>
+
+/* Initial capacity for frame array */
+#define INITIAL_FRAME_CAPACITY 1024
 
 /* Get current time in seconds with microsecond precision */
 static double get_time(void)
@@ -64,15 +68,14 @@ tui_recording *tui_recording_create(int width, int height, const char *title)
     tui_recording *rec = calloc(1, sizeof(tui_recording));
     if (!rec) return NULL;
 
-    rec->width = width > 0 ? width : 80;
-    rec->height = height > 0 ? height : 24;
+    rec->width = width > 0 ? width : TUI_DEFAULT_TERM_WIDTH;
+    rec->height = height > 0 ? height : TUI_DEFAULT_TERM_HEIGHT;
 
     if (title) {
         rec->title = strdup(title);
     }
 
-    /* Start with room for 1024 frames */
-    rec->frame_capacity = 1024;
+    rec->frame_capacity = INITIAL_FRAME_CAPACITY;
     rec->frames = malloc((size_t)rec->frame_capacity * sizeof(tui_frame));
     if (!rec->frames) {
         free(rec->title);
