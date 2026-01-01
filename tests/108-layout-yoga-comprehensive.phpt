@@ -4,53 +4,53 @@ Yoga layout comprehensive testing
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Flex direction ===\n";
 foreach (['column', 'row', 'column-reverse', 'row-reverse'] as $dir) {
-    $box = new Box(['flexDirection' => $dir]);
+    $box = new ContainerNode(['flexDirection' => $dir]);
     echo "flexDirection '$dir': " . $box->flexDirection . "\n";
 }
 
 echo "\n=== Align items ===\n";
 foreach (['flex-start', 'center', 'flex-end', 'stretch', 'baseline'] as $align) {
-    $box = new Box(['alignItems' => $align]);
+    $box = new ContainerNode(['alignItems' => $align]);
     echo "alignItems '$align': " . $box->alignItems . "\n";
 }
 
 echo "\n=== Justify content ===\n";
 foreach (['flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly'] as $justify) {
-    $box = new Box(['justifyContent' => $justify]);
+    $box = new ContainerNode(['justifyContent' => $justify]);
     echo "justifyContent '$justify': " . $box->justifyContent . "\n";
 }
 
 echo "\n=== Align self ===\n";
 foreach (['auto', 'flex-start', 'center', 'flex-end', 'stretch', 'baseline'] as $align) {
-    $box = new Box(['alignSelf' => $align]);
+    $box = new ContainerNode(['alignSelf' => $align]);
     echo "alignSelf '$align': " . $box->alignSelf . "\n";
 }
 
 echo "\n=== Flex wrap ===\n";
 foreach (['no-wrap', 'wrap', 'wrap-reverse'] as $wrap) {
-    $box = new Box(['flexWrap' => $wrap]);
+    $box = new ContainerNode(['flexWrap' => $wrap]);
     echo "flexWrap '$wrap': " . $box->flexWrap . "\n";
 }
 
 echo "\n=== Position ===\n";
 foreach (['relative', 'absolute'] as $pos) {
-    $box = new Box(['position' => $pos]);
+    $box = new ContainerNode(['position' => $pos]);
     echo "position '$pos': " . $box->position . "\n";
 }
 
 echo "\n=== Flex grow/shrink/basis ===\n";
-$box = new Box(['flexGrow' => 2, 'flexShrink' => 1, 'flexBasis' => 100]);
+$box = new ContainerNode(['flexGrow' => 2, 'flexShrink' => 1, 'flexBasis' => 100]);
 echo "flexGrow: " . $box->flexGrow . "\n";
 echo "flexShrink: " . $box->flexShrink . "\n";
 echo "flexBasis: " . $box->flexBasis . "\n";
 
 echo "\n=== Dimensions ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'width' => 100,
     'height' => 50,
     'minWidth' => 10,
@@ -66,7 +66,7 @@ echo "maxWidth: " . $box->maxWidth . "\n";
 echo "maxHeight: " . $box->maxHeight . "\n";
 
 echo "\n=== Percentage dimensions ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'width' => '50%',
     'height' => '100%',
 ]);
@@ -74,7 +74,7 @@ echo "width: " . $box->width . "\n";
 echo "height: " . $box->height . "\n";
 
 echo "\n=== Padding ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'padding' => 5,
     'paddingTop' => 1,
     'paddingBottom' => 2,
@@ -89,7 +89,7 @@ echo "paddingX: " . $box->paddingX . "\n";
 echo "paddingY: " . $box->paddingY . "\n";
 
 echo "\n=== Margin ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'margin' => 5,
     'marginTop' => 1,
     'marginBottom' => 2,
@@ -104,60 +104,60 @@ echo "marginX: " . $box->marginX . "\n";
 echo "marginY: " . $box->marginY . "\n";
 
 echo "\n=== Gap ===\n";
-$box = new Box(['gap' => 5]);
+$box = new ContainerNode(['gap' => 5]);
 echo "gap: " . $box->gap . "\n";
 
 echo "\n=== Aspect ratio ===\n";
-$box = new Box(['aspectRatio' => 1.5]);
+$box = new ContainerNode(['aspectRatio' => 1.5]);
 echo "aspectRatio: " . $box->aspectRatio . "\n";
 
 echo "\n=== Direction (RTL/LTR) ===\n";
-$box = new Box(['direction' => 'ltr']);
+$box = new ContainerNode(['direction' => 'ltr']);
 echo "direction ltr: " . $box->direction . "\n";
-$box = new Box(['direction' => 'rtl']);
+$box = new ContainerNode(['direction' => 'rtl']);
 echo "direction rtl: " . $box->direction . "\n";
 
 echo "\n=== Overflow ===\n";
 foreach (['visible', 'hidden', 'scroll'] as $overflow) {
-    $box = new Box(['overflow' => $overflow]);
+    $box = new ContainerNode(['overflow' => $overflow]);
     echo "overflow '$overflow': " . $box->overflow . "\n";
 }
 
 echo "\n=== Complex layout test ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box([
+$tree = new ContainerNode([
     'flexDirection' => 'column',
     'width' => '100%',
     'height' => '100%',
     'children' => [
-        new Box([
+        new ContainerNode([
             'id' => 'header',
             'height' => 3,
             'alignItems' => 'center',
             'justifyContent' => 'center',
-            'children' => [new Text("Header")]
+            'children' => [new ContentNode("Header")]
         ]),
-        new Box([
+        new ContainerNode([
             'id' => 'main',
             'flexDirection' => 'row',
             'flexGrow' => 1,
             'children' => [
-                new Box([
+                new ContainerNode([
                     'id' => 'sidebar',
                     'width' => 20,
-                    'children' => [new Text("Sidebar")]
+                    'children' => [new ContentNode("Sidebar")]
                 ]),
-                new Box([
+                new ContainerNode([
                     'id' => 'content',
                     'flexGrow' => 1,
-                    'children' => [new Text("Content")]
+                    'children' => [new ContentNode("Content")]
                 ]),
             ]
         ]),
-        new Box([
+        new ContainerNode([
             'id' => 'footer',
             'height' => 1,
-            'children' => [new Text("Footer")]
+            'children' => [new ContentNode("Footer")]
         ]),
     ]
 ]);

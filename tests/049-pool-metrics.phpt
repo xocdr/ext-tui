@@ -4,8 +4,8 @@ Object pool: metrics tracking
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 // Get pool metrics function exists
 var_dump(function_exists('tui_get_pool_metrics'));
@@ -25,10 +25,10 @@ var_dump(array_key_exists('keymap_hit_rate', $m));
 $renderer = tui_test_create(80, 24);
 
 // Create multiple boxes which should allocate from pool
-$box = new Box(['width' => 80, 'height' => 24]);
+$box = new ContainerNode(['width' => 80, 'height' => 24]);
 $box->children = [
-    new Text("Line 1"),
-    new Text("Line 2"),
+    new ContentNode("Line 1"),
+    new ContentNode("Line 2"),
 ];
 tui_test_render($renderer, $box);
 

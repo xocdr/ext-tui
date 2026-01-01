@@ -4,8 +4,8 @@ Integration test for full render cycles with state updates
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Full render cycle integration test ===\n";
 
@@ -15,38 +15,38 @@ $renderer = tui_test_create(80, 24);
 // Test 1: Initial render with nested structure
 echo "\n--- Test 1: Initial nested render ---\n";
 
-$root = new Box([
+$root = new ContainerNode([
     'id' => 'root',
     'flexDirection' => 'column',
     'width' => 80,
     'height' => 24,
 ]);
 
-$header = new Box([
+$header = new ContainerNode([
     'id' => 'header',
     'height' => 3,
     'borderStyle' => 'single',
 ]);
-$header->addChild(new Text('Header', ['id' => 'header-text']));
+$header->addChild(new ContentNode('Header', ['id' => 'header-text']));
 
-$content = new Box([
+$content = new ContainerNode([
     'id' => 'content',
     'flexGrow' => 1,
     'flexDirection' => 'row',
 ]);
 
-$sidebar = new Box([
+$sidebar = new ContainerNode([
     'id' => 'sidebar',
     'width' => 20,
     'borderStyle' => 'single',
 ]);
-$sidebar->addChild(new Text('Sidebar', ['id' => 'sidebar-text']));
+$sidebar->addChild(new ContentNode('Sidebar', ['id' => 'sidebar-text']));
 
-$main = new Box([
+$main = new ContainerNode([
     'id' => 'main',
     'flexGrow' => 1,
 ]);
-$main->addChild(new Text('Main content area', ['id' => 'main-text']));
+$main->addChild(new ContentNode('Main content area', ['id' => 'main-text']));
 
 $content->addChild($sidebar);
 $content->addChild($main);
@@ -77,13 +77,13 @@ echo "Main found: " . ($foundMain ? "yes" : "no") . "\n";
 // Test 2: Update content and re-render
 echo "\n--- Test 2: Content update and re-render ---\n";
 
-$main = new Box([
+$main = new ContainerNode([
     'id' => 'main',
     'flexGrow' => 1,
 ]);
-$main->addChild(new Text('Updated main content!', ['id' => 'main-text-updated']));
+$main->addChild(new ContentNode('Updated main content!', ['id' => 'main-text-updated']));
 
-$content = new Box([
+$content = new ContainerNode([
     'id' => 'content',
     'flexGrow' => 1,
     'flexDirection' => 'row',
@@ -91,7 +91,7 @@ $content = new Box([
 $content->addChild($sidebar);
 $content->addChild($main);
 
-$root = new Box([
+$root = new ContainerNode([
     'id' => 'root',
     'flexDirection' => 'column',
     'width' => 80,
@@ -113,7 +113,7 @@ echo "Updated content found: " . ($foundUpdated ? "yes" : "no") . "\n";
 echo "\n--- Test 3: Deep nesting structure ---\n";
 
 function createNestedBox($depth, $maxDepth) {
-    $box = new Box([
+    $box = new ContainerNode([
         'id' => "level-$depth",
         'padding' => 1,
     ]);
@@ -121,13 +121,13 @@ function createNestedBox($depth, $maxDepth) {
     if ($depth < $maxDepth) {
         $box->addChild(createNestedBox($depth + 1, $maxDepth));
     } else {
-        $box->addChild(new Text("Deepest level: $depth"));
+        $box->addChild(new ContentNode("Deepest level: $depth"));
     }
 
     return $box;
 }
 
-$deepRoot = new Box([
+$deepRoot = new ContainerNode([
     'id' => 'deep-root',
     'width' => 60,
     'height' => 20,
@@ -147,7 +147,7 @@ echo "Deepest level found: " . ($foundDeepest ? "yes" : "no") . "\n";
 // Test 4: Wide tree (many siblings)
 echo "\n--- Test 4: Wide tree with many siblings ---\n";
 
-$wideRoot = new Box([
+$wideRoot = new ContainerNode([
     'id' => 'wide-root',
     'width' => 80,
     'height' => 24,
@@ -156,12 +156,12 @@ $wideRoot = new Box([
 ]);
 
 for ($i = 0; $i < 20; $i++) {
-    $child = new Box([
+    $child = new ContainerNode([
         'id' => "child-$i",
         'width' => 10,
         'height' => 3,
     ]);
-    $child->addChild(new Text("C$i"));
+    $child->addChild(new ContentNode("C$i"));
     $wideRoot->addChild($child);
 }
 
@@ -172,7 +172,7 @@ echo "Wide tree rendered with " . count($wideOutput) . " lines\n";
 // Test 5: Focus traversal
 echo "\n--- Test 5: Focus system integration ---\n";
 
-$focusRoot = new Box([
+$focusRoot = new ContainerNode([
     'id' => 'focus-root',
     'width' => 80,
     'height' => 24,
@@ -180,13 +180,13 @@ $focusRoot = new Box([
 ]);
 
 for ($i = 0; $i < 5; $i++) {
-    $focusable = new Box([
+    $focusable = new ContainerNode([
         'id' => "focusable-$i",
         'focusable' => true,
         'focused' => ($i === 0), // First one focused
         'height' => 3,
     ]);
-    $focusable->addChild(new Text("Button $i"));
+    $focusable->addChild(new ContentNode("Button $i"));
     $focusRoot->addChild($focusable);
 }
 
@@ -203,19 +203,19 @@ echo "Tab navigation simulated\n";
 // Test 6: Style inheritance
 echo "\n--- Test 6: Style inheritance ---\n";
 
-$styledRoot = new Box([
+$styledRoot = new ContainerNode([
     'id' => 'styled-root',
     'width' => 40,
     'height' => 10,
     'borderStyle' => 'double',
 ]);
 
-$styledChild = new Box([
+$styledChild = new ContainerNode([
     'id' => 'styled-child',
     'flexGrow' => 1,
 ]);
 
-$styledText = new Text('Styled text', [
+$styledText = new ContentNode('Styled text', [
     'color' => 'white',
     'bold' => true,
 ]);
@@ -230,14 +230,14 @@ echo "Styled tree rendered with " . count($styledOutput) . " lines\n";
 // Test 7: Empty containers
 echo "\n--- Test 7: Empty containers ---\n";
 
-$emptyRoot = new Box([
+$emptyRoot = new ContainerNode([
     'id' => 'empty-root',
     'width' => 20,
     'height' => 5,
     'borderStyle' => 'single',
 ]);
 
-$emptyChild = new Box([
+$emptyChild = new ContainerNode([
     'id' => 'empty-child',
     'flexGrow' => 1,
 ]);
@@ -252,12 +252,12 @@ echo "Empty container rendered\n";
 echo "\n--- Test 8: Rapid re-render stress ---\n";
 
 for ($i = 0; $i < 50; $i++) {
-    $rapidRoot = new Box([
+    $rapidRoot = new ContainerNode([
         'id' => 'rapid-root',
         'width' => 80,
         'height' => 24,
     ]);
-    $rapidRoot->addChild(new Text("Render iteration $i"));
+    $rapidRoot->addChild(new ContentNode("Render iteration $i"));
     tui_test_render($renderer, $rapidRoot);
 }
 echo "50 rapid re-renders completed\n";

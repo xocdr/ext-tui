@@ -4,8 +4,8 @@ Boundary value testing for numeric parameters
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Zero values ===\n";
 
@@ -25,7 +25,7 @@ $buffer = tui_buffer_create(0, 0);
 echo "Zero buffer: " . (is_resource($buffer) || is_object($buffer) ? 'created' : 'null') . "\n";
 
 // Zero-size box
-$box = new Box(['width' => 0, 'height' => 0]);
+$box = new ContainerNode(['width' => 0, 'height' => 0]);
 echo "Zero box width: " . $box->width . "\n";
 echo "Zero box height: " . $box->height . "\n";
 
@@ -44,32 +44,32 @@ $buffer = tui_buffer_create(1000, 500);
 echo "Large buffer: " . (is_resource($buffer) || is_object($buffer) ? 'created' : 'null') . "\n";
 
 // Large box dimensions
-$box = new Box(['width' => 10000, 'height' => 5000]);
+$box = new ContainerNode(['width' => 10000, 'height' => 5000]);
 echo "Large box: {$box->width}x{$box->height}\n";
 
 echo "\n=== Negative values ===\n";
 
 // Negative box dimensions (should be treated as auto or 0)
-$box = new Box(['width' => -10, 'height' => -20]);
+$box = new ContainerNode(['width' => -10, 'height' => -20]);
 echo "Negative width: " . ($box->width ?? 'null') . "\n";
 echo "Negative height: " . ($box->height ?? 'null') . "\n";
 
 // Negative padding/margin (should handle gracefully)
-$box = new Box(['padding' => -5]);
+$box = new ContainerNode(['padding' => -5]);
 echo "Negative padding set\n";
 
-$box = new Box(['margin' => -5]);
+$box = new ContainerNode(['margin' => -5]);
 echo "Negative margin set\n";
 
 echo "\n=== Percentage values ===\n";
 
-$box = new Box(['width' => '0%']);
+$box = new ContainerNode(['width' => '0%']);
 echo "0% width set\n";
 
-$box = new Box(['width' => '100%']);
+$box = new ContainerNode(['width' => '100%']);
 echo "100% width set\n";
 
-$box = new Box(['width' => '150%']);  // Over 100%
+$box = new ContainerNode(['width' => '150%']);  // Over 100%
 echo "150% width set\n";
 
 echo "\n=== Edge case dimensions ===\n";
@@ -119,15 +119,15 @@ echo "Truncate to 4: '$result'\n";
 echo "\n=== Float values ===\n";
 
 // Floats should be converted to int
-$box = new Box(['width' => 100.9, 'height' => 50.1]);
+$box = new ContainerNode(['width' => 100.9, 'height' => 50.1]);
 echo "Float box: {$box->width}x{$box->height}\n";
 
 // Very small float
-$box = new Box(['width' => 0.001]);
+$box = new ContainerNode(['width' => 0.001]);
 echo "Tiny float width: " . $box->width . "\n";
 
 // Negative float
-$box = new Box(['width' => -0.5]);
+$box = new ContainerNode(['width' => -0.5]);
 echo "Negative float width: " . ($box->width ?? 'null') . "\n";
 
 echo "\n=== History capacity bounds ===\n";

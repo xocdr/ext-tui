@@ -1,12 +1,12 @@
 --TEST--
-Xocdr\Tui\Ext\Text has all style properties
+Xocdr\Tui\Ext\ContentNode has all style properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContentNode;
 
-$text = new Text("Test", [
+$text = new ContentNode("Test", [
     'bold' => true,
     'dim' => true,
     'italic' => true,

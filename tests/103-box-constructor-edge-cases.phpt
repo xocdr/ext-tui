@@ -4,19 +4,19 @@ Box constructor edge cases and property validation
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Empty constructor ===\n";
-$box = new Box();
+$box = new ContainerNode();
 var_dump(get_class($box));
 
 echo "\n=== Empty array ===\n";
-$box = new Box([]);
+$box = new ContainerNode([]);
 var_dump(get_class($box));
 
 echo "\n=== All numeric properties ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'width' => 100,
     'height' => 50,
     'padding' => 5,
@@ -39,7 +39,7 @@ echo "padding: " . $box->padding . "\n";
 echo "flexGrow: " . $box->flexGrow . "\n";
 
 echo "\n=== String properties ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'key' => 'my-key',
     'id' => 'my-id',
     'flexDirection' => 'row',
@@ -53,7 +53,7 @@ echo "alignItems: " . $box->alignItems . "\n";
 echo "justifyContent: " . $box->justifyContent . "\n";
 
 echo "\n=== Percentage values ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'width' => '100%',
     'height' => '50%',
 ]);
@@ -61,14 +61,14 @@ echo "width: " . $box->width . "\n";
 echo "height: " . $box->height . "\n";
 
 echo "\n=== Color properties ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'backgroundColor' => '#ff0000',
     'borderColor' => '#00ff00',
 ]);
 echo "backgroundColor set: " . (isset($box->backgroundColor) ? 'yes' : 'no') . "\n";
 
 echo "\n=== Boolean properties ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'focusable' => true,
     'focused' => false,
 ]);
@@ -77,22 +77,22 @@ var_dump($box->focused);
 
 echo "\n=== Border styles ===\n";
 foreach (['none', 'single', 'double', 'round', 'bold', 'dashed'] as $style) {
-    $box = new Box(['borderStyle' => $style]);
+    $box = new ContainerNode(['borderStyle' => $style]);
     echo "borderStyle '$style': " . $box->borderStyle . "\n";
 }
 
 echo "\n=== Children in constructor ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'children' => [
-        new Text("Child 1"),
-        new Text("Child 2"),
-        new Box(['children' => [new Text("Nested")]]),
+        new ContentNode("Child 1"),
+        new ContentNode("Child 2"),
+        new ContainerNode(['children' => [new ContentNode("Nested")]]),
     ]
 ]);
 echo "Has children\n";
 
 echo "\n=== Zero values ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'width' => 0,
     'height' => 0,
     'padding' => 0,
@@ -103,14 +103,14 @@ echo "width: " . $box->width . "\n";
 echo "flexGrow: " . $box->flexGrow . "\n";
 
 echo "\n=== Negative values (should be handled) ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'width' => -10,
     'height' => -20,
 ]);
 // Should not crash, behavior may vary
 
 echo "\n=== Float values ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'width' => 50.5,
     'height' => 25.75,
     'flexGrow' => 1.5,
@@ -118,14 +118,14 @@ $box = new Box([
 echo "width: " . $box->width . "\n";
 
 echo "\n=== Very large values ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'width' => 999999,
     'height' => 999999,
 ]);
 echo "width: " . $box->width . "\n";
 
 echo "\n=== Unknown properties (should be ignored) ===\n";
-$box = new Box([
+$box = new ContainerNode([
     'unknownProperty' => 'value',
     'anotherUnknown' => 123,
 ]);
@@ -135,10 +135,10 @@ echo "\nDone!\n";
 ?>
 --EXPECTF--
 === Empty constructor ===
-string(17) "Xocdr\Tui\Ext\Box"
+string(27) "Xocdr\Tui\Ext\ContainerNode"
 
 === Empty array ===
-string(17) "Xocdr\Tui\Ext\Box"
+string(27) "Xocdr\Tui\Ext\ContainerNode"
 
 === All numeric properties ===
 width: 100

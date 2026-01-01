@@ -4,8 +4,8 @@ Input key handling and Key class testing
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Key;
 
 echo "=== Key class exists ===\n";
@@ -107,7 +107,7 @@ echo "\n=== Test renderer key input ===\n";
 $renderer = tui_test_create(80, 24);
 
 // Render a simple focusable box (without onKeyPress to avoid deprecation)
-$tree = new Box([
+$tree = new ContainerNode([
     'focusable' => true,
     'focused' => true,
 ]);

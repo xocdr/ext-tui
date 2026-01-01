@@ -5,14 +5,14 @@ tui
 --FILE--
 <?php
 // Test direction property
-$box1 = new Xocdr\Tui\Ext\Box(['direction' => 'rtl']);
+$box1 = new Xocdr\Tui\Ext\ContainerNode(['direction' => 'rtl']);
 var_dump($box1->direction);
 
-$box2 = new Xocdr\Tui\Ext\Box(['direction' => 'ltr']);
+$box2 = new Xocdr\Tui\Ext\ContainerNode(['direction' => 'ltr']);
 var_dump($box2->direction);
 
 // Test default (null = inherit)
-$box3 = new Xocdr\Tui\Ext\Box([]);
+$box3 = new Xocdr\Tui\Ext\ContainerNode([]);
 var_dump($box3->direction);
 ?>
 --EXPECT--

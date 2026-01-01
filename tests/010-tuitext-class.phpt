@@ -1,14 +1,14 @@
 --TEST--
-Xocdr\Tui\Ext\Text class exists with properties
+Xocdr\Tui\Ext\ContentNode class exists with properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContentNode;
 
-$text = new Text("Hello World");
+$text = new ContentNode("Hello World");
 
-var_dump($text instanceof Text);
+var_dump($text instanceof ContentNode);
 var_dump($text->content);
 var_dump($text->bold);
 var_dump($text->italic);

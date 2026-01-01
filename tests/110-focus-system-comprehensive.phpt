@@ -4,8 +4,8 @@ Focus system comprehensive testing
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Focus;
 use Xocdr\Tui\Ext\FocusManager;
 use Xocdr\Tui\Ext\FocusEvent;
@@ -23,26 +23,26 @@ foreach ($props as $prop) {
 }
 
 echo "\n=== Box focusable property ===\n";
-$box = new Box(['focusable' => true]);
+$box = new ContainerNode(['focusable' => true]);
 var_dump($box->focusable);
 
-$box = new Box(['focusable' => false]);
+$box = new ContainerNode(['focusable' => false]);
 var_dump($box->focusable);
 
 echo "\n=== Box focused property ===\n";
-$box = new Box(['focused' => true]);
+$box = new ContainerNode(['focused' => true]);
 var_dump($box->focused);
 
-$box = new Box(['focused' => false]);
+$box = new ContainerNode(['focused' => false]);
 var_dump($box->focused);
 
 echo "\n=== Multiple focusable elements ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box([
+$tree = new ContainerNode([
     'children' => [
-        new Box(['id' => 'btn1', 'focusable' => true, 'children' => [new Text("Button 1")]]),
-        new Box(['id' => 'btn2', 'focusable' => true, 'children' => [new Text("Button 2")]]),
-        new Box(['id' => 'btn3', 'focusable' => true, 'children' => [new Text("Button 3")]]),
+        new ContainerNode(['id' => 'btn1', 'focusable' => true, 'children' => [new ContentNode("Button 1")]]),
+        new ContainerNode(['id' => 'btn2', 'focusable' => true, 'children' => [new ContentNode("Button 2")]]),
+        new ContainerNode(['id' => 'btn3', 'focusable' => true, 'children' => [new ContentNode("Button 3")]]),
     ]
 ]);
 tui_test_render($renderer, $tree);
@@ -70,18 +70,18 @@ echo "Sent shift+tab\n";
 tui_test_destroy($renderer);
 
 echo "\n=== Non-focusable element ===\n";
-$box = new Box(['focusable' => false]);
+$box = new ContainerNode(['focusable' => false]);
 var_dump($box->focusable);
 
 echo "\n=== Initial focused state ===\n";
-$box = new Box(['focusable' => true, 'focused' => true]);
+$box = new ContainerNode(['focusable' => true, 'focused' => true]);
 var_dump($box->focused);
 
 echo "\n=== showCursor property ===\n";
-$box = new Box(['focusable' => true, 'showCursor' => true]);
+$box = new ContainerNode(['focusable' => true, 'showCursor' => true]);
 var_dump($box->showCursor);
 
-$box = new Box(['focusable' => true, 'showCursor' => false]);
+$box = new ContainerNode(['focusable' => true, 'showCursor' => false]);
 var_dump($box->showCursor);
 
 echo "\nDone!\n";

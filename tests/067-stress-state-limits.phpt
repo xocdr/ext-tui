@@ -11,14 +11,14 @@ tui
  * The tui.max_states INI setting controls the maximum (default: 64).
  */
 
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "Test: State dynamic growth\n";
 
 // Create a basic render test
 $renderer = tui_test_create(80, 24);
-$tree = new Box(['children' => [new Text("State dynamic test")]]);
+$tree = new ContainerNode(['children' => [new ContentNode("State dynamic test")]]);
 tui_test_render($renderer, $tree);
 echo "Basic render works\n";
 
@@ -26,20 +26,20 @@ echo "Basic render works\n";
 // This tests the array growth from initial capacity (8) to higher counts
 $children = [];
 for ($i = 0; $i < 100; $i++) {
-    $children[] = new Text("state-$i", ['key' => "unique-key-$i"]);
+    $children[] = new ContentNode("state-$i", ['key' => "unique-key-$i"]);
 }
-$tree = new Box(['children' => $children]);
+$tree = new ContainerNode(['children' => $children]);
 tui_test_render($renderer, $tree);
 echo "100 uniquely-keyed nodes rendered\n";
 
 // Test with nested state-like structures
-$nested = new Box(['children' => []]);
+$nested = new ContainerNode(['children' => []]);
 $current = $nested;
 for ($i = 0; $i < 80; $i++) {
-    $child = new Box(['key' => "nested-$i", 'children' => [
-        new Text("level-$i")
+    $child = new ContainerNode(['key' => "nested-$i", 'children' => [
+        new ContentNode("level-$i")
     ]]);
-    $current = new Box(['key' => "parent-$i", 'children' => [$child]]);
+    $current = new ContainerNode(['key' => "parent-$i", 'children' => [$child]]);
 }
 tui_test_render($renderer, $current);
 echo "Deeply nested unique-keyed tree rendered\n";

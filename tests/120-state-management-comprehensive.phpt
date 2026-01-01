@@ -4,8 +4,8 @@ State management (useState) comprehensive testing
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Instance;
 
 echo "=== Basic useState ===\n";

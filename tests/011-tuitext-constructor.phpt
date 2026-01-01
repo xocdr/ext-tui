@@ -1,12 +1,12 @@
 --TEST--
-Xocdr\Tui\Ext\Text constructor accepts content and properties
+Xocdr\Tui\Ext\ContentNode constructor accepts content and properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContentNode;
 
-$text = new Text("Hello", [
+$text = new ContentNode("Hello", [
     'bold' => true,
     'color' => '#ff0000'
 ]);

@@ -1,12 +1,12 @@
 --TEST--
-Xocdr\Tui\Ext\Box constructor accepts properties
+Xocdr\Tui\Ext\ContainerNode constructor accepts properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
-$box = new Box([
+$box = new ContainerNode([
     'flexDirection' => 'row',
     'padding' => 2,
     'gap' => 1

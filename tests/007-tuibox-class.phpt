@@ -1,15 +1,15 @@
 --TEST--
-Xocdr\Tui\Ext\Box class exists with properties
+Xocdr\Tui\Ext\ContainerNode class exists with properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
-$box = new Box();
+$box = new ContainerNode();
 
 // Check class exists
-var_dump($box instanceof Box);
+var_dump($box instanceof ContainerNode);
 
 // Check default properties
 var_dump($box->flexDirection);

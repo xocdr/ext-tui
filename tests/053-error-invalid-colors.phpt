@@ -4,15 +4,15 @@ Error handling for invalid color values
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Valid named colors ===\n";
 
 // Test valid named colors
 $validColors = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'white', 'black'];
 foreach ($validColors as $color) {
-    $text = new Text('test', ['color' => $color]);
+    $text = new ContentNode('test', ['color' => $color]);
     echo "$color: OK\n";
 }
 
@@ -21,7 +21,7 @@ echo "\n=== Valid hex colors ===\n";
 // Test valid hex colors
 $hexColors = ['#fff', '#FFF', '#ffffff', '#FFFFFF', '#000', '#123456', '#abcdef', '#ABCDEF'];
 foreach ($hexColors as $color) {
-    $text = new Text('test', ['color' => $color]);
+    $text = new ContentNode('test', ['color' => $color]);
     echo "$color: OK\n";
 }
 
@@ -30,7 +30,7 @@ echo "\n=== Valid RGB colors ===\n";
 // Test valid RGB function colors
 $rgbColors = ['rgb(0,0,0)', 'rgb(255,255,255)', 'rgb(128, 128, 128)'];
 foreach ($rgbColors as $color) {
-    $text = new Text('test', ['color' => $color]);
+    $text = new ContentNode('test', ['color' => $color]);
     echo "$color: OK\n";
 }
 
@@ -51,7 +51,7 @@ $invalidColors = [
 
 foreach ($invalidColors as $color) {
     try {
-        $text = new Text('test', ['color' => $color]);
+        $text = new ContentNode('test', ['color' => $color]);
         echo "'$color': accepted (may use default)\n";
     } catch (Throwable $e) {
         echo "'$color': exception - " . $e->getMessage() . "\n";
@@ -61,10 +61,10 @@ foreach ($invalidColors as $color) {
 echo "\n=== Border colors ===\n";
 
 // Test border colors
-$box = new Box(['borderStyle' => 'single', 'borderColor' => 'green']);
+$box = new ContainerNode(['borderStyle' => 'single', 'borderColor' => 'green']);
 echo "borderColor green: OK\n";
 
-$box = new Box([
+$box = new ContainerNode([
     'borderStyle' => 'single',
     'borderTopColor' => 'red',
     'borderRightColor' => 'green',

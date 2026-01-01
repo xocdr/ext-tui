@@ -1,20 +1,20 @@
 --TEST--
-Xocdr\Tui\Ext\Text has wrap property
+Xocdr\Tui\Ext\ContentNode has wrap property
 --SKIPIF--
 <?php if (!extension_loaded('tui')) die('skip tui extension not loaded'); ?>
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContentNode;
 
-$text = new Text();
+$text = new ContentNode();
 var_dump(property_exists($text, 'wrap'));
 var_dump($text->wrap);
 
 // Test setting wrap mode
-$wrapped = new Text('Hello', ['wrap' => 'word']);
+$wrapped = new ContentNode('Hello', ['wrap' => 'word']);
 var_dump($wrapped->wrap);
 
-$charWrap = new Text('Hello', ['wrap' => 'char']);
+$charWrap = new ContentNode('Hello', ['wrap' => 'char']);
 var_dump($charWrap->wrap);
 ?>
 --EXPECT--

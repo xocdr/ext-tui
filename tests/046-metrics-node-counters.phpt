@@ -4,8 +4,8 @@ Telemetry: node creation/destruction metrics
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 // Enable metrics
 tui_metrics_enable();
@@ -15,10 +15,10 @@ tui_metrics_reset();
 $renderer = tui_test_create(80, 24);
 
 // Create a box with text children
-$box = new Box(['width' => 80, 'height' => 24]);
+$box = new ContainerNode(['width' => 80, 'height' => 24]);
 $box->children = [
-    new Text("Hello"),
-    new Text("World"),
+    new ContentNode("Hello"),
+    new ContentNode("World"),
 ];
 tui_test_render($renderer, $box);
 

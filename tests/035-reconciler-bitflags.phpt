@@ -10,22 +10,22 @@ tui
 // This test verifies that the reconciler handles keyed children
 // and that bit flags are used internally for composable effects
 
-$parent = new Xocdr\Tui\Ext\Box(['key' => 'parent']);
+$parent = new Xocdr\Tui\Ext\ContainerNode(['key' => 'parent']);
 
 // Create children with various states
-$box1 = new Xocdr\Tui\Ext\Box([
+$box1 = new Xocdr\Tui\Ext\ContainerNode([
     'key' => 'item1',
     'width' => 10,
     'height' => 5
 ]);
 
-$box2 = new Xocdr\Tui\Ext\Box([
+$box2 = new Xocdr\Tui\Ext\ContainerNode([
     'key' => 'item2',
     'width' => 20,
     'height' => 10
 ]);
 
-$box3 = new Xocdr\Tui\Ext\Box([
+$box3 = new Xocdr\Tui\Ext\ContainerNode([
     'key' => 'item3',
     'flexGrow' => 1
 ]);

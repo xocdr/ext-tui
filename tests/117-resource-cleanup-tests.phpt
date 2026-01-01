@@ -4,8 +4,8 @@ Resource cleanup and lifecycle tests
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Buffer lifecycle ===\n";
 
@@ -50,7 +50,7 @@ echo "\n=== Test renderer lifecycle ===\n";
 
 // Create and destroy
 $renderer = tui_test_create(80, 24);
-$tree = new Box(['children' => [new Text("Hello")]]);
+$tree = new ContainerNode(['children' => [new ContentNode("Hello")]]);
 tui_test_render($renderer, $tree);
 tui_test_destroy($renderer);
 echo "Renderer created, used, destroyed\n";
@@ -58,7 +58,7 @@ echo "Renderer created, used, destroyed\n";
 // Multiple renders before destroy
 $renderer = tui_test_create(80, 24);
 for ($i = 0; $i < 5; $i++) {
-    $tree = new Box(['children' => [new Text("Render $i")]]);
+    $tree = new ContainerNode(['children' => [new ContentNode("Render $i")]]);
     tui_test_render($renderer, $tree);
 }
 tui_test_destroy($renderer);
@@ -69,9 +69,9 @@ echo "\n=== Node tree lifecycle ===\n";
 // Deep tree with many nodes
 function createDeepTree($depth) {
     if ($depth <= 0) {
-        return new Text("Leaf");
+        return new ContentNode("Leaf");
     }
-    return new Box([
+    return new ContainerNode([
         'children' => [
             createDeepTree($depth - 1),
             createDeepTree($depth - 1),
@@ -85,9 +85,9 @@ $tree = null;  // Clear
 echo "Cleared deep tree\n";
 
 // Wide tree with many children
-$box = new Box();
+$box = new ContainerNode();
 for ($i = 0; $i < 100; $i++) {
-    $box->addChild(new Text("Child $i"));
+    $box->addChild(new ContentNode("Child $i"));
 }
 echo "Created box with 100 children\n";
 $box = null;
@@ -116,7 +116,7 @@ $canvas = tui_canvas_create(40, 20);
 // Use them
 tui_buffer_clear($buffer);
 tui_history_add($history, "test");
-$tree = new Box(['children' => [new Text("Test")]]);
+$tree = new ContainerNode(['children' => [new ContentNode("Test")]]);
 tui_test_render($renderer, $tree);
 tui_canvas_set($canvas, 0, 0);
 
@@ -171,7 +171,7 @@ echo "Created 50 buffers\n";
 // Create many test renderers
 for ($i = 0; $i < 20; $i++) {
     $r = tui_test_create(80, 24);
-    tui_test_render($r, new Box());
+    tui_test_render($r, new ContainerNode());
     tui_test_destroy($r);
 }
 echo "Created and destroyed 20 renderers\n";

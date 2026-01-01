@@ -4,8 +4,8 @@ Stress test for memory pool and allocation
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Memory pool stress test ===\n";
 
@@ -22,7 +22,7 @@ echo "Initial pool allocations: " . ($initialMetrics['allocations'] ?? 0) . "\n"
 
 for ($cycle = 0; $cycle < 10; $cycle++) {
     // Create a tree with many nodes
-    $root = new Box([
+    $root = new ContainerNode([
         'id' => 'cycle-root',
         'width' => 80,
         'height' => 24,
@@ -30,11 +30,11 @@ for ($cycle = 0; $cycle < 10; $cycle++) {
     ]);
 
     for ($i = 0; $i < 50; $i++) {
-        $child = new Box([
+        $child = new ContainerNode([
             'id' => "node-$cycle-$i",
             'height' => 1,
         ]);
-        $child->addChild(new Text("Node $i in cycle $cycle"));
+        $child->addChild(new ContentNode("Node $i in cycle $cycle"));
         $root->addChild($child);
     }
 
@@ -54,10 +54,10 @@ echo "\n--- Test 2: Deep recursion stress ---\n";
 
 function createDeepTree($depth) {
     if ($depth <= 0) {
-        return new Text("Leaf at depth 0");
+        return new ContentNode("Leaf at depth 0");
     }
 
-    $box = new Box([
+    $box = new ContainerNode([
         'id' => "depth-$depth",
         'padding' => 1,
     ]);
@@ -68,7 +68,7 @@ function createDeepTree($depth) {
 // Test multiple depths
 $depths = [10, 25, 50, 75, 100];
 foreach ($depths as $depth) {
-    $deepRoot = new Box([
+    $deepRoot = new ContainerNode([
         'id' => 'deep-root',
         'width' => 80,
         'height' => 24,
@@ -90,7 +90,7 @@ echo "\n--- Test 3: Wide tree stress ---\n";
 
 $widths = [100, 250, 500, 750, 1000];
 foreach ($widths as $width) {
-    $wideRoot = new Box([
+    $wideRoot = new ContainerNode([
         'id' => 'wide-root',
         'width' => 80,
         'height' => 24,
@@ -98,7 +98,7 @@ foreach ($widths as $width) {
     ]);
 
     for ($i = 0; $i < $width; $i++) {
-        $wideRoot->addChild(new Box(['id' => "w-$i"]));
+        $wideRoot->addChild(new ContainerNode(['id' => "w-$i"]));
     }
 
     $startMem = memory_get_usage();
@@ -118,8 +118,8 @@ $startTime = microtime(true);
 $iterations = 1000;
 
 for ($i = 0; $i < $iterations; $i++) {
-    $box = new Box(['id' => "rapid-$i"]);
-    $box->addChild(new Text("Content $i"));
+    $box = new ContainerNode(['id' => "rapid-$i"]);
+    $box->addChild(new ContentNode("Content $i"));
 
     // Immediately release
     unset($box);

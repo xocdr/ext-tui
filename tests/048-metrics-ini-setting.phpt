@@ -10,12 +10,12 @@ tui.metrics_enabled=1
 var_dump(tui_metrics_enabled());
 
 // Create some nodes to verify metrics are being collected
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 $renderer = tui_test_create(80, 24);
-$box = new Box();
-$box->children = [new Text("Test")];
+$box = new ContainerNode();
+$box->children = [new ContentNode("Test")];
 tui_test_render($renderer, $box);
 
 $m = tui_get_metrics();

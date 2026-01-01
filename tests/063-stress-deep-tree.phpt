@@ -9,20 +9,20 @@ tui
  * and properly cleans up memory on errors.
  */
 
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 // Build a deep tree
-function buildDeepTree(int $depth, int $childrenPerLevel = 2): Box {
+function buildDeepTree(int $depth, int $childrenPerLevel = 2): ContainerNode {
     if ($depth <= 0) {
-        return new Box(['children' => [new Text("leaf")]]);
+        return new ContainerNode(['children' => [new ContentNode("leaf")]]);
     }
 
     $children = [];
     for ($i = 0; $i < $childrenPerLevel; $i++) {
         $children[] = buildDeepTree($depth - 1, $childrenPerLevel);
     }
-    return new Box(['children' => $children]);
+    return new ContainerNode(['children' => $children]);
 }
 
 // Test 1: Build and render moderately deep tree (10 levels, 2 children each = 2047 nodes)
@@ -40,9 +40,9 @@ tui_metrics_reset();
 echo "\nTest 2: Wide tree (1000 children)\n";
 $children = [];
 for ($i = 0; $i < 1000; $i++) {
-    $children[] = new Text("item-$i", ['key' => "key-$i"]);
+    $children[] = new ContentNode("item-$i", ['key' => "key-$i"]);
 }
-$wideTree = new Box(['children' => $children]);
+$wideTree = new ContainerNode(['children' => $children]);
 
 $renderer2 = tui_test_create(200, 100);
 tui_test_render($renderer2, $wideTree);
@@ -61,9 +61,9 @@ echo "\nCleanup completed\n";
 // Test 4: Memory stress - many small allocations
 echo "\nTest 4: Many small trees\n";
 for ($i = 0; $i < 100; $i++) {
-    $smallTree = new Box(['children' => [
-        new Text("a"),
-        new Text("b"),
+    $smallTree = new ContainerNode(['children' => [
+        new ContentNode("a"),
+        new ContentNode("b"),
     ]]);
     $r = tui_test_create(20, 5);
     tui_test_render($r, $smallTree);

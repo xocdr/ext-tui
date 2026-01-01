@@ -4,25 +4,25 @@ Testing framework: query functions (get_by_id, get_by_text)
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 $renderer = tui_test_create(80, 24);
 
 // Create a simple UI with IDs
-$box = new Box(['width' => 80, 'height' => 24]);
+$box = new ContainerNode(['width' => 80, 'height' => 24]);
 $box->id = "root";
 $box->children = [
     (function() {
-        $header = new Box(['height' => 3]);
+        $header = new ContainerNode(['height' => 3]);
         $header->id = "header";
-        $header->children = [new Text("Welcome to TUI Test")];
+        $header->children = [new ContentNode("Welcome to TUI Test")];
         return $header;
     })(),
     (function() {
-        $content = new Box(['flexGrow' => 1]);
+        $content = new ContainerNode(['flexGrow' => 1]);
         $content->id = "content";
-        $content->children = [new Text("Main content here")];
+        $content->children = [new ContentNode("Main content here")];
         return $content;
     })(),
 ];

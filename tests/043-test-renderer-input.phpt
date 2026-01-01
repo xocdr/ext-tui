@@ -4,14 +4,14 @@ Testing framework: input simulation (send_input, send_key, advance_frame)
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 $renderer = tui_test_create(80, 24);
 
 // Create a simple UI
-$box = new Box(['width' => 80, 'height' => 24]);
-$box->children = [new Text("Press a key")];
+$box = new ContainerNode(['width' => 80, 'height' => 24]);
+$box->children = [new ContentNode("Press a key")];
 tui_test_render($renderer, $box);
 
 // Test tui_test_send_input - queue some text

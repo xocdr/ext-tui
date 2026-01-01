@@ -8,8 +8,8 @@ tui
  * Test key map performance with many children and reconciliation.
  */
 
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 tui_metrics_enable();
 tui_metrics_reset();
@@ -18,9 +18,9 @@ tui_metrics_reset();
 echo "Test 1: 100 keyed children\n";
 $children = [];
 for ($i = 0; $i < 100; $i++) {
-    $children[] = new Text("item-$i", ['key' => "key-$i"]);
+    $children[] = new ContentNode("item-$i", ['key' => "key-$i"]);
 }
-$tree1 = new Box(['children' => $children]);
+$tree1 = new ContainerNode(['children' => $children]);
 
 $renderer = tui_test_create(200, 100);
 tui_test_render($renderer, $tree1);
@@ -30,9 +30,9 @@ echo "Initial render: 100 children\n";
 // Reverse the order
 $reordered = [];
 for ($i = 99; $i >= 0; $i--) {
-    $reordered[] = new Text("item-$i-updated", ['key' => "key-$i"]);
+    $reordered[] = new ContentNode("item-$i-updated", ['key' => "key-$i"]);
 }
-$tree2 = new Box(['children' => $reordered]);
+$tree2 = new ContainerNode(['children' => $reordered]);
 tui_test_render($renderer, $tree2);
 echo "Reordered render completed\n";
 
@@ -40,10 +40,10 @@ echo "Reordered render completed\n";
 $mixed = [];
 // Keep every other item and add new ones
 for ($i = 0; $i < 50; $i++) {
-    $mixed[] = new Text("item-" . ($i * 2), ['key' => "key-" . ($i * 2)]);
-    $mixed[] = new Text("new-$i", ['key' => "new-$i"]);
+    $mixed[] = new ContentNode("item-" . ($i * 2), ['key' => "key-" . ($i * 2)]);
+    $mixed[] = new ContentNode("new-$i", ['key' => "new-$i"]);
 }
-$tree3 = new Box(['children' => $mixed]);
+$tree3 = new ContainerNode(['children' => $mixed]);
 tui_test_render($renderer, $tree3);
 echo "Mixed add/remove render completed\n";
 

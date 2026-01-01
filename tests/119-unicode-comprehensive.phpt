@@ -4,8 +4,8 @@ Comprehensive Unicode handling
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== CJK characters ===\n";
 
@@ -149,13 +149,13 @@ echo "Mixed truncate to 5: " . tui_strip_ansi($result) . "\n";
 
 echo "\n=== Text node with Unicode ===\n";
 
-$text = new Text("Hello中文");
+$text = new ContentNode("Hello中文");
 echo "Text created with CJK\n";
 
-$text = new Text("😀🎉👍");
+$text = new ContentNode("😀🎉👍");
 echo "Text created with emoji\n";
 
-$text = new Text("שלום");
+$text = new ContentNode("שלום");
 echo "Text created with Hebrew\n";
 
 echo "\n=== Edge cases ===\n";

@@ -4,8 +4,8 @@ Type error handling for all functions
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== tui_string_width type errors ===\n";
 try {
@@ -56,40 +56,40 @@ try {
 
 echo "\n=== Box constructor type errors ===\n";
 try {
-    new Box("not an array");
+    new ContainerNode("not an array");
 } catch (TypeError $e) {
     echo "Caught: string props\n";
 }
 
 try {
-    new Box(123);
+    new ContainerNode(123);
 } catch (TypeError $e) {
     echo "Caught: int props\n";
 }
 
 echo "\n=== Box property type coercion ===\n";
 // These should work with coercion
-$box = new Box(['width' => "100"]);  // string to int
+$box = new ContainerNode(['width' => "100"]);  // string to int
 echo "String width coerced\n";
 
-$box = new Box(['width' => 50.5]);  // float to int
+$box = new ContainerNode(['width' => 50.5]);  // float to int
 echo "Float width coerced\n";
 
 echo "\n=== Text constructor type errors ===\n";
 try {
-    new Text([]);  // array instead of string
+    new ContentNode([]);  // array instead of string
 } catch (TypeError $e) {
     echo "Caught: array content\n";
 }
 
 try {
-    new Text(new stdClass());
+    new ContentNode(new stdClass());
 } catch (TypeError $e) {
     echo "Caught: object content\n";
 }
 
 echo "\n=== addChild type errors ===\n";
-$box = new Box();
+$box = new ContainerNode();
 try {
     $box->addChild("not a node");
 } catch (TypeError $e) {

@@ -4,16 +4,16 @@ Testing framework: basic tui_test_* functions
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 // Test tui_test_create
 $renderer = tui_test_create(40, 10);
 var_dump(is_resource($renderer));
 
 // Test tui_test_render with a simple box
-$box = new Box(['width' => 20, 'height' => 3]);
-$box->children = [new Text("Hello World")];
+$box = new ContainerNode(['width' => 20, 'height' => 3]);
+$box->children = [new ContentNode("Hello World")];
 
 tui_test_render($renderer, $box);
 

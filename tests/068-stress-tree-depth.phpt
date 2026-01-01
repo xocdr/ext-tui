@@ -9,17 +9,17 @@ tui
  * Maximum nesting depth is 256 levels.
  */
 
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 /**
  * Build a tree with exactly N levels of nesting.
  */
-function buildNestedTree(int $depth): Box {
+function buildNestedTree(int $depth): ContainerNode {
     if ($depth <= 0) {
-        return new Box(['children' => [new Text("leaf")]]);
+        return new ContainerNode(['children' => [new ContentNode("leaf")]]);
     }
-    return new Box(['children' => [buildNestedTree($depth - 1)]]);
+    return new ContainerNode(['children' => [buildNestedTree($depth - 1)]]);
 }
 
 // Test 1: Tree at safe depth (100 levels)

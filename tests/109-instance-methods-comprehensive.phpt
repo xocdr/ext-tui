@@ -4,8 +4,8 @@ TuiInstance methods comprehensive testing
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Instance;
 
 echo "=== Instance class exists ===\n";
@@ -62,11 +62,11 @@ foreach ($methodsToCheck as $methodName) {
 
 echo "\n=== Test measureElement with test renderer ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box([
+$tree = new ContainerNode([
     'id' => 'measurable',
     'width' => 40,
     'height' => 10,
-    'children' => [new Text("Measure me")]
+    'children' => [new ContentNode("Measure me")]
 ]);
 tui_test_render($renderer, $tree);
 

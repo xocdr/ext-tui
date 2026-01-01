@@ -4,72 +4,72 @@ Box::addChild() edge cases and error handling
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Add single child ===\n";
-$box = new Box();
-$box->addChild(new Text("Child"));
+$box = new ContainerNode();
+$box->addChild(new ContentNode("Child"));
 echo "Added 1 child\n";
 
 echo "\n=== Add multiple children sequentially ===\n";
-$box = new Box();
+$box = new ContainerNode();
 for ($i = 0; $i < 10; $i++) {
-    $box->addChild(new Text("Child $i"));
+    $box->addChild(new ContentNode("Child $i"));
 }
 echo "Added 10 children\n";
 
 echo "\n=== Add nested boxes ===\n";
-$box = new Box();
-$inner = new Box();
-$inner->addChild(new Text("Nested content"));
+$box = new ContainerNode();
+$inner = new ContainerNode();
+$inner->addChild(new ContentNode("Nested content"));
 $box->addChild($inner);
 echo "Added nested box\n";
 
 echo "\n=== Add deeply nested structure ===\n";
-$root = new Box();
+$root = new ContainerNode();
 $current = $root;
 for ($i = 0; $i < 50; $i++) {
-    $child = new Box();
+    $child = new ContainerNode();
     $current->addChild($child);
     $current = $child;
 }
-$current->addChild(new Text("Deep leaf"));
+$current->addChild(new ContentNode("Deep leaf"));
 echo "Added 50 levels of nesting\n";
 
 echo "\n=== Add many children (stress test) ===\n";
-$box = new Box();
+$box = new ContainerNode();
 for ($i = 0; $i < 500; $i++) {
-    $box->addChild(new Text("Child $i"));
+    $box->addChild(new ContentNode("Child $i"));
 }
 echo "Added 500 children\n";
 
 echo "\n=== Mixed Box and Text children ===\n";
-$box = new Box();
-$box->addChild(new Text("Text 1"));
-$box->addChild(new Box(['children' => [new Text("Nested")]]));
-$box->addChild(new Text("Text 2"));
-$box->addChild(new Box());
+$box = new ContainerNode();
+$box->addChild(new ContentNode("Text 1"));
+$box->addChild(new ContainerNode(['children' => [new ContentNode("Nested")]]));
+$box->addChild(new ContentNode("Text 2"));
+$box->addChild(new ContainerNode());
 echo "Added mixed children\n";
 
 echo "\n=== Children with keys ===\n";
-$box = new Box();
-$box->addChild(new Text("First", ['key' => 'first']));
-$box->addChild(new Text("Second", ['key' => 'second']));
-$box->addChild(new Text("Third", ['key' => 'third']));
+$box = new ContainerNode();
+$box->addChild(new ContentNode("First", ['key' => 'first']));
+$box->addChild(new ContentNode("Second", ['key' => 'second']));
+$box->addChild(new ContentNode("Third", ['key' => 'third']));
 echo "Added keyed children\n";
 
 echo "\n=== Add same child multiple times ===\n";
-$box = new Box();
-$child = new Text("Shared");
+$box = new ContainerNode();
+$child = new ContentNode("Shared");
 $box->addChild($child);
 $box->addChild($child);  // Adding same instance again
 echo "Added same child twice (should work)\n";
 
 echo "\n=== Add child to multiple parents ===\n";
-$child = new Text("Shared child");
-$box1 = new Box();
-$box2 = new Box();
+$child = new ContentNode("Shared child");
+$box1 = new ContainerNode();
+$box2 = new ContainerNode();
 $box1->addChild($child);
 $box2->addChild($child);
 echo "Added to multiple parents (reference semantics)\n";

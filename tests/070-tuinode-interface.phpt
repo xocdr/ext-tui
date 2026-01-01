@@ -8,51 +8,51 @@ tui
  * Test the TuiNode interface and its implementations in Box and Text.
  */
 
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\TuiNode;
 
 echo "Test 1: TuiNode interface exists\n";
 var_dump(interface_exists(TuiNode::class));
 
-echo "\nTest 2: Box implements TuiNode\n";
-$box = new Box();
+echo "\nTest 2: ContainerNode implements TuiNode\n";
+$box = new ContainerNode();
 var_dump($box instanceof TuiNode);
 
-echo "\nTest 3: Text implements TuiNode\n";
-$text = new Text("hello");
+echo "\nTest 3: ContentNode implements TuiNode\n";
+$text = new ContentNode("hello");
 var_dump($text instanceof TuiNode);
 
-echo "\nTest 4: Box getKey() returns null when not set\n";
-$box = new Box();
+echo "\nTest 4: ContainerNode getKey() returns null when not set\n";
+$box = new ContainerNode();
 var_dump($box->getKey());
 
-echo "\nTest 5: Box getKey() returns value when set\n";
-$box = new Box(['key' => 'my-box-key']);
+echo "\nTest 5: ContainerNode getKey() returns value when set\n";
+$box = new ContainerNode(['key' => 'my-box-key']);
 var_dump($box->getKey());
 
-echo "\nTest 6: Box getId() returns null when not set\n";
-$box = new Box();
+echo "\nTest 6: ContainerNode getId() returns null when not set\n";
+$box = new ContainerNode();
 var_dump($box->getId());
 
-echo "\nTest 7: Box getId() returns value when set\n";
-$box = new Box(['id' => 'my-box-id']);
+echo "\nTest 7: ContainerNode getId() returns value when set\n";
+$box = new ContainerNode(['id' => 'my-box-id']);
 var_dump($box->getId());
 
-echo "\nTest 8: Text getKey() returns null when not set\n";
-$text = new Text("hello");
+echo "\nTest 8: ContentNode getKey() returns null when not set\n";
+$text = new ContentNode("hello");
 var_dump($text->getKey());
 
-echo "\nTest 9: Text getKey() returns value when set\n";
-$text = new Text("hello", ['key' => 'my-text-key']);
+echo "\nTest 9: ContentNode getKey() returns value when set\n";
+$text = new ContentNode("hello", ['key' => 'my-text-key']);
 var_dump($text->getKey());
 
-echo "\nTest 10: Text getId() returns null when not set\n";
-$text = new Text("hello");
+echo "\nTest 10: ContentNode getId() returns null when not set\n";
+$text = new ContentNode("hello");
 var_dump($text->getId());
 
-echo "\nTest 11: Text getId() returns value when set\n";
-$text = new Text("hello", ['id' => 'my-text-id']);
+echo "\nTest 11: ContentNode getId() returns value when set\n";
+$text = new ContentNode("hello", ['id' => 'my-text-id']);
 var_dump($text->getId());
 
 echo "\nTest 12: Type hints work with TuiNode interface\n";
@@ -61,8 +61,8 @@ function processNode(TuiNode $node): string {
         $node->getKey() ?? 'null',
         $node->getId() ?? 'null');
 }
-echo processNode(new Box(['key' => 'box1', 'id' => 'box-id'])) . "\n";
-echo processNode(new Text("text", ['key' => 'text1'])) . "\n";
+echo processNode(new ContainerNode(['key' => 'box1', 'id' => 'box-id'])) . "\n";
+echo processNode(new ContentNode("text", ['key' => 'text1'])) . "\n";
 
 echo "\nTuiNode interface test completed!\n";
 ?>
@@ -70,34 +70,34 @@ echo "\nTuiNode interface test completed!\n";
 Test 1: TuiNode interface exists
 bool(true)
 
-Test 2: Box implements TuiNode
+Test 2: ContainerNode implements TuiNode
 bool(true)
 
-Test 3: Text implements TuiNode
+Test 3: ContentNode implements TuiNode
 bool(true)
 
-Test 4: Box getKey() returns null when not set
+Test 4: ContainerNode getKey() returns null when not set
 NULL
 
-Test 5: Box getKey() returns value when set
+Test 5: ContainerNode getKey() returns value when set
 string(10) "my-box-key"
 
-Test 6: Box getId() returns null when not set
+Test 6: ContainerNode getId() returns null when not set
 NULL
 
-Test 7: Box getId() returns value when set
+Test 7: ContainerNode getId() returns value when set
 string(9) "my-box-id"
 
-Test 8: Text getKey() returns null when not set
+Test 8: ContentNode getKey() returns null when not set
 NULL
 
-Test 9: Text getKey() returns value when set
+Test 9: ContentNode getKey() returns value when set
 string(11) "my-text-key"
 
-Test 10: Text getId() returns null when not set
+Test 10: ContentNode getId() returns null when not set
 NULL
 
-Test 11: Text getId() returns value when set
+Test 11: ContentNode getId() returns value when set
 string(10) "my-text-id"
 
 Test 12: Type hints work with TuiNode interface

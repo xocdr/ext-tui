@@ -1,12 +1,12 @@
 --TEST--
-Xocdr\Tui\Ext\Box has all flex layout properties
+Xocdr\Tui\Ext\ContainerNode has all flex layout properties
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
-$box = new Box([
+$box = new ContainerNode([
     'flexDirection' => 'row',
     'alignItems' => 'center',
     'justifyContent' => 'space-between',

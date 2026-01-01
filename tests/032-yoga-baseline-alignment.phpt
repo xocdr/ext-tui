@@ -5,18 +5,18 @@ tui
 --FILE--
 <?php
 // Test alignItems baseline
-$box1 = new Xocdr\Tui\Ext\Box(['alignItems' => 'baseline']);
+$box1 = new Xocdr\Tui\Ext\ContainerNode(['alignItems' => 'baseline']);
 var_dump($box1->alignItems);
 
 // Test alignSelf baseline
-$box2 = new Xocdr\Tui\Ext\Box(['alignSelf' => 'baseline']);
+$box2 = new Xocdr\Tui\Ext\ContainerNode(['alignSelf' => 'baseline']);
 var_dump($box2->alignSelf);
 
 // Test other alignment values still work
-$box3 = new Xocdr\Tui\Ext\Box(['alignItems' => 'center']);
+$box3 = new Xocdr\Tui\Ext\ContainerNode(['alignItems' => 'center']);
 var_dump($box3->alignItems);
 
-$box4 = new Xocdr\Tui\Ext\Box(['alignItems' => 'stretch']);
+$box4 = new Xocdr\Tui\Ext\ContainerNode(['alignItems' => 'stretch']);
 var_dump($box4->alignItems);
 ?>
 --EXPECT--

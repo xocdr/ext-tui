@@ -1710,7 +1710,7 @@ tui_node* php_to_tui_node(zval *obj, int depth)
             size_t key_len = Z_STRLEN_P(prop);
             if (key_len > TUI_MAX_KEY_LENGTH) {
                 php_error_docref(NULL, E_WARNING,
-                    "Box key exceeds maximum length (%d), truncating",
+                    "ContainerNode key exceeds maximum length (%d), truncating",
                     TUI_MAX_KEY_LENGTH);
                 key_len = TUI_MAX_KEY_LENGTH;
             }
@@ -1726,7 +1726,7 @@ tui_node* php_to_tui_node(zval *obj, int depth)
             size_t id_len = Z_STRLEN_P(prop);
             if (id_len > TUI_MAX_ID_LENGTH) {
                 php_error_docref(NULL, E_WARNING,
-                    "Box id exceeds maximum length (%d), truncating",
+                    "ContainerNode id exceeds maximum length (%d), truncating",
                     TUI_MAX_ID_LENGTH);
                 id_len = TUI_MAX_ID_LENGTH;
             }
@@ -1868,7 +1868,7 @@ text_node_created:
             size_t key_len = Z_STRLEN_P(prop);
             if (key_len > TUI_MAX_KEY_LENGTH) {
                 php_error_docref(NULL, E_WARNING,
-                    "Text key exceeds maximum length (%d), truncating",
+                    "ContentNode key exceeds maximum length (%d), truncating",
                     TUI_MAX_KEY_LENGTH);
                 key_len = TUI_MAX_KEY_LENGTH;
             }
@@ -1884,7 +1884,7 @@ text_node_created:
             size_t id_len = Z_STRLEN_P(prop);
             if (id_len > TUI_MAX_ID_LENGTH) {
                 php_error_docref(NULL, E_WARNING,
-                    "Text id exceeds maximum length (%d), truncating",
+                    "ContentNode id exceeds maximum length (%d), truncating",
                     TUI_MAX_ID_LENGTH);
                 id_len = TUI_MAX_ID_LENGTH;
             }
@@ -4469,8 +4469,8 @@ static PHP_MINIT_FUNCTION(tui)
     INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\TuiNode", tui_node_interface_methods);
     tui_node_interface_ce = zend_register_internal_interface(&ce);
 
-    /* Register Xocdr\Tui\Ext\Box class with methods */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Box", tui_box_methods);
+    /* Register Xocdr\Tui\Ext\ContainerNode class with methods */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\ContainerNode", tui_box_methods);
     tui_box_ce = zend_register_internal_class(&ce);
     zend_class_implements(tui_box_ce, 1, tui_node_interface_ce);
 
@@ -4536,8 +4536,8 @@ static PHP_MINIT_FUNCTION(tui)
     zend_declare_property_null(tui_box_ce, "borderTitleColor", sizeof("borderTitleColor")-1, ZEND_ACC_PUBLIC);
     zend_declare_property_null(tui_box_ce, "borderTitleStyle", sizeof("borderTitleStyle")-1, ZEND_ACC_PUBLIC);
 
-    /* Register Xocdr\Tui\Ext\Text class with methods */
-    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\Text", tui_text_methods);
+    /* Register Xocdr\Tui\Ext\ContentNode class with methods */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\ContentNode", tui_text_methods);
     tui_text_ce = zend_register_internal_class(&ce);
     zend_class_implements(tui_text_ce, 1, tui_node_interface_ce);
 

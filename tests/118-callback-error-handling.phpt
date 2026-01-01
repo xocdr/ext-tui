@@ -4,8 +4,8 @@ Callback and event handler error handling
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Valid callbacks ===\n";
 
@@ -35,7 +35,7 @@ echo "Callbacks defined\n";
 echo "\n=== Box with onClick ===\n";
 
 $clicked = false;
-$box = new Box([
+$box = new ContainerNode([
     'onClick' => function() use (&$clicked) {
         $clicked = true;
         echo "Box clicked\n";
@@ -46,7 +46,7 @@ echo "Box with onClick created\n";
 echo "\n=== Box with onKeyPress ===\n";
 
 $keyPressed = null;
-$box = new Box([
+$box = new ContainerNode([
     'onKeyPress' => function($key) use (&$keyPressed) {
         $keyPressed = $key;
         echo "Key pressed\n";
@@ -57,7 +57,7 @@ echo "Box with onKeyPress created\n";
 echo "\n=== Text with onInput ===\n";
 
 $input = '';
-$text = new Text('', [
+$text = new ContentNode('', [
     'onInput' => function($char) use (&$input) {
         $input .= $char;
     }
@@ -68,7 +68,7 @@ echo "\n=== Invalid callback types ===\n";
 
 // String that's not a function name
 try {
-    $box = new Box(['onClick' => 'not_a_function']);
+    $box = new ContainerNode(['onClick' => 'not_a_function']);
     echo "String callback accepted (may fail at call time)\n";
 } catch (TypeError $e) {
     echo "Caught: invalid string callback\n";
@@ -76,7 +76,7 @@ try {
 
 // Integer as callback
 try {
-    $box = new Box(['onClick' => 123]);
+    $box = new ContainerNode(['onClick' => 123]);
     echo "Int callback accepted (may fail at call time)\n";
 } catch (TypeError $e) {
     echo "Caught: invalid int callback\n";
@@ -84,7 +84,7 @@ try {
 
 // Array that's not a valid callable
 try {
-    $box = new Box(['onClick' => ['not', 'valid']]);
+    $box = new ContainerNode(['onClick' => ['not', 'valid']]);
     echo "Invalid array callback accepted (may fail at call time)\n";
 } catch (TypeError $e) {
     echo "Caught: invalid array callback\n";
@@ -93,7 +93,7 @@ try {
 echo "\n=== Multiple event handlers ===\n";
 
 $events = [];
-$box = new Box([
+$box = new ContainerNode([
     'onClick' => function() use (&$events) { $events[] = 'click'; },
     'onKeyPress' => function($k) use (&$events) { $events[] = 'keypress'; },
     'onFocus' => function() use (&$events) { $events[] = 'focus'; },
@@ -110,7 +110,7 @@ $outer = function() {
     return $inner;
 };
 
-$box = new Box([
+$box = new ContainerNode([
     'onClick' => $outer()
 ]);
 echo "Nested callback set\n";
@@ -118,7 +118,7 @@ echo "Nested callback set\n";
 echo "\n=== Callbacks with use() references ===\n";
 
 $counter = 0;
-$box = new Box([
+$box = new ContainerNode([
     'onClick' => function() use (&$counter) {
         $counter++;
     }
@@ -128,7 +128,7 @@ echo "Reference callback created, counter = $counter\n";
 echo "\n=== Arrow function callbacks ===\n";
 
 $value = 'test';
-$box = new Box([
+$box = new ContainerNode([
     'onClick' => fn() => $value
 ]);
 echo "Arrow function callback set\n";
@@ -136,29 +136,29 @@ echo "Arrow function callback set\n";
 echo "\n=== Class method callbacks ===\n";
 
 $obj = new CallbackTest();
-$box = new Box([
+$box = new ContainerNode([
     'onClick' => [$obj, 'instanceMethod']
 ]);
 echo "Instance method callback set\n";
 
-$box = new Box([
+$box = new ContainerNode([
     'onClick' => [CallbackTest::class, 'staticMethod']
 ]);
 echo "Static method callback set\n";
 
-$box = new Box([
+$box = new ContainerNode([
     'onClick' => 'CallbackTest::staticMethod'
 ]);
 echo "Static method string callback set\n";
 
 echo "\n=== First-class callable syntax ===\n";
 
-$box = new Box([
+$box = new ContainerNode([
     'onClick' => myCallback(...)
 ]);
 echo "First-class callable set\n";
 
-$box = new Box([
+$box = new ContainerNode([
     'onClick' => CallbackTest::staticMethod(...)
 ]);
 echo "First-class static method set\n";

@@ -4,19 +4,19 @@ Exception handling in component callbacks - basic error handling
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Test 1: Normal rendering works ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box(['children' => [new Text("Normal content")]]);
+$tree = new ContainerNode(['children' => [new ContentNode("Normal content")]]);
 tui_test_render($renderer, $tree);
 echo "Normal render succeeded\n";
 tui_test_destroy($renderer);
 
 echo "\n=== Test 2: Exception in PHP code doesn't crash extension ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box(['children' => [new Text("Before exception")]]);
+$tree = new ContainerNode(['children' => [new ContentNode("Before exception")]]);
 tui_test_render($renderer, $tree);
 
 try {
@@ -26,7 +26,7 @@ try {
 }
 
 // Renderer should still be usable
-$tree = new Box(['children' => [new Text("After exception")]]);
+$tree = new ContainerNode(['children' => [new ContentNode("After exception")]]);
 tui_test_render($renderer, $tree);
 echo "Renderer still works after exception\n";
 tui_test_destroy($renderer);
@@ -50,7 +50,7 @@ for ($i = 0; $i < 3; $i++) {
         if ($i === 1) {
             throw new RuntimeException("Exception on iteration $i");
         }
-        $tree = new Box(['children' => [new Text("Iteration $i")]]);
+        $tree = new ContainerNode(['children' => [new ContentNode("Iteration $i")]]);
         tui_test_render($renderer, $tree);
         echo "Render $i: ok\n";
     } catch (RuntimeException $e) {
@@ -64,7 +64,7 @@ echo "\n=== Test 5: Nested exception handling ===\n";
 $renderer = tui_test_create(80, 24);
 
 try {
-    $tree = new Box(['children' => [new Text("Outer")]]);
+    $tree = new ContainerNode(['children' => [new ContentNode("Outer")]]);
     tui_test_render($renderer, $tree);
 
     try {
@@ -73,7 +73,7 @@ try {
         echo "Caught inner: " . $e->getMessage() . "\n";
 
         // Can still render after catching inner exception
-        $tree = new Box(['children' => [new Text("After inner")]]);
+        $tree = new ContainerNode(['children' => [new ContentNode("After inner")]]);
         tui_test_render($renderer, $tree);
         echo "Render after inner exception: ok\n";
     }

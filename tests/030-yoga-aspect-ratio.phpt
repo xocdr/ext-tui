@@ -5,17 +5,17 @@ tui
 --FILE--
 <?php
 // Test aspectRatio property exists and can be set
-$box = new Xocdr\Tui\Ext\Box(['aspectRatio' => 2.0]);
+$box = new Xocdr\Tui\Ext\ContainerNode(['aspectRatio' => 2.0]);
 var_dump($box->aspectRatio);
 
-$box2 = new Xocdr\Tui\Ext\Box(['aspectRatio' => 0.5]);
+$box2 = new Xocdr\Tui\Ext\ContainerNode(['aspectRatio' => 0.5]);
 var_dump($box2->aspectRatio);
 
-$box3 = new Xocdr\Tui\Ext\Box(['aspectRatio' => 16/9]);
+$box3 = new Xocdr\Tui\Ext\ContainerNode(['aspectRatio' => 16/9]);
 var_dump(round($box3->aspectRatio, 4));
 
 // Test default (null)
-$box4 = new Xocdr\Tui\Ext\Box([]);
+$box4 = new Xocdr\Tui\Ext\ContainerNode([]);
 var_dump($box4->aspectRatio);
 ?>
 --EXPECT--

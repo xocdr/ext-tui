@@ -4,8 +4,8 @@ Integration test for input handling and keyboard events
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Key;
 
 echo "=== Input events integration test ===\n";
@@ -15,14 +15,14 @@ $renderer = tui_test_create(80, 24);
 // Test 1: Basic key input
 echo "\n--- Test 1: Basic key input ---\n";
 
-$root = new Box([
+$root = new ContainerNode([
     'id' => 'input-test',
     'width' => 80,
     'height' => 24,
     'focusable' => true,
     'focused' => true,
 ]);
-$root->addChild(new Text('Press keys'));
+$root->addChild(new ContentNode('Press keys'));
 
 tui_test_render($renderer, $root);
 
@@ -114,8 +114,8 @@ foreach ($navKeys as $seq => $name) {
     echo "Sent nav key: $name\n";
 }
 
-// Test 6: Text input sequence
-echo "\n--- Test 6: Text input sequence ---\n";
+// Test 6: ContentNode input sequence
+echo "\n--- Test 6: ContentNode input sequence ---\n";
 
 $textInput = "Hello, World!";
 for ($i = 0; $i < strlen($textInput); $i++) {
@@ -128,7 +128,7 @@ echo "Sent text: \"$textInput\"\n";
 // Test 7: Focus navigation
 echo "\n--- Test 7: Focus navigation ---\n";
 
-$focusRoot = new Box([
+$focusRoot = new ContainerNode([
     'id' => 'focus-root',
     'width' => 80,
     'height' => 24,
@@ -136,13 +136,13 @@ $focusRoot = new Box([
 ]);
 
 for ($i = 0; $i < 3; $i++) {
-    $btn = new Box([
+    $btn = new ContainerNode([
         'id' => "btn-$i",
         'focusable' => true,
         'focused' => ($i === 0),
         'height' => 3,
     ]);
-    $btn->addChild(new Text("Button $i"));
+    $btn->addChild(new ContentNode("Button $i"));
     $focusRoot->addChild($btn);
 }
 
@@ -242,7 +242,7 @@ Sent nav key: Delete
 Sent nav key: PageUp
 Sent nav key: PageDown
 
---- Test 6: Text input sequence ---
+--- Test 6: ContentNode input sequence ---
 Sent text: "Hello, World!"
 
 --- Test 7: Focus navigation ---

@@ -33,19 +33,19 @@ echo "canvas(10000, 10000): " . ($canvas ? "created" : "failed") . "\n";
 echo "\n=== Box dimension properties ===\n";
 
 // Test Box with valid dimensions
-$box = new Xocdr\Tui\Ext\Box(['width' => 10, 'height' => 10]);
+$box = new Xocdr\Tui\Ext\ContainerNode(['width' => 10, 'height' => 10]);
 echo "Box(10x10): created\n";
 
 // Test Box with zero dimensions
-$box = new Xocdr\Tui\Ext\Box(['width' => 0, 'height' => 0]);
+$box = new Xocdr\Tui\Ext\ContainerNode(['width' => 0, 'height' => 0]);
 echo "Box(0x0): created (dimensions are style hints)\n";
 
 // Test Box with null dimensions (auto-size)
-$box = new Xocdr\Tui\Ext\Box(['width' => null, 'height' => null]);
+$box = new Xocdr\Tui\Ext\ContainerNode(['width' => null, 'height' => null]);
 echo "Box(null): created (auto-size)\n";
 
 // Test Box with percentage dimensions
-$box = new Xocdr\Tui\Ext\Box(['width' => '50%', 'height' => '100%']);
+$box = new Xocdr\Tui\Ext\ContainerNode(['width' => '50%', 'height' => '100%']);
 echo "Box(50%x100%): created\n";
 
 echo "\nAll dimension tests completed.";

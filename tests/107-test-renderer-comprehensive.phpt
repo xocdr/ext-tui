@@ -4,30 +4,30 @@ Test renderer comprehensive functionality
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Create test renderer ===\n";
 $renderer = tui_test_create(80, 24);
 var_dump(is_resource($renderer) || is_object($renderer));
 
 echo "\n=== Render simple text ===\n";
-$tree = new Text("Hello World");
+$tree = new ContentNode("Hello World");
 tui_test_render($renderer, $tree);
 echo "Rendered simple text\n";
 
 echo "\n=== Render box with text ===\n";
-$tree = new Box(['children' => [new Text("Inside box")]]);
+$tree = new ContainerNode(['children' => [new ContentNode("Inside box")]]);
 tui_test_render($renderer, $tree);
 echo "Rendered box with text\n";
 
 echo "\n=== Render nested structure ===\n";
-$tree = new Box([
+$tree = new ContainerNode([
     'flexDirection' => 'column',
     'children' => [
-        new Box(['id' => 'header', 'children' => [new Text("Header")]]),
-        new Box(['id' => 'content', 'flexGrow' => 1, 'children' => [new Text("Content")]]),
-        new Box(['id' => 'footer', 'children' => [new Text("Footer")]]),
+        new ContainerNode(['id' => 'header', 'children' => [new ContentNode("Header")]]),
+        new ContainerNode(['id' => 'content', 'flexGrow' => 1, 'children' => [new ContentNode("Content")]]),
+        new ContainerNode(['id' => 'footer', 'children' => [new ContentNode("Footer")]]),
     ]
 ]);
 tui_test_render($renderer, $tree);
@@ -86,18 +86,18 @@ for ($i = 0; $i < 10; $i++) {
 echo "Advanced 10 frames\n";
 
 echo "\n=== Re-render ===\n";
-$newTree = new Box(['children' => [new Text("Updated content")]]);
+$newTree = new ContainerNode(['children' => [new ContentNode("Updated content")]]);
 tui_test_render($renderer, $newTree);
 echo "Re-rendered with new tree\n";
 
 echo "\n=== Different sizes ===\n";
 $small = tui_test_create(20, 10);
-tui_test_render($small, new Text("Small"));
+tui_test_render($small, new ContentNode("Small"));
 echo "Created 20x10 renderer\n";
 tui_test_destroy($small);
 
 $large = tui_test_create(200, 50);
-tui_test_render($large, new Text("Large"));
+tui_test_render($large, new ContentNode("Large"));
 echo "Created 200x50 renderer\n";
 tui_test_destroy($large);
 
@@ -118,7 +118,7 @@ try {
 
 echo "\n=== Edge case: empty render ===\n";
 $r = tui_test_create(80, 24);
-tui_test_render($r, new Box());
+tui_test_render($r, new ContainerNode());
 echo "Rendered empty box\n";
 tui_test_destroy($r);
 

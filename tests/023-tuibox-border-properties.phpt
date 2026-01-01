@@ -1,19 +1,19 @@
 --TEST--
-Xocdr\Tui\Ext\Box has border style properties
+Xocdr\Tui\Ext\ContainerNode has border style properties
 --SKIPIF--
 <?php if (!extension_loaded('tui')) die('skip tui extension not loaded'); ?>
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
-$box = new Box();
+$box = new ContainerNode();
 var_dump(property_exists($box, 'borderStyle'));
 var_dump(property_exists($box, 'borderColor'));
 var_dump($box->borderStyle);
 var_dump($box->borderColor);
 
 // Test setting border style
-$bordered = new Box(['borderStyle' => 'single', 'borderColor' => '#ff0000']);
+$bordered = new ContainerNode(['borderStyle' => 'single', 'borderColor' => '#ff0000']);
 var_dump($bordered->borderStyle);
 var_dump($bordered->borderColor);
 ?>

@@ -4,12 +4,12 @@ Focus system edge cases
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Test 1: Empty tree ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box(['children' => []]);
+$tree = new ContainerNode(['children' => []]);
 tui_test_render($renderer, $tree);
 
 // Sending tab to empty tree should not crash
@@ -24,13 +24,13 @@ tui_test_destroy($renderer);
 
 echo "\n=== Test 2: Tree with no focusable elements ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box([
+$tree = new ContainerNode([
     'focusable' => false,
     'children' => [
-        new Text("Not focusable"),
-        new Box([
+        new ContentNode("Not focusable"),
+        new ContainerNode([
             'focusable' => false,
-            'children' => [new Text("Also not focusable")]
+            'children' => [new ContentNode("Also not focusable")]
         ])
     ]
 ]);
@@ -46,10 +46,10 @@ tui_test_destroy($renderer);
 
 echo "\n=== Test 3: Single focusable element ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box([
+$tree = new ContainerNode([
     'id' => 'only-one',
     'focusable' => true,
-    'children' => [new Text("The only focusable")]
+    'children' => [new ContentNode("The only focusable")]
 ]);
 tui_test_render($renderer, $tree);
 
@@ -69,11 +69,11 @@ tui_test_destroy($renderer);
 
 echo "\n=== Test 4: Focusable with tabIndex -1 (skip) ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box([
+$tree = new ContainerNode([
     'children' => [
-        new Box(['id' => 'first', 'focusable' => true, 'tabIndex' => 1, 'children' => [new Text("First")]]),
-        new Box(['id' => 'skip-me', 'focusable' => true, 'tabIndex' => -1, 'children' => [new Text("Skip")]]),
-        new Box(['id' => 'second', 'focusable' => true, 'tabIndex' => 2, 'children' => [new Text("Second")]]),
+        new ContainerNode(['id' => 'first', 'focusable' => true, 'tabIndex' => 1, 'children' => [new ContentNode("First")]]),
+        new ContainerNode(['id' => 'skip-me', 'focusable' => true, 'tabIndex' => -1, 'children' => [new ContentNode("Skip")]]),
+        new ContainerNode(['id' => 'second', 'focusable' => true, 'tabIndex' => 2, 'children' => [new ContentNode("Second")]]),
     ]
 ]);
 tui_test_render($renderer, $tree);
@@ -89,15 +89,15 @@ echo "\n=== Test 5: Deeply nested single focusable ===\n";
 $renderer = tui_test_create(80, 24);
 
 // Create deeply nested structure with one focusable at the bottom
-$innermost = new Box([
+$innermost = new ContainerNode([
     'id' => 'deep-focus',
     'focusable' => true,
-    'children' => [new Text("Deep inside")]
+    'children' => [new ContentNode("Deep inside")]
 ]);
 
 $tree = $innermost;
 for ($i = 0; $i < 10; $i++) {
-    $tree = new Box(['children' => [$tree]]);
+    $tree = new ContainerNode(['children' => [$tree]]);
 }
 
 tui_test_render($renderer, $tree);
@@ -110,11 +110,11 @@ tui_test_destroy($renderer);
 
 echo "\n=== Test 6: Focus wrap-around ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box([
+$tree = new ContainerNode([
     'children' => [
-        new Box(['id' => 'a', 'focusable' => true, 'children' => [new Text("A")]]),
-        new Box(['id' => 'b', 'focusable' => true, 'children' => [new Text("B")]]),
-        new Box(['id' => 'c', 'focusable' => true, 'children' => [new Text("C")]]),
+        new ContainerNode(['id' => 'a', 'focusable' => true, 'children' => [new ContentNode("A")]]),
+        new ContainerNode(['id' => 'b', 'focusable' => true, 'children' => [new ContentNode("B")]]),
+        new ContainerNode(['id' => 'c', 'focusable' => true, 'children' => [new ContentNode("C")]]),
     ]
 ]);
 tui_test_render($renderer, $tree);
@@ -135,11 +135,11 @@ tui_test_destroy($renderer);
 
 echo "\n=== Test 7: All elements with same tabIndex ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box([
+$tree = new ContainerNode([
     'children' => [
-        new Box(['id' => 'x', 'focusable' => true, 'tabIndex' => 0, 'children' => [new Text("X")]]),
-        new Box(['id' => 'y', 'focusable' => true, 'tabIndex' => 0, 'children' => [new Text("Y")]]),
-        new Box(['id' => 'z', 'focusable' => true, 'tabIndex' => 0, 'children' => [new Text("Z")]]),
+        new ContainerNode(['id' => 'x', 'focusable' => true, 'tabIndex' => 0, 'children' => [new ContentNode("X")]]),
+        new ContainerNode(['id' => 'y', 'focusable' => true, 'tabIndex' => 0, 'children' => [new ContentNode("Y")]]),
+        new ContainerNode(['id' => 'z', 'focusable' => true, 'tabIndex' => 0, 'children' => [new ContentNode("Z")]]),
     ]
 ]);
 tui_test_render($renderer, $tree);
@@ -156,18 +156,18 @@ echo "\n=== Test 8: Removing focused element via re-render ===\n";
 $renderer = tui_test_create(80, 24);
 
 // First render with focusable element
-$tree = new Box([
+$tree = new ContainerNode([
     'children' => [
-        new Box(['id' => 'btn1', 'focusable' => true, 'focused' => true, 'children' => [new Text("Button 1")]]),
-        new Box(['id' => 'btn2', 'focusable' => true, 'children' => [new Text("Button 2")]]),
+        new ContainerNode(['id' => 'btn1', 'focusable' => true, 'focused' => true, 'children' => [new ContentNode("Button 1")]]),
+        new ContainerNode(['id' => 'btn2', 'focusable' => true, 'children' => [new ContentNode("Button 2")]]),
     ]
 ]);
 tui_test_render($renderer, $tree);
 
 // Re-render without the focused element
-$tree = new Box([
+$tree = new ContainerNode([
     'children' => [
-        new Box(['id' => 'btn2', 'focusable' => true, 'children' => [new Text("Button 2")]]),
+        new ContainerNode(['id' => 'btn2', 'focusable' => true, 'children' => [new ContentNode("Button 2")]]),
     ]
 ]);
 tui_test_render($renderer, $tree);
@@ -178,11 +178,11 @@ tui_test_destroy($renderer);
 
 echo "\n=== Test 9: Focus initially set ===\n";
 $renderer = tui_test_create(80, 24);
-$tree = new Box([
+$tree = new ContainerNode([
     'children' => [
-        new Box(['id' => 'first', 'focusable' => true, 'children' => [new Text("First")]]),
-        new Box(['id' => 'second', 'focusable' => true, 'focused' => true, 'children' => [new Text("Second (focused)")]]),
-        new Box(['id' => 'third', 'focusable' => true, 'children' => [new Text("Third")]]),
+        new ContainerNode(['id' => 'first', 'focusable' => true, 'children' => [new ContentNode("First")]]),
+        new ContainerNode(['id' => 'second', 'focusable' => true, 'focused' => true, 'children' => [new ContentNode("Second (focused)")]]),
+        new ContainerNode(['id' => 'third', 'focusable' => true, 'children' => [new ContentNode("Third")]]),
     ]
 ]);
 tui_test_render($renderer, $tree);

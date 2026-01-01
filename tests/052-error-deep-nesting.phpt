@@ -4,17 +4,17 @@ Error handling for deeply nested node trees
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Testing tree depth limits ===\n";
 
 // Test moderate nesting (should work fine)
-function createNestedBoxes(int $depth): Box {
+function createNestedBoxes(int $depth): ContainerNode {
     if ($depth <= 0) {
-        return new Box(['children' => [new Text('leaf')]]);
+        return new ContainerNode(['children' => [new ContentNode('leaf')]]);
     }
-    return new Box(['children' => [createNestedBoxes($depth - 1)]]);
+    return new ContainerNode(['children' => [createNestedBoxes($depth - 1)]]);
 }
 
 // Test depth 10 - should work
@@ -38,32 +38,32 @@ echo "\n=== Testing wide trees ===\n";
 // Test many children (wide tree)
 $children = [];
 for ($i = 0; $i < 100; $i++) {
-    $children[] = new Text("child $i");
+    $children[] = new ContentNode("child $i");
 }
-$wideBox = new Box(['children' => $children]);
+$wideBox = new ContainerNode(['children' => $children]);
 echo "100 children: created successfully\n";
 
 // Test 1000 children
 $children = [];
 for ($i = 0; $i < 1000; $i++) {
-    $children[] = new Text("child $i");
+    $children[] = new ContentNode("child $i");
 }
-$wideBox = new Box(['children' => $children]);
+$wideBox = new ContainerNode(['children' => $children]);
 echo "1000 children: created successfully\n";
 
 echo "\n=== Testing mixed deep and wide ===\n";
 
 // Create a tree that's both deep and wide
-function createMixedTree(int $depth, int $width): Box {
+function createMixedTree(int $depth, int $width): ContainerNode {
     if ($depth <= 0) {
-        return new Box(['children' => [new Text('leaf')]]);
+        return new ContainerNode(['children' => [new ContentNode('leaf')]]);
     }
 
     $children = [];
     for ($i = 0; $i < $width; $i++) {
         $children[] = createMixedTree($depth - 1, max(1, $width - 1));
     }
-    return new Box(['children' => $children]);
+    return new ContainerNode(['children' => $children]);
 }
 
 // Moderate mixed tree

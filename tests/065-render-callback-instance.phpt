@@ -10,14 +10,14 @@ tui
  * being called correctly with the Instance parameter.
  */
 
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 $renderer = tui_test_create(80, 24);
 
 // Initial render
-$box = new Box(['width' => 80, 'height' => 24]);
-$box->children = [new Text("Hello World")];
+$box = new ContainerNode(['width' => 80, 'height' => 24]);
+$box->children = [new ContentNode("Hello World")];
 
 tui_test_render($renderer, $box);
 echo "Initial render completed\n";
@@ -31,8 +31,8 @@ if (count($matches) > 0) {
 }
 
 // Test re-render with different content
-$box2 = new Box(['width' => 80, 'height' => 24]);
-$box2->children = [new Text("Updated Content")];
+$box2 = new ContainerNode(['width' => 80, 'height' => 24]);
+$box2->children = [new ContentNode("Updated Content")];
 
 tui_test_render($renderer, $box2);
 echo "Re-render completed\n";

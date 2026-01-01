@@ -4,49 +4,49 @@ Color parsing edge cases
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Text;
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContentNode;
+use Xocdr\Tui\Ext\ContainerNode;
 use Xocdr\Tui\Ext\Color;
 
 echo "=== Hex colors (6-digit) ===\n";
-$text = new Text("Red", ['color' => '#ff0000']);
+$text = new ContentNode("Red", ['color' => '#ff0000']);
 echo "Created with #ff0000\n";
 
-$text = new Text("Green", ['color' => '#00FF00']);  // uppercase
+$text = new ContentNode("Green", ['color' => '#00FF00']);  // uppercase
 echo "Created with #00FF00\n";
 
-$text = new Text("Blue", ['color' => '#0000ff']);
+$text = new ContentNode("Blue", ['color' => '#0000ff']);
 echo "Created with #0000ff\n";
 
 echo "\n=== Hex colors (3-digit shorthand) ===\n";
-$text = new Text("Red", ['color' => '#f00']);
+$text = new ContentNode("Red", ['color' => '#f00']);
 echo "Created with #f00\n";
 
-$text = new Text("White", ['color' => '#fff']);
+$text = new ContentNode("White", ['color' => '#fff']);
 echo "Created with #fff\n";
 
 echo "\n=== RGB array format ===\n";
-$text = new Text("Red", ['color' => [255, 0, 0]]);
+$text = new ContentNode("Red", ['color' => [255, 0, 0]]);
 echo "Created with [255, 0, 0]\n";
 
-$text = new Text("Green", ['color' => [0, 255, 0]]);
+$text = new ContentNode("Green", ['color' => [0, 255, 0]]);
 echo "Created with [0, 255, 0]\n";
 
-$text = new Text("Black", ['color' => [0, 0, 0]]);
+$text = new ContentNode("Black", ['color' => [0, 0, 0]]);
 echo "Created with [0, 0, 0]\n";
 
-$text = new Text("White", ['color' => [255, 255, 255]]);
+$text = new ContentNode("White", ['color' => [255, 255, 255]]);
 echo "Created with [255, 255, 255]\n";
 
 echo "\n=== Background colors ===\n";
-$text = new Text("BG Red", ['backgroundColor' => '#ff0000']);
+$text = new ContentNode("BG Red", ['backgroundColor' => '#ff0000']);
 echo "Background #ff0000\n";
 
-$text = new Text("BG RGB", ['backgroundColor' => [128, 128, 128]]);
+$text = new ContentNode("BG RGB", ['backgroundColor' => [128, 128, 128]]);
 echo "Background [128, 128, 128]\n";
 
 echo "\n=== Box border colors ===\n";
-$box = new Box(['borderStyle' => 'single', 'borderColor' => '#00ff00']);
+$box = new ContainerNode(['borderStyle' => 'single', 'borderColor' => '#00ff00']);
 echo "Border color #00ff00\n";
 
 echo "\n=== Named colors via Color enum ===\n";
@@ -82,19 +82,19 @@ echo "Blue ANSI BG (length): " . strlen($ansiBg) . "\n";
 
 echo "\n=== Edge case: out of range RGB ===\n";
 // Values outside 0-255 range
-$text = new Text("OutOfRange", ['color' => [300, -50, 1000]]);
+$text = new ContentNode("OutOfRange", ['color' => [300, -50, 1000]]);
 echo "Created with out-of-range RGB\n";
 
 echo "\n=== Edge case: hex without # ===\n";
-$text = new Text("NoHash", ['color' => 'ff0000']);
+$text = new ContentNode("NoHash", ['color' => 'ff0000']);
 echo "Created with 'ff0000' (no #)\n";
 
 echo "\n=== Edge case: invalid hex ===\n";
-$text = new Text("Invalid", ['color' => '#gggggg']);
+$text = new ContentNode("Invalid", ['color' => '#gggggg']);
 echo "Created with invalid hex\n";
 
 echo "\n=== Edge case: empty color ===\n";
-$text = new Text("Empty", ['color' => '']);
+$text = new ContentNode("Empty", ['color' => '']);
 echo "Created with empty color\n";
 
 echo "\nDone!\n";

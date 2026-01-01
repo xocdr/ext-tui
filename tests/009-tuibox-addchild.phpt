@@ -1,14 +1,14 @@
 --TEST--
-Xocdr\Tui\Ext\Box::addChild() adds children
+Xocdr\Tui\Ext\ContainerNode::addChild() adds children
 --EXTENSIONS--
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
-$box = new Box();
-$text = new Text("Hello");
+$box = new ContainerNode();
+$text = new ContentNode("Hello");
 
 $result = $box->addChild($text);
 

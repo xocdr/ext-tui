@@ -4,8 +4,8 @@ Stress test: Rapid consecutive rerenders
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== Test 1: 100 rapid rerenders ===\n";
 $renderer = tui_test_create(80, 24);
@@ -14,9 +14,9 @@ $renderCount = 0;
 $start = microtime(true);
 
 for ($i = 0; $i < 100; $i++) {
-    $tree = new Box([
+    $tree = new ContainerNode([
         'children' => [
-            new Text("Render #$i")
+            new ContentNode("Render #$i")
         ]
     ]);
     tui_test_render($renderer, $tree);
@@ -43,10 +43,10 @@ for ($i = 0; $i < 50; $i++) {
     $state = $states[$stateIndex];
     $stateIndex = ($stateIndex + 1) % count($states);
 
-    $tree = new Box([
+    $tree = new ContainerNode([
         'children' => [
-            new Box(['children' => [new Text("State: $state")]]),
-            new Box(['children' => [new Text("Iteration: $i")]])
+            new ContainerNode(['children' => [new ContentNode("State: $state")]]),
+            new ContainerNode(['children' => [new ContentNode("Iteration: $i")]])
         ]
     ]);
     tui_test_render($renderer, $tree);
@@ -66,21 +66,21 @@ for ($i = 0; $i < 30; $i++) {
     // Alternate between different tree structures
     if ($i % 3 === 0) {
         // Single child
-        $tree = new Box(['children' => [new Text("Single")]]);
+        $tree = new ContainerNode(['children' => [new ContentNode("Single")]]);
     } elseif ($i % 3 === 1) {
         // Multiple children
-        $tree = new Box([
+        $tree = new ContainerNode([
             'children' => [
-                new Text("First"),
-                new Text("Second"),
-                new Text("Third")
+                new ContentNode("First"),
+                new ContentNode("Second"),
+                new ContentNode("Third")
             ]
         ]);
     } else {
         // Nested structure
-        $tree = new Box([
+        $tree = new ContainerNode([
             'children' => [
-                new Box(['children' => [new Text("Nested")]])
+                new ContainerNode(['children' => [new ContentNode("Nested")]])
             ]
         ]);
     }
@@ -95,12 +95,12 @@ echo "\n=== Test 4: Multiple render calls on same tree ===\n";
 $renderer = tui_test_create(80, 24);
 
 // Initial render
-$tree = new Box(['children' => [new Text("Initial")]]);
+$tree = new ContainerNode(['children' => [new ContentNode("Initial")]]);
 tui_test_render($renderer, $tree);
 
 // Re-render same tree structure multiple times
 for ($i = 0; $i < 5; $i++) {
-    $tree = new Box(['children' => [new Text("Initial")]]);
+    $tree = new ContainerNode(['children' => [new ContentNode("Initial")]]);
     tui_test_render($renderer, $tree);
 }
 
@@ -118,9 +118,9 @@ $renderer = tui_test_create(120, 40);
 for ($size = 1; $size <= 20; $size++) {
     $children = [];
     for ($j = 0; $j < $size; $j++) {
-        $children[] = new Text("Item $j");
+        $children[] = new ContentNode("Item $j");
     }
-    $tree = new Box(['children' => $children]);
+    $tree = new ContainerNode(['children' => $children]);
     tui_test_render($renderer, $tree);
 }
 
@@ -133,10 +133,10 @@ $initialMem = memory_get_usage(true);
 
 $renderer = tui_test_create(80, 24);
 for ($i = 0; $i < 100; $i++) {
-    $tree = new Box([
+    $tree = new ContainerNode([
         'children' => [
-            new Text("Memory test iteration $i"),
-            new Box(['children' => [new Text("Nested content")]])
+            new ContentNode("Memory test iteration $i"),
+            new ContainerNode(['children' => [new ContentNode("Nested content")]])
         ]
     ]);
     tui_test_render($renderer, $tree);

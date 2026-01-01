@@ -1,23 +1,23 @@
 --TEST--
-Xocdr\Tui\Ext\Box has focusable and focused properties
+Xocdr\Tui\Ext\ContainerNode has focusable and focused properties
 --SKIPIF--
 <?php if (!extension_loaded('tui')) die('skip tui extension not loaded'); ?>
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
-$box = new Box();
+$box = new ContainerNode();
 var_dump(property_exists($box, 'focusable'));
 var_dump(property_exists($box, 'focused'));
 var_dump($box->focusable);
 var_dump($box->focused);
 
 // Test setting focusable
-$focusable = new Box(['focusable' => true]);
+$focusable = new ContainerNode(['focusable' => true]);
 var_dump($focusable->focusable);
 
 // Test setting focused
-$focused = new Box(['focusable' => true, 'focused' => true]);
+$focused = new ContainerNode(['focusable' => true, 'focused' => true]);
 var_dump($focused->focused);
 ?>
 --EXPECT--

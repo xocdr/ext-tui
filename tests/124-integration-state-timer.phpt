@@ -4,8 +4,8 @@ Integration test for state management and timers
 tui
 --FILE--
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 echo "=== State and Timer integration test ===\n";
 
@@ -17,12 +17,12 @@ echo "\n--- Test 1: State updates ---\n";
 $counter = 0;
 $renderCount = 0;
 
-$root = new Box([
+$root = new ContainerNode([
     'id' => 'root',
     'width' => 80,
     'height' => 24,
 ]);
-$root->addChild(new Text("Counter: $counter"));
+$root->addChild(new ContentNode("Counter: $counter"));
 
 // Initial render
 tui_test_render($renderer, $root);
@@ -32,12 +32,12 @@ echo "Initial render, counter = $counter\n";
 // Simulate state updates
 for ($i = 1; $i <= 5; $i++) {
     $counter = $i;
-    $root = new Box([
+    $root = new ContainerNode([
         'id' => 'root',
         'width' => 80,
         'height' => 24,
     ]);
-    $root->addChild(new Text("Counter: $counter"));
+    $root->addChild(new ContentNode("Counter: $counter"));
     tui_test_render($renderer, $root);
     $renderCount++;
 }
@@ -89,29 +89,29 @@ echo "\n--- Test 3: Conditional rendering ---\n";
 $showModal = false;
 
 function renderApp($showModal) {
-    $root = new Box([
+    $root = new ContainerNode([
         'id' => 'app',
         'width' => 80,
         'height' => 24,
         'flexDirection' => 'column',
     ]);
 
-    $header = new Box(['id' => 'header', 'height' => 3]);
-    $header->addChild(new Text('My App'));
+    $header = new ContainerNode(['id' => 'header', 'height' => 3]);
+    $header->addChild(new ContentNode('My App'));
     $root->addChild($header);
 
-    $content = new Box(['id' => 'content', 'flexGrow' => 1]);
-    $content->addChild(new Text('Main content here'));
+    $content = new ContainerNode(['id' => 'content', 'flexGrow' => 1]);
+    $content->addChild(new ContentNode('Main content here'));
     $root->addChild($content);
 
     if ($showModal) {
-        $modal = new Box([
+        $modal = new ContainerNode([
             'id' => 'modal',
             'borderStyle' => 'double',
             'width' => 40,
             'height' => 10,
         ]);
-        $modal->addChild(new Text('Modal dialog'));
+        $modal->addChild(new ContentNode('Modal dialog'));
         $root->addChild($modal);
     }
 
@@ -140,7 +140,7 @@ echo "With modal - Modal visible: " . ($hasModal2 ? "yes" : "no") . "\n";
 echo "\n--- Test 4: Dynamic list rendering ---\n";
 
 function renderList($items) {
-    $root = new Box([
+    $root = new ContainerNode([
         'id' => 'list-container',
         'width' => 40,
         'height' => 20,
@@ -148,11 +148,11 @@ function renderList($items) {
     ]);
 
     foreach ($items as $i => $item) {
-        $itemBox = new Box([
+        $itemBox = new ContainerNode([
             'id' => "item-$i",
             'height' => 1,
         ]);
-        $itemBox->addChild(new Text("• $item"));
+        $itemBox->addChild(new ContentNode("• $item"));
         $root->addChild($itemBox);
     }
 
@@ -188,19 +188,19 @@ echo "After adding items: Found $foundItems of " . count($items) . " items\n";
 echo "\n--- Test 5: Keyed list reordering ---\n";
 
 function renderKeyedList($items) {
-    $root = new Box([
+    $root = new ContainerNode([
         'id' => 'keyed-list',
         'width' => 40,
         'flexDirection' => 'column',
     ]);
 
     foreach ($items as $id => $label) {
-        $itemBox = new Box([
+        $itemBox = new ContainerNode([
             'key' => "item-$id",
             'id' => "box-$id",
             'height' => 1,
         ]);
-        $itemBox->addChild(new Text($label));
+        $itemBox->addChild(new ContentNode($label));
         $root->addChild($itemBox);
     }
 
@@ -233,7 +233,7 @@ $appState = [
 ];
 
 function renderFromState($state) {
-    $root = new Box([
+    $root = new ContainerNode([
         'id' => 'stateful-app',
         'width' => 60,
         'height' => 20,
@@ -241,20 +241,20 @@ function renderFromState($state) {
     ]);
 
     // User info
-    $userInfo = new Box(['id' => 'user-info', 'height' => 2]);
-    $userInfo->addChild(new Text("User: {$state['user']['name']} ({$state['user']['role']})"));
+    $userInfo = new ContainerNode(['id' => 'user-info', 'height' => 2]);
+    $userInfo->addChild(new ContentNode("User: {$state['user']['name']} ({$state['user']['role']})"));
     $root->addChild($userInfo);
 
     // Theme indicator
-    $theme = new Box(['id' => 'theme', 'height' => 1]);
-    $theme->addChild(new Text("Theme: {$state['theme']}"));
+    $theme = new ContainerNode(['id' => 'theme', 'height' => 1]);
+    $theme->addChild(new ContentNode("Theme: {$state['theme']}"));
     $root->addChild($theme);
 
     // Notifications
-    $notifs = new Box(['id' => 'notifications', 'flexGrow' => 1, 'flexDirection' => 'column']);
+    $notifs = new ContainerNode(['id' => 'notifications', 'flexGrow' => 1, 'flexDirection' => 'column']);
     foreach ($state['notifications'] as $notif) {
-        $notifBox = new Box(['id' => "notif-{$notif['id']}", 'height' => 1]);
-        $notifBox->addChild(new Text("📬 {$notif['text']}"));
+        $notifBox = new ContainerNode(['id' => "notif-{$notif['id']}", 'height' => 1]);
+        $notifBox->addChild(new ContentNode("📬 {$notif['text']}"));
         $notifs->addChild($notifBox);
     }
     $root->addChild($notifs);

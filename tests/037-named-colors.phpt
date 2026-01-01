@@ -13,12 +13,12 @@ tui
 echo "Extension loaded: " . (extension_loaded('tui') ? "yes" : "no") . "\n";
 
 // Create boxes - colors are parsed when php_to_tui_node is called
-$box1 = new Xocdr\Tui\Ext\Box([]);
-echo "Box created: " . ($box1 instanceof Xocdr\Tui\Ext\Box ? "yes" : "no") . "\n";
+$box1 = new Xocdr\Tui\Ext\ContainerNode([]);
+echo "Box created: " . ($box1 instanceof Xocdr\Tui\Ext\ContainerNode ? "yes" : "no") . "\n";
 
 // Test that Text node can be created
-$text = new Xocdr\Tui\Ext\Text("Hello", []);
-echo "Text created: " . ($text instanceof Xocdr\Tui\Ext\Text ? "yes" : "no") . "\n";
+$text = new Xocdr\Tui\Ext\ContentNode("Hello", []);
+echo "Text created: " . ($text instanceof Xocdr\Tui\Ext\ContentNode ? "yes" : "no") . "\n";
 
 // Verify truncate with all positions works (uses tui_string_width internally)
 echo "Truncate end: " . tui_truncate("Hello World", 8, "...", "end") . "\n";
