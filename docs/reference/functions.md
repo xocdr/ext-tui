@@ -1175,3 +1175,610 @@ tui_image_destroy($image);
 | Konsole | Partial |
 | iTerm2 | No (uses different protocol) |
 | Apple Terminal | No |
+
+---
+
+## Notifications
+
+Terminal notifications and alerts.
+
+### tui_bell
+
+```php
+tui_bell(): void
+```
+
+Sends terminal bell (audible beep).
+
+### tui_flash
+
+```php
+tui_flash(): void
+```
+
+Sends visual bell (screen flash).
+
+### tui_notify
+
+```php
+tui_notify(string $title, ?string $body = null, int $priority = 0): bool
+```
+
+Sends desktop notification via OSC 9/777.
+
+**Parameters:**
+- `title`: Notification title
+- `body`: Optional notification body text
+- `priority`: 0 = normal, 1 = low, 2 = critical
+
+**Returns:** `true` if notification was sent
+
+---
+
+## Input Parsing
+
+Low-level input sequence parsing.
+
+### tui_parse_mouse
+
+```php
+tui_parse_mouse(string $input): ?array
+```
+
+Parses SGR mouse escape sequence.
+
+**Returns:** Array with mouse event info or `null` if invalid:
+- `x` (int): Column (0-based)
+- `y` (int): Row (0-based)
+- `button` (string): `'left'`, `'middle'`, `'right'`, `'scroll_up'`, `'scroll_down'`, `'none'`
+- `action` (string): `'press'`, `'release'`, `'move'`, `'drag'`
+- `ctrl` (bool): Ctrl modifier
+- `meta` (bool): Meta/Alt modifier
+- `shift` (bool): Shift modifier
+- `consumed` (int): Bytes consumed from input
+
+### tui_parse_key
+
+```php
+tui_parse_key(string $input): ?array
+```
+
+Parses keyboard escape sequence.
+
+**Returns:** Array with key info or `null` if invalid:
+- `key` (string): Character or key name
+- `ctrl` (bool): Ctrl modifier
+- `alt` (bool): Alt modifier
+- `shift` (bool): Shift modifier
+- `consumed` (int): Bytes consumed from input
+
+---
+
+## ANSI Text Processing
+
+Handle strings containing ANSI escape codes.
+
+### tui_strip_ansi
+
+```php
+tui_strip_ansi(string $text): string
+```
+
+Removes all ANSI escape codes from text.
+
+### tui_string_width_ansi
+
+```php
+tui_string_width_ansi(string $text): int
+```
+
+Returns display width of text, ignoring ANSI escape codes.
+
+### tui_slice_ansi
+
+```php
+tui_slice_ansi(string $text, int $start, int $end): string
+```
+
+Slices text by display width, preserving ANSI codes.
+
+**Parameters:**
+- `text`: Text with ANSI codes
+- `start`: Start position (display column)
+- `end`: End position (display column)
+
+---
+
+## Grapheme Counting
+
+### tui_grapheme_count
+
+```php
+tui_grapheme_count(string $text): int
+```
+
+Counts grapheme clusters in text. A grapheme cluster is a user-perceived character (e.g., emoji with modifiers count as 1).
+
+---
+
+## Accessibility
+
+Accessibility and user preference detection.
+
+### tui_announce
+
+```php
+tui_announce(string $message, string $priority = "polite"): bool
+```
+
+Announces message to screen readers.
+
+**Parameters:**
+- `message`: Message to announce
+- `priority`: `"polite"` (wait for pause) or `"assertive"` (interrupt)
+
+**Returns:** `true` if announcement was sent
+
+### tui_prefers_reduced_motion
+
+```php
+tui_prefers_reduced_motion(): bool
+```
+
+Returns `true` if user prefers reduced motion (from `REDUCE_MOTION` env or system setting).
+
+### tui_prefers_high_contrast
+
+```php
+tui_prefers_high_contrast(): bool
+```
+
+Returns `true` if user prefers high contrast.
+
+### tui_get_accessibility_features
+
+```php
+tui_get_accessibility_features(): array
+```
+
+Returns array of accessibility features:
+- `reduced_motion` (bool)
+- `high_contrast` (bool)
+- `screen_reader` (bool): Screen reader detected
+
+### tui_aria_role_to_string
+
+```php
+tui_aria_role_to_string(int $role): string
+```
+
+Converts ARIA role constant to string name.
+
+### tui_aria_role_from_string
+
+```php
+tui_aria_role_from_string(string $role): int
+```
+
+Converts ARIA role string to constant.
+
+---
+
+## Drag & Drop
+
+Drag and drop operations.
+
+### tui_drag_start
+
+```php
+tui_drag_start(int $x, int $y, string $type, string $data): bool
+```
+
+Starts a drag operation.
+
+**Parameters:**
+- `x`, `y`: Starting position
+- `type`: MIME type or custom type (e.g., `'text/plain'`, `'application/x-custom'`)
+- `data`: Data being dragged
+
+**Returns:** `true` if drag started successfully
+
+### tui_drag_move
+
+```php
+tui_drag_move(int $x, int $y): bool
+```
+
+Updates drag position.
+
+**Returns:** `true` if drag is active
+
+### tui_drag_end
+
+```php
+tui_drag_end(bool $dropped = true): bool
+```
+
+Ends drag operation.
+
+**Parameters:**
+- `dropped`: Whether the drag resulted in a drop
+
+**Returns:** `true` if drag was active
+
+### tui_drag_cancel
+
+```php
+tui_drag_cancel(): bool
+```
+
+Cancels active drag operation.
+
+**Returns:** `true` if drag was cancelled
+
+### tui_drag_is_active
+
+```php
+tui_drag_is_active(): bool
+```
+
+Returns `true` if a drag is in progress.
+
+### tui_drag_get_type
+
+```php
+tui_drag_get_type(): ?string
+```
+
+Returns current drag type or `null` if no drag active.
+
+### tui_drag_get_data
+
+```php
+tui_drag_get_data(): ?string
+```
+
+Returns current drag data or `null` if no drag active.
+
+### tui_drag_get_state
+
+```php
+tui_drag_get_state(): array
+```
+
+Returns drag state:
+- `active` (bool)
+- `x` (int): Current X position
+- `y` (int): Current Y position
+- `start_x` (int): Starting X position
+- `start_y` (int): Starting Y position
+- `type` (?string): Drag type
+- `data` (?string): Drag data
+
+---
+
+## Screen Recording
+
+Record terminal output for playback or export.
+
+### tui_record_create
+
+```php
+tui_record_create(int $width, int $height, ?string $title = null): resource
+```
+
+Creates a screen recorder.
+
+**Parameters:**
+- `width`, `height`: Recording dimensions
+- `title`: Optional recording title
+
+### tui_record_start
+
+```php
+tui_record_start(resource $recording): bool
+```
+
+Starts recording.
+
+### tui_record_pause
+
+```php
+tui_record_pause(resource $recording): bool
+```
+
+Pauses recording.
+
+### tui_record_resume
+
+```php
+tui_record_resume(resource $recording): bool
+```
+
+Resumes paused recording.
+
+### tui_record_stop
+
+```php
+tui_record_stop(resource $recording): bool
+```
+
+Stops recording.
+
+### tui_record_capture
+
+```php
+tui_record_capture(resource $recording, string $data): bool
+```
+
+Captures a frame of terminal output.
+
+### tui_record_duration
+
+```php
+tui_record_duration(resource $recording): float
+```
+
+Returns recording duration in seconds.
+
+### tui_record_frame_count
+
+```php
+tui_record_frame_count(resource $recording): int
+```
+
+Returns number of captured frames.
+
+### tui_record_export
+
+```php
+tui_record_export(resource $recording): string
+```
+
+Exports recording to asciicast format.
+
+### tui_record_save
+
+```php
+tui_record_save(resource $recording, string $path): bool
+```
+
+Saves recording to file.
+
+### tui_record_destroy
+
+```php
+tui_record_destroy(resource $recording): void
+```
+
+Destroys recording resource.
+
+---
+
+## Graphics Protocol Detection
+
+Detect terminal graphics capabilities beyond Kitty protocol.
+
+### tui_graphics_protocol
+
+```php
+tui_graphics_protocol(): string
+```
+
+Returns detected graphics protocol: `'kitty'`, `'iterm2'`, `'sixel'`, or `'none'`.
+
+### tui_iterm2_supported
+
+```php
+tui_iterm2_supported(): bool
+```
+
+Returns `true` if iTerm2 inline images are supported.
+
+### tui_sixel_supported
+
+```php
+tui_sixel_supported(): bool
+```
+
+Returns `true` if Sixel graphics are supported.
+
+---
+
+## Testing Framework
+
+Headless testing utilities for TUI applications.
+
+### tui_test_create
+
+```php
+tui_test_create(int $width, int $height): resource
+```
+
+Creates a test renderer with specified dimensions.
+
+### tui_test_destroy
+
+```php
+tui_test_destroy(resource $renderer): void
+```
+
+Destroys test renderer.
+
+### tui_test_render
+
+```php
+tui_test_render(resource $renderer, ContainerNode $element): void
+```
+
+Renders element tree to test renderer.
+
+### tui_test_get_output
+
+```php
+tui_test_get_output(resource $renderer): array
+```
+
+Returns rendered output as array of lines.
+
+### tui_test_to_string
+
+```php
+tui_test_to_string(resource $renderer): string
+```
+
+Returns rendered output as single string.
+
+### tui_test_send_input
+
+```php
+tui_test_send_input(resource $renderer, string $input): void
+```
+
+Simulates raw input string.
+
+### tui_test_send_key
+
+```php
+tui_test_send_key(resource $renderer, int $keyCode): void
+```
+
+Simulates key press.
+
+### tui_test_advance_frame
+
+```php
+tui_test_advance_frame(resource $renderer): void
+```
+
+Advances to next frame.
+
+### tui_test_run_timers
+
+```php
+tui_test_run_timers(resource $renderer, int $ms): void
+```
+
+Runs timers for specified milliseconds.
+
+### tui_test_get_by_id
+
+```php
+tui_test_get_by_id(resource $renderer, string $id): mixed
+```
+
+Finds element by ID. Returns element info or `null`.
+
+### tui_test_get_by_text
+
+```php
+tui_test_get_by_text(resource $renderer, string $text): array
+```
+
+Finds elements containing text. Returns array of matches.
+
+---
+
+## Performance Metrics
+
+Performance monitoring and profiling.
+
+### tui_metrics_enable
+
+```php
+tui_metrics_enable(): void
+```
+
+Enables performance metrics collection.
+
+### tui_metrics_disable
+
+```php
+tui_metrics_disable(): void
+```
+
+Disables performance metrics collection.
+
+### tui_metrics_enabled
+
+```php
+tui_metrics_enabled(): bool
+```
+
+Returns `true` if metrics collection is enabled.
+
+### tui_metrics_reset
+
+```php
+tui_metrics_reset(): void
+```
+
+Resets all collected metrics.
+
+### tui_get_metrics
+
+```php
+tui_get_metrics(): array
+```
+
+Returns overall metrics summary.
+
+### tui_get_node_metrics
+
+```php
+tui_get_node_metrics(): array
+```
+
+Returns node-related metrics (creation, destruction counts).
+
+### tui_get_reconciler_metrics
+
+```php
+tui_get_reconciler_metrics(): array
+```
+
+Returns reconciler metrics (diff operations, updates).
+
+### tui_get_render_metrics
+
+```php
+tui_get_render_metrics(): array
+```
+
+Returns render metrics (frame times, buffer operations).
+
+### tui_get_loop_metrics
+
+```php
+tui_get_loop_metrics(): array
+```
+
+Returns event loop metrics (input processing, timer execution).
+
+### tui_get_pool_metrics
+
+```php
+tui_get_pool_metrics(): array
+```
+
+Returns memory pool metrics (allocations, cache hits).
+
+---
+
+## Additional Functions
+
+### tui_mouse_get_mode
+
+```php
+tui_mouse_get_mode(): int
+```
+
+Returns current mouse tracking mode: `TUI_MOUSE_MODE_CLICK`, `TUI_MOUSE_MODE_BUTTON`, `TUI_MOUSE_MODE_ALL`, or `0` if disabled.
+
+### tui_bracketed_paste_is_enabled
+
+```php
+tui_bracketed_paste_is_enabled(): bool
+```
+
+Returns `true` if bracketed paste mode is enabled.
