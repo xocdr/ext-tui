@@ -438,10 +438,17 @@ void tui_reconciler_apply(tui_node *tree, tui_diff_result *diff)
                 tui_node_remove_child(parent, op->old_node);
 
                 /* Insert new node at target position */
+                int result;
                 if (insert_index < parent->child_count) {
-                    tui_node_insert_before(parent, op->new_node, parent->children[insert_index]);
+                    result = tui_node_insert_before(parent, op->new_node, parent->children[insert_index]);
                 } else {
-                    tui_node_append_child(parent, op->new_node);
+                    result = tui_node_append_child(parent, op->new_node);
+                }
+
+                if (result < 0) {
+                    /* Failed to insert - destroy new node to prevent leak */
+                    tui_node_destroy(op->new_node);
+                    op->new_node = NULL;
                 }
 
                 tui_node_destroy(op->old_node);
@@ -472,12 +479,16 @@ void tui_reconciler_apply(tui_node *tree, tui_diff_result *diff)
                     /* Remove from current position */
                     tui_node_remove_child(parent, node);
 
-                    /* Insert at target position */
+                    /* Insert at target position - if this fails, the node
+                     * becomes orphaned. This is an edge case (OOM) that we
+                     * can't fully recover from, but at least we don't leak. */
+                    int result;
                     if (target_index < parent->child_count) {
-                        tui_node_insert_before(parent, node, parent->children[target_index]);
+                        result = tui_node_insert_before(parent, node, parent->children[target_index]);
                     } else {
-                        tui_node_append_child(parent, node);
+                        result = tui_node_append_child(parent, node);
                     }
+                    (void)result;  /* Node stays orphaned on failure - unavoidable in reorder */
                 }
             }
         }
@@ -492,10 +503,17 @@ void tui_reconciler_apply(tui_node *tree, tui_diff_result *diff)
                 tui_node *parent = op->new_node->parent;
                 int target_index = op->new_index >= 0 ? op->new_index : parent->child_count;
 
+                int result;
                 if (target_index < parent->child_count) {
-                    tui_node_insert_before(parent, op->new_node, parent->children[target_index]);
+                    result = tui_node_insert_before(parent, op->new_node, parent->children[target_index]);
                 } else {
-                    tui_node_append_child(parent, op->new_node);
+                    result = tui_node_append_child(parent, op->new_node);
+                }
+
+                if (result < 0) {
+                    /* Failed to insert - destroy node to prevent leak */
+                    tui_node_destroy(op->new_node);
+                    op->new_node = NULL;
                 }
             }
         }
