@@ -2010,6 +2010,13 @@ PHP_METHOD(TuiBox, setKey)
         Z_PARAM_STR_OR_NULL(key)
     ZEND_PARSE_PARAMETERS_END();
 
+    /* Validate length */
+    if (key && ZSTR_LEN(key) > TUI_MAX_KEY_LENGTH) {
+        zend_throw_exception_ex(tui_validation_exception_ce, 0,
+            "Node key exceeds maximum length (%d bytes)", TUI_MAX_KEY_LENGTH);
+        RETURN_THROWS();
+    }
+
     if (key) {
         zend_update_property_str(tui_box_ce, Z_OBJ_P(ZEND_THIS), "key", sizeof("key")-1, key);
     } else {
@@ -2029,6 +2036,13 @@ PHP_METHOD(TuiBox, setId)
     ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_STR_OR_NULL(id)
     ZEND_PARSE_PARAMETERS_END();
+
+    /* Validate length */
+    if (id && ZSTR_LEN(id) > TUI_MAX_ID_LENGTH) {
+        zend_throw_exception_ex(tui_validation_exception_ce, 0,
+            "Node ID exceeds maximum length (%d bytes)", TUI_MAX_ID_LENGTH);
+        RETURN_THROWS();
+    }
 
     if (id) {
         zend_update_property_str(tui_box_ce, Z_OBJ_P(ZEND_THIS), "id", sizeof("id")-1, id);
@@ -2084,14 +2098,29 @@ PHP_METHOD(TuiBox, __construct)
     zend_update_property(tui_box_ce, Z_OBJ_P(ZEND_THIS), "children", sizeof("children")-1, &children);
     zval_ptr_dtor(&children);
 
-    /* Apply passed properties */
+    /* Apply passed properties with validation */
     if (props) {
         HashTable *ht = Z_ARRVAL_P(props);
-        zend_string *key;
+        zend_string *prop_key;
         zval *val;
-        ZEND_HASH_FOREACH_STR_KEY_VAL(ht, key, val) {
-            if (key) {
-                zend_update_property(tui_box_ce, Z_OBJ_P(ZEND_THIS), ZSTR_VAL(key), ZSTR_LEN(key), val);
+        ZEND_HASH_FOREACH_STR_KEY_VAL(ht, prop_key, val) {
+            if (prop_key) {
+                /* Validate key and id length */
+                if (zend_string_equals_literal(prop_key, "key") && Z_TYPE_P(val) == IS_STRING) {
+                    if (Z_STRLEN_P(val) > TUI_MAX_KEY_LENGTH) {
+                        zend_throw_exception_ex(tui_validation_exception_ce, 0,
+                            "Node key exceeds maximum length (%d bytes)", TUI_MAX_KEY_LENGTH);
+                        RETURN_THROWS();
+                    }
+                }
+                if (zend_string_equals_literal(prop_key, "id") && Z_TYPE_P(val) == IS_STRING) {
+                    if (Z_STRLEN_P(val) > TUI_MAX_ID_LENGTH) {
+                        zend_throw_exception_ex(tui_validation_exception_ce, 0,
+                            "Node ID exceeds maximum length (%d bytes)", TUI_MAX_ID_LENGTH);
+                        RETURN_THROWS();
+                    }
+                }
+                zend_update_property(tui_box_ce, Z_OBJ_P(ZEND_THIS), ZSTR_VAL(prop_key), ZSTR_LEN(prop_key), val);
             }
         } ZEND_HASH_FOREACH_END();
     }
@@ -2212,6 +2241,13 @@ PHP_METHOD(TuiText, setKey)
         Z_PARAM_STR_OR_NULL(key)
     ZEND_PARSE_PARAMETERS_END();
 
+    /* Validate length */
+    if (key && ZSTR_LEN(key) > TUI_MAX_KEY_LENGTH) {
+        zend_throw_exception_ex(tui_validation_exception_ce, 0,
+            "Node key exceeds maximum length (%d bytes)", TUI_MAX_KEY_LENGTH);
+        RETURN_THROWS();
+    }
+
     if (key) {
         zend_update_property_str(tui_text_ce, Z_OBJ_P(ZEND_THIS), "key", sizeof("key")-1, key);
     } else {
@@ -2231,6 +2267,13 @@ PHP_METHOD(TuiText, setId)
     ZEND_PARSE_PARAMETERS_START(1, 1)
         Z_PARAM_STR_OR_NULL(id)
     ZEND_PARSE_PARAMETERS_END();
+
+    /* Validate length */
+    if (id && ZSTR_LEN(id) > TUI_MAX_ID_LENGTH) {
+        zend_throw_exception_ex(tui_validation_exception_ce, 0,
+            "Node ID exceeds maximum length (%d bytes)", TUI_MAX_ID_LENGTH);
+        RETURN_THROWS();
+    }
 
     if (id) {
         zend_update_property_str(tui_text_ce, Z_OBJ_P(ZEND_THIS), "id", sizeof("id")-1, id);
@@ -2253,6 +2296,13 @@ PHP_METHOD(TuiText, __construct)
         Z_PARAM_STR(content)
         Z_PARAM_ARRAY(props)
     ZEND_PARSE_PARAMETERS_END();
+
+    /* Validate content length to prevent DoS */
+    if (content && ZSTR_LEN(content) > TUI_MAX_TEXT_LENGTH) {
+        zend_throw_exception_ex(tui_validation_exception_ce, 0,
+            "Text content exceeds maximum length (%d bytes)", TUI_MAX_TEXT_LENGTH);
+        RETURN_THROWS();
+    }
 
     /* Initialize defaults */
     zend_update_property_string(tui_text_ce, Z_OBJ_P(ZEND_THIS), "content", sizeof("content")-1, content ? ZSTR_VAL(content) : "");
