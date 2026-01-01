@@ -3,6 +3,10 @@
   | ext-tui: Hash-based key map implementation                          |
   | Uses open addressing with linear probing                            |
   +----------------------------------------------------------------------+
+  | Optimization: When keys are interned (via string intern pool),      |
+  | pointer equality check is tried first before strcmp() for O(1)      |
+  | comparison of interned strings.                                     |
+  +----------------------------------------------------------------------+
 */
 
 #include "keymap.h"
@@ -129,9 +133,11 @@ int tui_keymap_insert(tui_keymap *map, const char *key, tui_node *node, int old_
 
     /* Linear probing to find empty slot */
     while (map->buckets[idx].key) {
-        /* Check if key already exists (shouldn't happen with unique keys) */
-        if (map->buckets[idx].hash == hash &&
-            strcmp(map->buckets[idx].key, key) == 0) {
+        /* Check if key already exists (shouldn't happen with unique keys)
+         * Fast path: pointer equality for interned strings, else strcmp */
+        if (map->buckets[idx].key == key ||
+            (map->buckets[idx].hash == hash &&
+             strcmp(map->buckets[idx].key, key) == 0)) {
             /* Update existing entry */
             map->buckets[idx].node = node;
             map->buckets[idx].old_index = old_index;
@@ -169,7 +175,9 @@ tui_keymap_entry* tui_keymap_find(tui_keymap *map, const char *key)
             return NULL;
         }
 
-        if (entry->hash == hash && strcmp(entry->key, key) == 0) {
+        /* Fast path: pointer equality for interned strings, else strcmp */
+        if (entry->key == key ||
+            (entry->hash == hash && strcmp(entry->key, key) == 0)) {
             /* Found it */
             return entry;
         }

@@ -1704,7 +1704,7 @@ tui_node* php_to_tui_node(zval *obj, int depth)
             node->show_cursor = 1;
         }
 
-        /* key - for reconciliation (with length limit) */
+        /* key - for reconciliation (with length limit, uses string interning) */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "key", sizeof("key")-1, 1, &rv);
         if (prop && Z_TYPE_P(prop) == IS_STRING) {
             size_t key_len = Z_STRLEN_P(prop);
@@ -1714,14 +1714,10 @@ tui_node* php_to_tui_node(zval *obj, int depth)
                     TUI_MAX_KEY_LENGTH);
                 key_len = TUI_MAX_KEY_LENGTH;
             }
-            /* Use malloc+memcpy for compatibility with free() in tui_node_destroy */
-            node->key = malloc(key_len + 1);
-            if (!node->key) {
+            if (tui_node_set_key(node, Z_STRVAL_P(prop), key_len) < 0) {
                 tui_node_destroy(node);
                 return NULL;
             }
-            memcpy(node->key, Z_STRVAL_P(prop), key_len);
-            node->key[key_len] = '\0';
         }
 
         /* id - for focus-by-id (with length limit) */
@@ -1866,7 +1862,7 @@ text_node_created:
             }
         }
 
-        /* key - for reconciliation (with length limit) */
+        /* key - for reconciliation (with length limit, uses string interning) */
         prop = zend_read_property(ce, Z_OBJ_P(obj), "key", sizeof("key")-1, 1, &rv);
         if (prop && Z_TYPE_P(prop) == IS_STRING) {
             size_t key_len = Z_STRLEN_P(prop);
@@ -1876,14 +1872,10 @@ text_node_created:
                     TUI_MAX_KEY_LENGTH);
                 key_len = TUI_MAX_KEY_LENGTH;
             }
-            /* Use malloc+memcpy for compatibility with free() in tui_node_destroy */
-            node->key = malloc(key_len + 1);
-            if (!node->key) {
+            if (tui_node_set_key(node, Z_STRVAL_P(prop), key_len) < 0) {
                 tui_node_destroy(node);
                 return NULL;
             }
-            memcpy(node->key, Z_STRVAL_P(prop), key_len);
-            node->key[key_len] = '\0';
         }
 
         /* id - for focus-by-id and measureElement (with length limit) */

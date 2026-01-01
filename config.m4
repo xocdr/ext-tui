@@ -88,7 +88,8 @@ if test "$PHP_TUI" != "no"; then
      src/app/app.c \
      src/testing/renderer.c \
      src/testing/query.c \
-     src/pool/pool.c"
+     src/pool/pool.c \
+     src/pool/intern.c"
 
   dnl Define C++ sources (Yoga layout engine)
   YOGA_SOURCES="src/yoga/YGConfig.cpp \

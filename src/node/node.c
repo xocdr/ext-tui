@@ -23,7 +23,8 @@
   |    - Free operations check the flag to call the correct deallocator  |
   |                                                                      |
   | Node structs themselves always use standard malloc/free.             |
-  | Text strings (node->text, node->key) use strdup/free.                |
+  | Text strings (node->text) use strdup/free.                           |
+  | Keys and IDs use the string intern pool for memory efficiency.       |
   |                                                                      |
   +----------------------------------------------------------------------+
 */
@@ -264,16 +265,71 @@ tui_node* tui_node_create_spacer(void)
     return node;
 }
 
+int tui_node_set_key(tui_node *node, const char *key, size_t len)
+{
+    if (!node) return -1;
+
+    /* Release old key if interned */
+    if (node->key) {
+        if (node->key_interned && TUI_G(pools)) {
+            tui_intern_release(&TUI_G(pools)->intern, node->key);
+        } else {
+            free(node->key);
+        }
+        node->key = NULL;
+        node->key_interned = 0;
+    }
+
+    if (key && len > 0) {
+        /* Try to intern the key */
+        if (TUI_G(pools)) {
+            const char *interned = tui_intern(&TUI_G(pools)->intern, key, len);
+            if (interned) {
+                node->key = (char*)interned;
+                node->key_interned = 1;
+                return 0;
+            }
+        }
+        /* Fallback to regular allocation if pool not available or intern failed */
+        node->key = malloc(len + 1);
+        if (!node->key) return -1;
+        memcpy(node->key, key, len);
+        node->key[len] = '\0';
+        node->key_interned = 0;
+    }
+    return 0;
+}
+
 int tui_node_set_id(tui_node *node, const char *id)
 {
     if (!node) return -1;
 
-    free(node->id);
-    if (id) {
-        node->id = strdup(id);
-        if (!node->id) return -1;  /* Allocation failed */
-    } else {
+    /* Release old id if interned */
+    if (node->id) {
+        if (node->id_interned && TUI_G(pools)) {
+            tui_intern_release(&TUI_G(pools)->intern, node->id);
+        } else {
+            free(node->id);
+        }
         node->id = NULL;
+        node->id_interned = 0;
+    }
+
+    if (id) {
+        size_t len = strlen(id);
+        /* Try to intern the ID */
+        if (TUI_G(pools)) {
+            const char *interned = tui_intern(&TUI_G(pools)->intern, id, len);
+            if (interned) {
+                node->id = (char*)interned;
+                node->id_interned = 1;
+                return 0;
+            }
+        }
+        /* Fallback to strdup if pool not available or intern failed */
+        node->id = strdup(id);
+        if (!node->id) return -1;
+        node->id_interned = 0;
     }
     return 0;
 }
@@ -337,8 +393,23 @@ static void free_node_resources(tui_node *node)
 
     /* Free string properties */
     free(node->text);
-    free(node->key);
-    free(node->id);
+
+    /* Release interned strings via pool, or free if not interned */
+    if (node->key) {
+        if (node->key_interned && TUI_G(pools)) {
+            tui_intern_release(&TUI_G(pools)->intern, node->key);
+        } else {
+            free(node->key);
+        }
+    }
+    if (node->id) {
+        if (node->id_interned && TUI_G(pools)) {
+            tui_intern_release(&TUI_G(pools)->intern, node->id);
+        } else {
+            free(node->id);
+        }
+    }
+
     free(node->hyperlink_url);
     free(node->hyperlink_id);
     free(node->focus_group);

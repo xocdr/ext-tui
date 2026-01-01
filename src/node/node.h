@@ -76,6 +76,8 @@ typedef struct tui_node {
     tui_node_type type;           /* Node type */
     char *key;                    /* Node identity for reconciler */
     char *id;                     /* ID for focus-by-id */
+    uint8_t key_interned;         /* 1 if key is interned (use tui_intern_release) */
+    uint8_t id_interned;          /* 1 if id is interned (use tui_intern_release) */
     tui_style style;              /* Text styling */
 
     /* For text nodes */
@@ -169,13 +171,24 @@ tui_node* tui_node_create_spacer(void);
 void tui_node_destroy(tui_node *node);
 
 /* ================================================================
- * ID and hyperlink management
+ * Key, ID and hyperlink management
  * ================================================================ */
 
 /**
- * Set node ID for focus-by-id.
+ * Set node key for reconciler matching.
+ * The key is interned for memory efficiency and fast pointer comparison.
  * @param node Node to modify
- * @param id   ID string (copied internally)
+ * @param key  Key string (interned internally)
+ * @param len  Length of key string
+ * @return 0 on success, -1 on allocation failure
+ */
+int tui_node_set_key(tui_node *node, const char *key, size_t len);
+
+/**
+ * Set node ID for focus-by-id.
+ * The ID is interned for memory efficiency.
+ * @param node Node to modify
+ * @param id   ID string (interned internally)
  * @return 0 on success, -1 on allocation failure
  */
 int tui_node_set_id(tui_node *node, const char *id);

@@ -26,6 +26,7 @@
 #define TUI_POOL_H
 
 #include <stdint.h>
+#include "intern.h"
 
 /* Forward declarations */
 struct tui_node;
@@ -67,6 +68,7 @@ typedef struct {
 typedef struct tui_pools {
     tui_children_pool children;
     tui_key_map_pool key_map;
+    tui_intern_pool intern;         /* String interning pool for keys/IDs */
 
     /* Pool metrics */
     int64_t children_hits;          /* Successful pool allocations */

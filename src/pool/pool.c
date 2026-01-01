@@ -32,12 +32,20 @@ int tui_pools_init(tui_pools *pools)
 
     /* Children arrays and key map are allocated on demand, memset handles init */
 
+    /* Initialize intern pool */
+    if (tui_intern_pool_init(&pools->intern) != 0) {
+        return -1;
+    }
+
     return 0;
 }
 
 void tui_pools_shutdown(tui_pools *pools)
 {
     if (!pools) return;
+
+    /* Shutdown intern pool first (nodes may reference interned strings) */
+    tui_intern_pool_shutdown(&pools->intern);
 
     /* Free any pooled children arrays */
     for (int i = 0; i < pools->children.count_4; i++) {
@@ -66,6 +74,9 @@ void tui_pools_reset(tui_pools *pools)
 
     /* Key map can be reused */
     pools->key_map.in_use = 0;
+
+    /* Reset intern pool (frees all interned strings for next request) */
+    tui_intern_pool_reset(&pools->intern);
 }
 
 /*
