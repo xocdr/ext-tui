@@ -400,15 +400,21 @@ void tui_reconciler_apply(tui_node *tree, tui_diff_result *diff)
 
                     if (text_changed) {
                         if (op->new_node->text) {
-                            char *new_text = strdup(op->new_node->text);
-                            if (new_text) {
-                                free(op->old_node->text);
-                                op->old_node->text = new_text;
-                                /* Mark Yoga node dirty for text measurement */
-                                if (op->old_node->yoga_node) {
-                                    YGNodeMarkDirty(op->old_node->yoga_node);
+                            /* Validate length before strdup */
+                            size_t text_len = strlen(op->new_node->text);
+                            if (text_len <= TUI_MAX_TEXT_LENGTH) {
+                                char *new_text = strdup(op->new_node->text);
+                                if (new_text) {
+                                    free(op->old_node->text);
+                                    op->old_node->text = new_text;
+                                    /* Mark Yoga node dirty for text measurement */
+                                    if (op->old_node->yoga_node) {
+                                        YGNodeMarkDirty(op->old_node->yoga_node);
+                                    }
                                 }
                             }
+                            /* Silently ignore oversized text in reconciler -
+                             * the create path already validated */
                         } else {
                             free(op->old_node->text);
                             op->old_node->text = NULL;

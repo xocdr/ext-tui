@@ -32,13 +32,15 @@
 extern zend_module_entry tui_module_entry;
 #define phpext_tui_ptr &tui_module_entry
 
-#define PHP_TUI_VERSION "0.4.2"
-#define PHP_TUI_VERSION_ID 402  /* major * 10000 + minor * 100 + patch */
+#define PHP_TUI_VERSION "0.4.3"
+#define PHP_TUI_VERSION_ID 403  /* major * 10000 + minor * 100 + patch */
 
 /* Security limits for string properties */
-#define TUI_MAX_KEY_LENGTH 256      /* Maximum key string length */
-#define TUI_MAX_ID_LENGTH 256       /* Maximum id string length */
-#define TUI_MAX_TEXT_LENGTH 1048576 /* Maximum text content (1MB) */
+#define TUI_MAX_KEY_LENGTH 256       /* Maximum key string length */
+#define TUI_MAX_ID_LENGTH 256        /* Maximum id string length */
+#define TUI_MAX_TEXT_LENGTH 1048576  /* Maximum text content (1MB) */
+#define TUI_MAX_URL_LENGTH 2048      /* Maximum hyperlink URL length */
+#define TUI_MAX_GROUP_LENGTH 256     /* Maximum focus group name length */
 
 #ifdef PHP_WIN32
 #   define PHP_TUI_API __declspec(dllexport)

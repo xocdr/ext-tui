@@ -141,6 +141,16 @@ tui_node* tui_node_create_box(void)
 
 tui_node* tui_node_create_text(const char *text)
 {
+    /* Validate text length to prevent DoS via huge allocations */
+    if (text) {
+        size_t len = strlen(text);
+        if (len > TUI_MAX_TEXT_LENGTH) {
+            php_error_docref(NULL, E_WARNING,
+                "Text content exceeds maximum length (%d bytes)", TUI_MAX_TEXT_LENGTH);
+            return NULL;
+        }
+    }
+
     tui_node *node = calloc(1, sizeof(tui_node));
     if (!node) return NULL;
 
@@ -269,6 +279,13 @@ int tui_node_set_key(tui_node *node, const char *key, size_t len)
 {
     if (!node) return -1;
 
+    /* Validate length to prevent DoS */
+    if (len > TUI_MAX_KEY_LENGTH) {
+        php_error_docref(NULL, E_WARNING,
+            "Node key exceeds maximum length (%d bytes)", TUI_MAX_KEY_LENGTH);
+        return -1;
+    }
+
     /* Release old key if interned */
     if (node->key) {
         if (node->key_interned && TUI_G(pools)) {
@@ -317,6 +334,14 @@ int tui_node_set_id(tui_node *node, const char *id)
 
     if (id) {
         size_t len = strlen(id);
+
+        /* Validate length to prevent DoS */
+        if (len > TUI_MAX_ID_LENGTH) {
+            php_error_docref(NULL, E_WARNING,
+                "Node ID exceeds maximum length (%d bytes)", TUI_MAX_ID_LENGTH);
+            return -1;
+        }
+
         /* Try to intern the ID */
         if (TUI_G(pools)) {
             const char *interned = tui_intern(&TUI_G(pools)->intern, id, len);
@@ -337,6 +362,18 @@ int tui_node_set_id(tui_node *node, const char *id)
 int tui_node_set_hyperlink(tui_node *node, const char *url, const char *id)
 {
     if (!node) return -1;
+
+    /* Validate lengths to prevent DoS */
+    if (url && strlen(url) > TUI_MAX_URL_LENGTH) {
+        php_error_docref(NULL, E_WARNING,
+            "Hyperlink URL exceeds maximum length (%d bytes)", TUI_MAX_URL_LENGTH);
+        return -1;
+    }
+    if (id && strlen(id) > TUI_MAX_ID_LENGTH) {
+        php_error_docref(NULL, E_WARNING,
+            "Hyperlink ID exceeds maximum length (%d bytes)", TUI_MAX_ID_LENGTH);
+        return -1;
+    }
 
     free(node->hyperlink_url);
     free(node->hyperlink_id);
@@ -800,6 +837,13 @@ static int copy_layout_recursive(tui_node *node)
 int tui_node_set_focus_group(tui_node *node, const char *group)
 {
     if (!node) return -1;
+
+    /* Validate length to prevent DoS */
+    if (group && strlen(group) > TUI_MAX_GROUP_LENGTH) {
+        php_error_docref(NULL, E_WARNING,
+            "Focus group name exceeds maximum length (%d bytes)", TUI_MAX_GROUP_LENGTH);
+        return -1;
+    }
 
     free(node->focus_group);
     if (group) {
