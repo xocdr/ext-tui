@@ -204,7 +204,7 @@ PHP_FUNCTION(tui_render)
                 app->instance_zval_set = 0;
                 instance_obj->app = NULL;
                 tui_app_destroy(app);
-                zend_throw_exception(zend_ce_exception,
+                zend_throw_exception(tui_validation_exception_ce,
                     "Component must return Box or Text, got other object", 0);
                 RETURN_THROWS();
             }
@@ -216,7 +216,7 @@ PHP_FUNCTION(tui_render)
             app->instance_zval_set = 0;
             instance_obj->app = NULL;
             tui_app_destroy(app);
-            zend_throw_exception(zend_ce_exception,
+            zend_throw_exception(tui_validation_exception_ce,
                 "Component must return Box, Text, or null", 0);
             RETURN_THROWS();
         }
@@ -227,7 +227,7 @@ PHP_FUNCTION(tui_render)
         app->instance_zval_set = 0;
         instance_obj->app = NULL;
         tui_app_destroy(app);
-        zend_throw_exception(zend_ce_exception,
+        zend_throw_exception(tui_resource_exception_ce,
             "Component callback failed to execute", 0);
         RETURN_THROWS();
     }

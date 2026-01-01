@@ -40,15 +40,18 @@ PHP_FUNCTION(tui_virtual_create)
     ZEND_PARSE_PARAMETERS_END();
 
     if (item_count < 0) {
-        zend_throw_exception(zend_ce_value_error, "item_count must be non-negative", 0);
+        zend_throw_exception(tui_invalid_dimension_exception_ce,
+            "item_count must be non-negative", 0);
         RETURN_THROWS();
     }
     if (item_height < 1) {
-        zend_throw_exception(zend_ce_value_error, "item_height must be at least 1", 0);
+        zend_throw_exception(tui_invalid_dimension_exception_ce,
+            "item_height must be at least 1", 0);
         RETURN_THROWS();
     }
     if (viewport_height < 1) {
-        zend_throw_exception(zend_ce_value_error, "viewport_height must be at least 1", 0);
+        zend_throw_exception(tui_invalid_dimension_exception_ce,
+            "viewport_height must be at least 1", 0);
         RETURN_THROWS();
     }
 

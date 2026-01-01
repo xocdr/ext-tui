@@ -26,13 +26,15 @@ PHP_FUNCTION(tui_test_create)
     ZEND_PARSE_PARAMETERS_END();
 
     if (width <= 0 || width > 1000 || height <= 0 || height > 1000) {
-        zend_throw_exception(NULL, "Invalid dimensions: width and height must be 1-1000", 0);
+        zend_throw_exception(tui_invalid_dimension_exception_ce,
+            "Invalid dimensions: width and height must be 1-1000", 0);
         RETURN_THROWS();
     }
 
     tui_test_renderer *renderer = tui_test_renderer_create((int)width, (int)height);
     if (!renderer) {
-        zend_throw_exception(NULL, "Failed to create test renderer", 0);
+        zend_throw_exception(tui_resource_exception_ce,
+            "Failed to create test renderer", 0);
         RETURN_THROWS();
     }
 
@@ -73,7 +75,8 @@ PHP_FUNCTION(tui_test_render)
     /* Convert PHP element to tui_node tree */
     tui_node *root = php_to_tui_node(zelement, 0);
     if (!root) {
-        zend_throw_exception(NULL, "Failed to convert element to node", 0);
+        zend_throw_exception(tui_validation_exception_ce,
+            "Failed to convert element to node", 0);
         RETURN_THROWS();
     }
 

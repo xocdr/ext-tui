@@ -47,7 +47,7 @@ PHP_FUNCTION(tui_record_create)
         title ? ZSTR_VAL(title) : NULL);
 
     if (!rec) {
-        zend_throw_exception(zend_ce_exception,
+        zend_throw_exception(tui_resource_exception_ce,
             "Failed to create recording", 0);
         RETURN_THROWS();
     }

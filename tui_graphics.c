@@ -72,14 +72,14 @@ PHP_FUNCTION(tui_image_load)
 
     tui_image *img = tui_image_alloc();
     if (!img) {
-        zend_throw_exception(zend_ce_exception,
+        zend_throw_exception(tui_resource_exception_ce,
             "Failed to allocate image", 0);
         RETURN_THROWS();
     }
 
     if (tui_image_load_file(img, path) < 0) {
         free(img);
-        zend_throw_exception(zend_ce_exception,
+        zend_throw_exception(tui_resource_exception_ce,
             "Failed to load image file", 0);
         RETURN_THROWS();
     }
@@ -108,7 +108,7 @@ PHP_FUNCTION(tui_image_create)
 
     /* Validate dimensions */
     if (width <= 0 || height <= 0) {
-        zend_throw_exception(zend_ce_value_error,
+        zend_throw_exception(tui_invalid_dimension_exception_ce,
             "Width and height must be positive", 0);
         RETURN_THROWS();
     }
@@ -126,21 +126,21 @@ PHP_FUNCTION(tui_image_create)
         fmt = TUI_GRAPHICS_PNG;
         expected_len = 0;  /* PNG is compressed, size varies */
     } else {
-        zend_throw_exception(zend_ce_value_error,
+        zend_throw_exception(tui_validation_exception_ce,
             "Format must be 'rgba', 'rgb', or 'png'", 0);
         RETURN_THROWS();
     }
 
     /* Validate data length for raw formats */
     if (expected_len > 0 && data_len != expected_len) {
-        zend_throw_exception(zend_ce_value_error,
+        zend_throw_exception(tui_validation_exception_ce,
             "Data length does not match dimensions and format", 0);
         RETURN_THROWS();
     }
 
     tui_image *img = tui_image_alloc();
     if (!img) {
-        zend_throw_exception(zend_ce_exception,
+        zend_throw_exception(tui_resource_exception_ce,
             "Failed to allocate image", 0);
         RETURN_THROWS();
     }
@@ -148,7 +148,7 @@ PHP_FUNCTION(tui_image_create)
     if (tui_image_load_data(img, (const unsigned char *)data,
                             data_len, (int)width, (int)height, fmt) < 0) {
         free(img);
-        zend_throw_exception(zend_ce_exception,
+        zend_throw_exception(tui_resource_exception_ce,
             "Failed to create image from data", 0);
         RETURN_THROWS();
     }

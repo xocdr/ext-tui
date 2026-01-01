@@ -141,6 +141,11 @@ zend_class_entry *tui_color_ce;
 /* Exception class entries */
 zend_class_entry *tui_exception_ce;                    /* Base: Xocdr\Tui\TuiException */
 zend_class_entry *tui_instance_destroyed_exception_ce; /* Xocdr\Tui\InstanceDestroyedException */
+zend_class_entry *tui_validation_exception_ce;         /* Xocdr\Tui\ValidationException */
+zend_class_entry *tui_invalid_dimension_exception_ce;  /* Xocdr\Tui\InvalidDimensionException */
+zend_class_entry *tui_resource_exception_ce;           /* Xocdr\Tui\ResourceException */
+zend_class_entry *tui_state_limit_exception_ce;        /* Xocdr\Tui\StateLimitException */
+zend_class_entry *tui_timer_limit_exception_ce;        /* Xocdr\Tui\TimerLimitException */
 
 /* ==========================================================================
  * OBJECT HANDLERS
@@ -933,8 +938,13 @@ static void css_name_to_pascal_case(const char *name, char *out, size_t out_size
             }
         }
         if (!matched) {
-            /* Unknown character - just copy (capitalize if first) */
-            if (i == 0 && name[i] >= 'a' && name[i] <= 'z') {
+            /* Skip spaces - enum case names cannot have spaces */
+            if (name[i] == ' ') {
+                i++;
+                continue;
+            }
+            /* Unknown character - just copy (capitalize if first or after space) */
+            if ((i == 0 || name[i-1] == ' ') && name[i] >= 'a' && name[i] <= 'z') {
                 out[j++] = name[i] - 'a' + 'A';
             } else {
                 out[j++] = name[i];
@@ -976,13 +986,15 @@ PHP_METHOD(Color, toRgb)
 
     zval *value = zend_enum_fetch_case_value(Z_OBJ_P(ZEND_THIS));
     if (!value || Z_TYPE_P(value) != IS_STRING) {
-        zend_throw_exception(NULL, "Color enum value is not a valid hex string", 0);
+        zend_throw_exception(tui_validation_exception_ce,
+            "Color enum value is not a valid hex string", 0);
         RETURN_THROWS();
     }
 
     int idx = get_color_index_from_hex(Z_STRVAL_P(value));
     if (idx < 0) {
-        zend_throw_exception(NULL, "Color hex value not found in color table", 0);
+        zend_throw_exception(tui_validation_exception_ce,
+            "Color hex value not found in color table", 0);
         RETURN_THROWS();
     }
 
@@ -2081,7 +2093,8 @@ PHP_METHOD(TuiBox, addChild)
     /* Verify child is TuiBox or TuiText */
     if (!instanceof_function(Z_OBJCE_P(child), tui_box_ce) &&
         !instanceof_function(Z_OBJCE_P(child), tui_text_ce)) {
-        zend_throw_exception(zend_ce_exception, "Child must be TuiBox or TuiText", 0);
+        zend_throw_exception(tui_validation_exception_ce,
+            "Child must be TuiBox or TuiText", 0);
         RETURN_THROWS();
     }
 
@@ -2345,7 +2358,7 @@ PHP_METHOD(TuiInstance, useState)
     int index = tui_app_get_or_create_state_slot(app, initial, &is_new);
 
     if (index < 0) {
-        zend_throw_exception(zend_ce_exception,
+        zend_throw_exception(tui_state_limit_exception_ce,
             "Failed to allocate state slot: maximum states exceeded", 0);
         RETURN_THROWS();
     }
@@ -2602,7 +2615,7 @@ PHP_METHOD(TuiInstance, setState)
         RETURN_THROWS();
     }
     if (index < 0 || index >= obj->app->state_count) {
-        zend_throw_exception(zend_ce_exception,
+        zend_throw_exception(tui_validation_exception_ce,
             "Invalid state index", 0);
         RETURN_THROWS();
     }
@@ -4464,6 +4477,26 @@ static PHP_MINIT_FUNCTION(tui)
     /* Register Xocdr\Tui\InstanceDestroyedException (extends TuiException) */
     INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\InstanceDestroyedException", NULL);
     tui_instance_destroyed_exception_ce = zend_register_internal_class_ex(&ce, tui_exception_ce);
+
+    /* Register Xocdr\Tui\ValidationException (extends TuiException) */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\ValidationException", NULL);
+    tui_validation_exception_ce = zend_register_internal_class_ex(&ce, tui_exception_ce);
+
+    /* Register Xocdr\Tui\InvalidDimensionException (extends ValidationException) */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\InvalidDimensionException", NULL);
+    tui_invalid_dimension_exception_ce = zend_register_internal_class_ex(&ce, tui_validation_exception_ce);
+
+    /* Register Xocdr\Tui\ResourceException (extends TuiException) */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\ResourceException", NULL);
+    tui_resource_exception_ce = zend_register_internal_class_ex(&ce, tui_exception_ce);
+
+    /* Register Xocdr\Tui\StateLimitException (extends ResourceException) */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\StateLimitException", NULL);
+    tui_state_limit_exception_ce = zend_register_internal_class_ex(&ce, tui_resource_exception_ce);
+
+    /* Register Xocdr\Tui\TimerLimitException (extends ResourceException) */
+    INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\TimerLimitException", NULL);
+    tui_timer_limit_exception_ce = zend_register_internal_class_ex(&ce, tui_resource_exception_ce);
 
     /* Register Xocdr\Tui\Ext\TuiNode interface */
     INIT_CLASS_ENTRY(ce, "Xocdr\\Tui\\Ext\\TuiNode", tui_node_interface_methods);

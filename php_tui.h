@@ -192,6 +192,11 @@ extern zend_class_entry *tui_color_ce;
 /* Exception class entries */
 extern zend_class_entry *tui_exception_ce;                    /* Base: Xocdr\Tui\TuiException */
 extern zend_class_entry *tui_instance_destroyed_exception_ce; /* Xocdr\Tui\InstanceDestroyedException */
+extern zend_class_entry *tui_validation_exception_ce;         /* Xocdr\Tui\ValidationException */
+extern zend_class_entry *tui_invalid_dimension_exception_ce;  /* Xocdr\Tui\InvalidDimensionException */
+extern zend_class_entry *tui_resource_exception_ce;           /* Xocdr\Tui\ResourceException */
+extern zend_class_entry *tui_state_limit_exception_ce;        /* Xocdr\Tui\StateLimitException */
+extern zend_class_entry *tui_timer_limit_exception_ce;        /* Xocdr\Tui\TimerLimitException */
 
 /* Function declarations */
 PHP_FUNCTION(tui_render);

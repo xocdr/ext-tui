@@ -103,7 +103,7 @@ PHP_FUNCTION(tui_cursor_shape)
     } else if (zend_string_equals_literal(shape, "bar_blink")) {
         cursor_shape = TUI_CURSOR_BAR_BLINK;
     } else {
-        zend_throw_exception(zend_ce_exception,
+        zend_throw_exception(tui_validation_exception_ce,
             "Invalid cursor shape. Use 'default', 'block', 'block_blink', 'underline', 'underline_blink', 'bar', or 'bar_blink'", 0);
         RETURN_THROWS();
     }
@@ -197,7 +197,7 @@ PHP_FUNCTION(tui_mouse_enable)
     ZEND_PARSE_PARAMETERS_END();
 
     if (mode < TUI_MOUSE_MODE_OFF || mode > TUI_MOUSE_MODE_ALL) {
-        zend_throw_exception(zend_ce_exception, "Invalid mouse mode", 0);
+        zend_throw_exception(tui_validation_exception_ce, "Invalid mouse mode", 0);
         RETURN_THROWS();
     }
 
@@ -278,7 +278,7 @@ PHP_FUNCTION(tui_clipboard_copy)
         } else if (zend_string_equals_literal(target, "secondary")) {
             clipboard_target = TUI_CLIPBOARD_SECONDARY;
         } else if (!zend_string_equals_literal(target, "clipboard")) {
-            zend_throw_exception(zend_ce_exception,
+            zend_throw_exception(tui_validation_exception_ce,
                 "Invalid clipboard target. Use 'clipboard', 'primary', or 'secondary'", 0);
             RETURN_THROWS();
         }
@@ -317,7 +317,7 @@ PHP_FUNCTION(tui_clipboard_request)
         } else if (zend_string_equals_literal(target, "secondary")) {
             clipboard_target = TUI_CLIPBOARD_SECONDARY;
         } else if (!zend_string_equals_literal(target, "clipboard")) {
-            zend_throw_exception(zend_ce_exception,
+            zend_throw_exception(tui_validation_exception_ce,
                 "Invalid clipboard target. Use 'clipboard', 'primary', or 'secondary'", 0);
             RETURN_THROWS();
         }
@@ -347,7 +347,7 @@ PHP_FUNCTION(tui_clipboard_clear)
         } else if (zend_string_equals_literal(target, "secondary")) {
             clipboard_target = TUI_CLIPBOARD_SECONDARY;
         } else if (!zend_string_equals_literal(target, "clipboard")) {
-            zend_throw_exception(zend_ce_exception,
+            zend_throw_exception(tui_validation_exception_ce,
                 "Invalid clipboard target. Use 'clipboard', 'primary', or 'secondary'", 0);
             RETURN_THROWS();
         }

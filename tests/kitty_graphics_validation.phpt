@@ -4,11 +4,14 @@ Kitty graphics parameter validation
 tui
 --FILE--
 <?php
+use Xocdr\Tui\InvalidDimensionException;
+use Xocdr\Tui\ValidationException;
+
 // Test invalid dimensions
 try {
     tui_image_create("data", -1, 10, 'rgba');
     echo "Should have thrown\n";
-} catch (ValueError $e) {
+} catch (InvalidDimensionException $e) {
     echo "Caught: dimensions error\n";
 }
 
@@ -16,7 +19,7 @@ try {
 try {
     tui_image_create("data", 10, 10, 'invalid');
     echo "Should have thrown\n";
-} catch (ValueError $e) {
+} catch (ValidationException $e) {
     echo "Caught: format error\n";
 }
 
@@ -24,7 +27,7 @@ try {
 try {
     tui_image_create("short", 10, 10, 'rgba');
     echo "Should have thrown\n";
-} catch (ValueError $e) {
+} catch (ValidationException $e) {
     echo "Caught: data length error\n";
 }
 
@@ -32,7 +35,7 @@ try {
 try {
     tui_image_create(str_repeat("x", 16), 2, 2, 'rgb');
     echo "Should have thrown\n";
-} catch (ValueError $e) {
+} catch (ValidationException $e) {
     echo "Caught: rgb data length error\n";
 }
 
