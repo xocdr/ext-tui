@@ -139,7 +139,29 @@ ZEND_EXTERN_MODULE_GLOBALS(tui)
 #define TUI_G(v) (tui_globals.v)
 #endif
 
-/* Metrics collection macros - minimal overhead when disabled */
+/* Metrics collection macros
+ *
+ * When TUI_DISABLE_METRICS is defined at compile time, all metrics
+ * macros expand to nothing, eliminating any runtime overhead.
+ *
+ * To build without metrics: add -DTUI_DISABLE_METRICS to CFLAGS
+ *   CFLAGS="-DTUI_DISABLE_METRICS" ./configure --enable-tui && make
+ *
+ * Without this flag, metrics are collected when tui.metrics_enabled=1
+ * in php.ini, with minimal overhead (a single branch) when disabled.
+ */
+#ifdef TUI_DISABLE_METRICS
+
+/* Compile-time disabled: zero overhead */
+#define TUI_METRIC_INC(field)           ((void)0)
+#define TUI_METRIC_DEC(field)           ((void)0)
+#define TUI_METRIC_ADD(field, val)      ((void)0)
+#define TUI_METRIC_MAX(field, val)      ((void)0)
+#define TUI_METRIC_MIN(field, val)      ((void)0)
+
+#else /* !TUI_DISABLE_METRICS */
+
+/* Runtime-controlled: minimal overhead when disabled (single branch) */
 #define TUI_METRIC_INC(field) \
     do { if (TUI_G(metrics_enabled)) TUI_G(metrics).field++; } while(0)
 
@@ -157,6 +179,8 @@ ZEND_EXTERN_MODULE_GLOBALS(tui)
     do { if (TUI_G(metrics_enabled) && \
         (TUI_G(metrics).field == 0 || (val) < TUI_G(metrics).field)) \
         TUI_G(metrics).field = (val); } while(0)
+
+#endif /* TUI_DISABLE_METRICS */
 
 /* Class entries */
 extern zend_class_entry *tui_box_ce;
