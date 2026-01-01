@@ -419,7 +419,12 @@ static int collect_focusable_nodes_impl(tui_node *node, tui_node ***nodes, int *
     if (!node) return 0;
 
     /* Prevent stack overflow from very deep trees or circular references */
-    if (depth > MAX_TREE_DEPTH) return -1;
+    if (depth > MAX_TREE_DEPTH) {
+        php_error_docref(NULL, E_NOTICE,
+            "Tree depth limit (%d) exceeded during focus traversal",
+            MAX_TREE_DEPTH);
+        return -1;
+    }
 
     if (node->focusable) {
         if (*count >= *capacity) {

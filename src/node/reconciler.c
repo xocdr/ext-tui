@@ -145,7 +145,12 @@ static void diff_children_keyed_with_depth(tui_diff_result *result,
                                             int depth)
 {
     /* Prevent stack overflow on very deep trees */
-    if (depth >= MAX_RECONCILE_DEPTH) return;
+    if (depth >= MAX_RECONCILE_DEPTH) {
+        php_error_docref(NULL, E_NOTICE,
+            "Reconciler depth limit (%d) exceeded, deep children not diffed",
+            MAX_RECONCILE_DEPTH);
+        return;
+    }
 
     int old_count = old_node ? old_node->child_count : 0;
     int new_count = new_node ? new_node->child_count : 0;
@@ -255,7 +260,12 @@ static void diff_children_indexed_with_depth(tui_diff_result *result,
                                               int depth)
 {
     /* Prevent stack overflow on very deep trees */
-    if (depth >= MAX_RECONCILE_DEPTH) return;
+    if (depth >= MAX_RECONCILE_DEPTH) {
+        php_error_docref(NULL, E_NOTICE,
+            "Reconciler depth limit (%d) exceeded, deep children not diffed",
+            MAX_RECONCILE_DEPTH);
+        return;
+    }
 
     int old_count = old_node ? old_node->child_count : 0;
     int new_count = new_node ? new_node->child_count : 0;

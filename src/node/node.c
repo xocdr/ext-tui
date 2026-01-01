@@ -1142,7 +1142,13 @@ int tui_node_contains_point(tui_node *node, int x, int y)
 static tui_node* hit_test_recursive(tui_node *node, int x, int y,
                                      float parent_x, float parent_y, int depth)
 {
-    if (!node || depth >= MAX_TREE_DEPTH) return NULL;
+    if (!node) return NULL;
+    if (depth >= MAX_TREE_DEPTH) {
+        php_error_docref(NULL, E_NOTICE,
+            "Tree depth limit (%d) exceeded during hit test, results may be incomplete",
+            MAX_TREE_DEPTH);
+        return NULL;
+    }
 
     /* Calculate absolute position of this node */
     float abs_x = parent_x + node->x;
@@ -1180,7 +1186,13 @@ tui_node* tui_node_hit_test(tui_node *root, int x, int y)
 static void collect_hit_nodes(tui_node *node, int x, int y, float parent_x, float parent_y,
                               tui_node ***nodes, int *count, int *capacity, int depth)
 {
-    if (!node || depth >= MAX_TREE_DEPTH) return;
+    if (!node) return;
+    if (depth >= MAX_TREE_DEPTH) {
+        php_error_docref(NULL, E_NOTICE,
+            "Tree depth limit (%d) exceeded during hit collection, results may be incomplete",
+            MAX_TREE_DEPTH);
+        return;
+    }
 
     float abs_x = parent_x + node->x;
     float abs_y = parent_y + node->y;
