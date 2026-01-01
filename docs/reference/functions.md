@@ -404,18 +404,18 @@ Wraps text to width. Returns array of lines.
 ### tui_truncate
 
 ```php
-tui_truncate(string $text, int $width, string $ellipsis = '...'): string
+tui_truncate(string $text, int $width, string $ellipsis = "...", string $position = "end"): string
 ```
 
-Truncates text with ellipsis.
+Truncates text with ellipsis. Position: `"end"` (default), `"start"`, `"middle"`.
 
 ### tui_pad
 
 ```php
-tui_pad(string $text, int $width, string $align = 'left', string $char = ' '): string
+tui_pad(string $text, int $width, string $align = "l", string $pad_char = " "): string
 ```
 
-Pads text to width. Align: `'left'`, `'right'`, `'center'`.
+Pads text to width. Align: `"l"` (left), `"r"` (right), `"c"` (center).
 
 ---
 
@@ -558,8 +558,10 @@ tui_canvas_fill_circle(resource $canvas, int $cx, int $cy, int $r): void
 ### tui_canvas_set_color
 
 ```php
-tui_canvas_set_color(resource $canvas, array $rgb): void
+tui_canvas_set_color(resource $canvas, int $r, int $g, int $b): void
 ```
+
+Sets the drawing color for subsequent canvas operations.
 
 ### tui_canvas_get_resolution
 
@@ -572,10 +574,10 @@ Returns `['width' => int, 'height' => int]` in pixels.
 ### tui_canvas_render
 
 ```php
-tui_canvas_render(resource $canvas, array $style = []): array
+tui_canvas_render(resource $canvas): array
 ```
 
-Returns array of strings.
+Returns array of strings representing the canvas content.
 
 ---
 
@@ -594,18 +596,18 @@ Apply easing to `t` (0.0-1.0).
 ### tui_lerp
 
 ```php
-tui_lerp(float $start, float $end, float $t): float
+tui_lerp(float $a, float $b, float $t): float
 ```
 
-Linear interpolation.
+Linear interpolation between `$a` and `$b` at position `$t` (0.0-1.0).
 
 ### tui_lerp_color
 
 ```php
-tui_lerp_color(array $from, array $to, float $t): array
+tui_lerp_color(array $a, array $b, float $t): string
 ```
 
-Color interpolation. Returns RGB array.
+Color interpolation. Returns hex color string (e.g., `"#ff8800"`).
 
 ### tui_gradient
 
@@ -650,10 +652,12 @@ Sets column alignment. Pass `true` for right-align, `false` for left-align (defa
 ### tui_table_render_to_buffer
 
 ```php
-tui_table_render_to_buffer(resource $table, resource $buffer, int $x, int $y, array $options = []): void
+tui_table_render_to_buffer(resource $buffer, resource $table, int $x, int $y, string $border = "single", ?array $header_style = null, ?array $cell_style = null): int
 ```
 
-Options: `border`, `header_bold`, `header_color`
+Renders table to buffer. Returns number of rows rendered.
+
+**Border styles:** `"single"`, `"double"`, `"rounded"`, `"none"`
 
 ---
 
@@ -662,8 +666,10 @@ Options: `border`, `header_bold`, `header_color`
 ### tui_render_progress_bar
 
 ```php
-tui_render_progress_bar(float $progress, int $width, array $style = []): string
+tui_render_progress_bar(resource $buffer, int $x, int $y, int $width, float $progress, ?array $style = null): void
 ```
+
+Renders a progress bar to a buffer at the specified position.
 
 ### tui_render_busy_bar
 
@@ -706,20 +712,26 @@ Renders a spinner animation frame to a buffer.
 ### tui_sprite_create
 
 ```php
-tui_sprite_create(array $config): resource
+tui_sprite_create(array $frames, string $name = "default", bool $loop = true): resource
 ```
+
+Creates an animated sprite from frame data.
 
 ### tui_sprite_update
 
 ```php
-tui_sprite_update(resource $sprite): void
+tui_sprite_update(resource $sprite, int $delta_ms): void
 ```
+
+Updates sprite animation. Pass elapsed milliseconds since last update.
 
 ### tui_sprite_set_animation
 
 ```php
-tui_sprite_set_animation(resource $sprite, string $name): void
+tui_sprite_set_animation(resource $sprite, string $name): bool
 ```
+
+Switches to a named animation. Returns `true` if animation exists.
 
 ### tui_sprite_set_position
 
@@ -730,8 +742,10 @@ tui_sprite_set_position(resource $sprite, int $x, int $y): void
 ### tui_sprite_flip
 
 ```php
-tui_sprite_flip(resource $sprite, bool $horizontal, bool $vertical): void
+tui_sprite_flip(resource $sprite, bool $flipped): void
 ```
+
+Flips sprite horizontally when `$flipped` is `true`.
 
 ### tui_sprite_set_visible
 
@@ -742,8 +756,10 @@ tui_sprite_set_visible(resource $sprite, bool $visible): void
 ### tui_sprite_render
 
 ```php
-tui_sprite_render(resource $sprite, resource $buffer): void
+tui_sprite_render(resource $buffer, resource $sprite): void
 ```
+
+Renders sprite to buffer at its current position.
 
 ### tui_sprite_get_bounds
 
@@ -756,8 +772,10 @@ Returns `['x' => int, 'y' => int, 'width' => int, 'height' => int]`
 ### tui_sprite_collides
 
 ```php
-tui_sprite_collides(resource $sprite1, resource $sprite2): bool
+tui_sprite_collides(resource $a, resource $b): bool
 ```
+
+Returns `true` if two sprites' bounding boxes overlap.
 
 ---
 

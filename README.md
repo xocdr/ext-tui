@@ -126,7 +126,7 @@ $instance->waitUntilExit();
 ```php
 <?php
 // Create a high-resolution canvas using Braille characters
-$canvas = tui_canvas_create(80, 40, TUI_CANVAS_BRAILLE);
+$canvas = tui_canvas_create(80, 40, "braille");
 
 // Draw shapes
 tui_canvas_circle($canvas, 40, 20, 15);
@@ -139,16 +139,18 @@ foreach ($lines as $line) {
 }
 ```
 
-### Progress Bar
+### Progress Bar with Buffer
 
 ```php
 <?php
+$buffer = tui_buffer_create(80, 24);
+
 for ($i = 0; $i <= 100; $i += 5) {
-    $bar = tui_render_progress_bar($i / 100, 40, ['filled_char' => '█', 'empty_char' => '░']);
-    echo "\r$bar $i%";
+    tui_buffer_clear($buffer);
+    tui_render_progress_bar($buffer, 0, 0, 40, $i / 100);
+    tui_buffer_render($buffer);
     usleep(100000);
 }
-echo "\n";
 ```
 
 ## Documentation
@@ -224,8 +226,8 @@ tui_is_ci(): bool
 ```php
 tui_string_width(string $text): int
 tui_wrap_text(string $text, int $width): array
-tui_truncate(string $text, int $width, string $ellipsis = '...'): string
-tui_pad(string $text, int $width, string $align = 'left', string $char = ' '): string
+tui_truncate(string $text, int $width, string $ellipsis = "...", string $position = "end"): string
+tui_pad(string $text, int $width, string $align = "l", string $pad_char = " "): string
 ```
 
 ### Drawing Buffers
@@ -253,7 +255,7 @@ tui_fill_triangle(resource $buffer, int $x1, int $y1, int $x2, int $y2, int $x3,
 ### Canvas (High-Resolution Drawing)
 
 ```php
-tui_canvas_create(int $width, int $height, int $mode = TUI_CANVAS_BRAILLE): resource
+tui_canvas_create(int $width, int $height, string $mode = "braille"): resource
 tui_canvas_set(resource $canvas, int $x, int $y): void
 tui_canvas_unset(resource $canvas, int $x, int $y): void
 tui_canvas_toggle(resource $canvas, int $x, int $y): void
@@ -264,17 +266,17 @@ tui_canvas_rect(resource $canvas, int $x, int $y, int $w, int $h): void
 tui_canvas_fill_rect(resource $canvas, int $x, int $y, int $w, int $h): void
 tui_canvas_circle(resource $canvas, int $cx, int $cy, int $r): void
 tui_canvas_fill_circle(resource $canvas, int $cx, int $cy, int $r): void
-tui_canvas_set_color(resource $canvas, array $rgb): void
+tui_canvas_set_color(resource $canvas, int $r, int $g, int $b): void
 tui_canvas_get_resolution(resource $canvas): array
-tui_canvas_render(resource $canvas, array $style = []): array
+tui_canvas_render(resource $canvas): array
 ```
 
 ### Animation
 
 ```php
-tui_ease(float $t, int $easing = TUI_EASE_LINEAR): float
-tui_lerp(float $start, float $end, float $t): float
-tui_lerp_color(array $from, array $to, float $t): array
+tui_ease(float $t, string $easing = "linear"): float
+tui_lerp(float $a, float $b, float $t): float
+tui_lerp_color(array $a, array $b, float $t): string
 tui_gradient(array $from, array $to, int $steps): array
 tui_color_from_hex(string $hex): array
 ```
@@ -284,32 +286,32 @@ tui_color_from_hex(string $hex): array
 ```php
 tui_table_create(array $headers): resource
 tui_table_add_row(resource $table, array $cells): void
-tui_table_set_align(resource $table, int $column, int $align): void
-tui_table_render_to_buffer(resource $table, resource $buffer, int $x, int $y, array $options = []): void
+tui_table_set_align(resource $table, int $column, bool $right_align): void
+tui_table_render_to_buffer(resource $buffer, resource $table, int $x, int $y, string $border = "single"): int
 ```
 
 ### Progress Indicators
 
 ```php
-tui_render_progress_bar(float $progress, int $width, array $style = []): string
-tui_render_busy_bar(int $frame, int $width, array $options = []): string
-tui_spinner_frame(int $frame, int $type = TUI_SPINNER_DOTS): string
-tui_spinner_frame_count(int $type): int
-tui_render_spinner(int $frame, string $label, int $type, array $style = []): string
+tui_render_progress_bar(resource $buffer, int $x, int $y, int $width, float $progress): void
+tui_render_busy_bar(resource $buffer, int $x, int $y, int $width, int $frame, string $style_name = "pulse"): void
+tui_spinner_frame(string $type, int $frame): string
+tui_spinner_frame_count(string $type): int
+tui_render_spinner(resource $buffer, int $x, int $y, string $type, int $frame): void
 ```
 
 ### Sprites
 
 ```php
-tui_sprite_create(array $config): resource
-tui_sprite_update(resource $sprite): void
-tui_sprite_set_animation(resource $sprite, string $name): void
+tui_sprite_create(array $frames, string $name = "default", bool $loop = true): resource
+tui_sprite_update(resource $sprite, int $delta_ms): void
+tui_sprite_set_animation(resource $sprite, string $name): bool
 tui_sprite_set_position(resource $sprite, int $x, int $y): void
-tui_sprite_flip(resource $sprite, bool $horizontal, bool $vertical): void
+tui_sprite_flip(resource $sprite, bool $flipped): void
 tui_sprite_set_visible(resource $sprite, bool $visible): void
-tui_sprite_render(resource $sprite, resource $buffer): void
+tui_sprite_render(resource $buffer, resource $sprite): void
 tui_sprite_get_bounds(resource $sprite): array
-tui_sprite_collides(resource $sprite1, resource $sprite2): bool
+tui_sprite_collides(resource $a, resource $b): bool
 ```
 
 ## Classes
@@ -392,23 +394,20 @@ $key->shift         // bool
 
 ## Constants
 
-### Easing Functions
+### Mouse Tracking Modes
 
-`TUI_EASE_LINEAR`, `TUI_EASE_IN_QUAD`, `TUI_EASE_OUT_QUAD`, `TUI_EASE_IN_OUT_QUAD`, `TUI_EASE_IN_CUBIC`, `TUI_EASE_OUT_CUBIC`, `TUI_EASE_IN_OUT_CUBIC`, `TUI_EASE_IN_QUART`, `TUI_EASE_OUT_QUART`, `TUI_EASE_IN_OUT_QUART`, `TUI_EASE_IN_SINE`, `TUI_EASE_OUT_SINE`, `TUI_EASE_IN_OUT_SINE`, `TUI_EASE_OUT_BOUNCE`, `TUI_EASE_OUT_ELASTIC`, `TUI_EASE_OUT_BACK`
+`TUI_MOUSE_MODE_OFF`, `TUI_MOUSE_MODE_CLICK`, `TUI_MOUSE_MODE_BUTTON`, `TUI_MOUSE_MODE_ALL`
 
-### Canvas Modes
+### String-Based Options
 
-- `TUI_CANVAS_BRAILLE` - 2x4 pixels per cell (highest resolution)
-- `TUI_CANVAS_BLOCK` - 2x2 pixels per cell
-- `TUI_CANVAS_ASCII` - 1x1 pixel per cell
+Many functions use string values instead of constants:
 
-### Spinner Types
+- **Easing:** `"linear"`, `"in_quad"`, `"out_quad"`, `"in_out_quad"`, `"in_cubic"`, `"out_cubic"`, etc.
+- **Canvas modes:** `"braille"`, `"block"`, `"ascii"`
+- **Spinner types:** `"dots"`, `"line"`, `"bounce"`, `"circle"`
+- **Clipboard targets:** `"clipboard"`, `"primary"`, `"secondary"`
 
-`TUI_SPINNER_DOTS`, `TUI_SPINNER_LINE`, `TUI_SPINNER_BOUNCE`, `TUI_SPINNER_CIRCLE`
-
-### Table Alignment
-
-`TUI_ALIGN_LEFT`, `TUI_ALIGN_CENTER`, `TUI_ALIGN_RIGHT`
+See [Constants Reference](docs/reference/constants.md) for complete list.
 
 ## Known Limitations
 
