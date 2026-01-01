@@ -250,15 +250,28 @@ void tui_terminal_emergency_restore(void)
         raw_mode_enabled = 0;
     }
 
-    /* Try to exit alternate screen and show cursor - best effort */
+    /* Try to restore terminal to clean state - best effort */
     if (isatty(STDOUT_FILENO)) {
-        /* Exit alternate screen: ESC[?1049l */
-        /* Show cursor: ESC[?25h */
-        /* Reset attributes: ESC[0m */
-        const char *restore_seq = "\033[?1049l\033[?25h\033[0m";
+        /* Combined escape sequences for full terminal restoration:
+         * - ESC[?1000l  Disable mouse tracking (X10 mode)
+         * - ESC[?1002l  Disable mouse button tracking
+         * - ESC[?1003l  Disable mouse any-event tracking
+         * - ESC[?1006l  Disable SGR mouse mode
+         * - ESC[?2004l  Disable bracketed paste mode
+         * - ESC[?1049l  Exit alternate screen buffer
+         * - ESC[?25h    Show cursor
+         * - ESC[0m      Reset all text attributes
+         */
+        const char *restore_seq =
+            "\033[?1000l\033[?1002l\033[?1003l\033[?1006l"
+            "\033[?2004l\033[?1049l\033[?25h\033[0m";
         /* Ignore return value - we're in emergency cleanup */
-        (void)write(STDOUT_FILENO, restore_seq, 22);
+        (void)write(STDOUT_FILENO, restore_seq, 62);
     }
+
+    /* Clear global state flags */
+    current_mouse_mode = TUI_MOUSE_MODE_OFF;
+    bracketed_paste_enabled = 0;
 }
 
 void tui_terminal_register_emergency_handler(void)

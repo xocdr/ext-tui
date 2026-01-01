@@ -16,6 +16,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <time.h>
+#include <termios.h>
 
 /* External class entries for event objects (defined in tui.c) */
 extern zend_class_entry *tui_key_ce;
@@ -755,6 +756,18 @@ void tui_app_stop(tui_app *app)
     /* Stop event loop */
     tui_loop_stop(app->loop);
 
+    /* Disable mouse tracking if enabled */
+    tui_terminal_disable_mouse();
+
+    /* Disable bracketed paste mode if enabled */
+    tui_terminal_disable_bracketed_paste();
+
+    /* Reset text attributes before showing cursor */
+    char reset_buf[16];
+    size_t reset_len;
+    tui_ansi_reset(reset_buf, &reset_len);
+    write(STDOUT_FILENO, reset_buf, reset_len);
+
     /* Show cursor */
     tui_output_show_cursor(app->output);
 
@@ -763,7 +776,10 @@ void tui_app_stop(tui_app *app)
         tui_output_exit_alternate(app->output);
     }
 
-    /* Disable raw mode */
+    /* Flush any pending input to prevent stale keystrokes */
+    tcflush(STDIN_FILENO, TCIFLUSH);
+
+    /* Disable raw mode - restores original terminal settings */
     tui_terminal_disable_raw_mode();
 }
 
