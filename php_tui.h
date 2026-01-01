@@ -131,6 +131,10 @@ ZEND_BEGIN_MODULE_GLOBALS(tui)
 
     /* Object pools (pointer to avoid header dependency) */
     struct tui_pools *pools;
+
+    /* Pool miss tracking (thread-safe via TUI_G) */
+    int pool_miss_count;
+    int pool_miss_log_threshold;
 ZEND_END_MODULE_GLOBALS(tui)
 
 ZEND_EXTERN_MODULE_GLOBALS(tui)

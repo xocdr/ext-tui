@@ -4437,6 +4437,10 @@ static PHP_GINIT_FUNCTION(tui)
     tui_globals->metrics_enabled = 0;
     memset(&tui_globals->metrics, 0, sizeof(tui_metrics));
     tui_globals->pools = NULL;
+
+    /* Pool miss tracking - thread-safe initialization */
+    tui_globals->pool_miss_count = 0;
+    tui_globals->pool_miss_log_threshold = 10000;
 }
 /* }}} */
 
