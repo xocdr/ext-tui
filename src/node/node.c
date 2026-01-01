@@ -451,13 +451,12 @@ void tui_node_remove_child(tui_node *parent, tui_node *child)
     }
 }
 
-void tui_node_insert_before(tui_node *parent, tui_node *child, tui_node *before)
+int tui_node_insert_before(tui_node *parent, tui_node *child, tui_node *before)
 {
-    if (!parent || !child) return;
+    if (!parent || !child) return -1;
 
     if (!before) {
-        tui_node_append_child(parent, child);
-        return;
+        return tui_node_append_child(parent, child);
     }
 
     int index = -1;
@@ -468,23 +467,27 @@ void tui_node_insert_before(tui_node *parent, tui_node *child, tui_node *before)
         }
     }
 
-    if (index >= 0) {
-        if (ensure_children_capacity(parent) != 0) {
-            return;
-        }
-
-        /* Shift children to make room */
-        for (int i = parent->child_count; i > index; i--) {
-            parent->children[i] = parent->children[i - 1];
-        }
-
-        parent->children[index] = child;
-        parent->child_count++;
-        child->parent = parent;
-
-        /* Update Yoga tree */
-        YGNodeInsertChild(parent->yoga_node, child->yoga_node, index);
+    if (index < 0) {
+        /* 'before' node not found in parent's children */
+        return -1;
     }
+
+    if (ensure_children_capacity(parent) != 0) {
+        return -1;
+    }
+
+    /* Shift children to make room */
+    for (int i = parent->child_count; i > index; i--) {
+        parent->children[i] = parent->children[i - 1];
+    }
+
+    parent->children[index] = child;
+    parent->child_count++;
+    child->parent = parent;
+
+    /* Update Yoga tree */
+    YGNodeInsertChild(parent->yoga_node, child->yoga_node, index);
+    return 0;
 }
 
 void tui_node_set_style(tui_node *node, const tui_style *style)

@@ -213,9 +213,10 @@ void tui_node_remove_child(tui_node *parent, tui_node *child);
  * Insert child before another child.
  * @param parent Parent node
  * @param child  Child node to insert
- * @param before Reference child (insert before this)
+ * @param before Reference child (insert before this); if NULL, appends
+ * @return 0 on success, -1 on failure (NULL params, 'before' not found, or OOM)
  */
-void tui_node_insert_before(tui_node *parent, tui_node *child, tui_node *before);
+int tui_node_insert_before(tui_node *parent, tui_node *child, tui_node *before);
 
 /* ================================================================
  * Styling
