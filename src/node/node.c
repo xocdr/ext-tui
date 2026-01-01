@@ -45,7 +45,7 @@
 #define MAX_TREE_DEPTH 256
 
 /* Forward declarations */
-static int copy_layout_recursive(tui_node *node);
+static int copy_layout_recursive(tui_node *node, int depth);
 static YGSize text_measure_func(YGNodeConstRef yg_node, float width,
     YGMeasureMode widthMode, float height, YGMeasureMode heightMode);
 static float text_baseline_func(YGNodeConstRef yg_node, float width, float height);
@@ -710,7 +710,7 @@ void tui_node_calculate_layout(tui_node *root, float width, float height)
     YGNodeCalculateLayout(root->yoga_node, width, height, dir);
 
     /* Copy layout results to nodes */
-    copy_layout_recursive(root);
+    copy_layout_recursive(root, 0);
 }
 
 /* Text measurement function for Yoga */
@@ -800,10 +800,17 @@ static void node_dirtied_func(YGNodeConstRef yg_node)
  * Recursively copy layout results from Yoga to tui_node.
  * Only copies nodes that have new layout data (optimization).
  * Returns 1 if any node in subtree had new layout, 0 otherwise.
+ * Depth parameter prevents stack overflow on deeply nested trees.
  */
-static int copy_layout_recursive(tui_node *node)
+static int copy_layout_recursive(tui_node *node, int depth)
 {
     if (!node || !node->yoga_node) return 0;
+    if (depth >= MAX_TREE_DEPTH) {
+        php_error_docref(NULL, E_NOTICE,
+            "Tree depth limit (%d) exceeded during layout copy, deeper nodes skipped",
+            MAX_TREE_DEPTH);
+        return 0;
+    }
 
     int had_changes = 0;
 
@@ -822,7 +829,7 @@ static int copy_layout_recursive(tui_node *node)
 
     /* Recurse to children (always, as children may have changed even if parent didn't) */
     for (int i = 0; i < node->child_count; i++) {
-        if (copy_layout_recursive(node->children[i])) {
+        if (copy_layout_recursive(node->children[i], depth + 1)) {
             had_changes = 1;
         }
     }
@@ -883,10 +890,17 @@ static int focus_list_add(focus_list *list, tui_node *node)
 /**
  * Recursively collect focusable nodes into a list.
  * Returns 0 on success, -1 on allocation failure.
+ * Depth parameter prevents stack overflow on deeply nested trees.
  */
-static int collect_focusable_nodes(tui_node *node, focus_list *list, const char *group, tui_node *trap_root)
+static int collect_focusable_nodes(tui_node *node, focus_list *list, const char *group, tui_node *trap_root, int depth)
 {
     if (!node) return 0;
+    if (depth >= MAX_TREE_DEPTH) {
+        php_error_docref(NULL, E_NOTICE,
+            "Tree depth limit (%d) exceeded during focus collection, deeper nodes skipped",
+            MAX_TREE_DEPTH);
+        return 0;
+    }
 
     /* Skip if we have a trap but this node is outside it */
     if (trap_root && node != trap_root) {
@@ -912,7 +926,7 @@ static int collect_focusable_nodes(tui_node *node, focus_list *list, const char 
 
     /* Recurse to children */
     for (int i = 0; i < node->child_count; i++) {
-        if (collect_focusable_nodes(node->children[i], list, group, trap_root) != 0) {
+        if (collect_focusable_nodes(node->children[i], list, group, trap_root, depth + 1) != 0) {
             return -1;  /* Propagate error */
         }
     }
@@ -955,7 +969,7 @@ tui_node* tui_focus_find_next(tui_node *root, tui_node *current)
 
     /* Collect focusable nodes */
     focus_list list = {NULL, 0, 0};
-    if (collect_focusable_nodes(search_root, &list, NULL, trap) != 0) {
+    if (collect_focusable_nodes(search_root, &list, NULL, trap, 0) != 0) {
         free(list.nodes);
         return NULL;  /* Allocation failed */
     }
@@ -999,7 +1013,7 @@ tui_node* tui_focus_find_prev(tui_node *root, tui_node *current)
 
     /* Collect focusable nodes */
     focus_list list = {NULL, 0, 0};
-    if (collect_focusable_nodes(search_root, &list, NULL, trap) != 0) {
+    if (collect_focusable_nodes(search_root, &list, NULL, trap, 0) != 0) {
         free(list.nodes);
         return NULL;  /* Allocation failed */
     }
@@ -1036,7 +1050,7 @@ tui_node* tui_focus_find_next_in_group(tui_node *root, tui_node *current, const 
     if (!root || !group) return NULL;
 
     focus_list list = {NULL, 0, 0};
-    if (collect_focusable_nodes(root, &list, group, NULL) != 0) {
+    if (collect_focusable_nodes(root, &list, group, NULL, 0) != 0) {
         free(list.nodes);
         return NULL;  /* Allocation failed */
     }
@@ -1067,16 +1081,22 @@ tui_node* tui_focus_find_next_in_group(tui_node *root, tui_node *current, const 
     return result;
 }
 
-static tui_node* find_by_id_recursive(tui_node *node, const char *id)
+static tui_node* find_by_id_recursive(tui_node *node, const char *id, int depth)
 {
     if (!node || !id) return NULL;
+    if (depth >= MAX_TREE_DEPTH) {
+        php_error_docref(NULL, E_NOTICE,
+            "Tree depth limit (%d) exceeded during ID search, deeper nodes skipped",
+            MAX_TREE_DEPTH);
+        return NULL;
+    }
 
     if (node->id && strcmp(node->id, id) == 0) {
         return node;
     }
 
     for (int i = 0; i < node->child_count; i++) {
-        tui_node *found = find_by_id_recursive(node->children[i], id);
+        tui_node *found = find_by_id_recursive(node->children[i], id, depth + 1);
         if (found) return found;
     }
 
@@ -1085,7 +1105,7 @@ static tui_node* find_by_id_recursive(tui_node *node, const char *id)
 
 tui_node* tui_focus_find_by_id(tui_node *root, const char *id)
 {
-    return find_by_id_recursive(root, id);
+    return find_by_id_recursive(root, id, 0);
 }
 
 tui_node* tui_focus_find_first(tui_node *root)
@@ -1093,7 +1113,7 @@ tui_node* tui_focus_find_first(tui_node *root)
     if (!root) return NULL;
 
     focus_list list = {NULL, 0, 0};
-    if (collect_focusable_nodes(root, &list, NULL, NULL) != 0) {
+    if (collect_focusable_nodes(root, &list, NULL, NULL, 0) != 0) {
         free(list.nodes);
         return NULL;  /* Allocation failed */
     }

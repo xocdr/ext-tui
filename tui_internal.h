@@ -215,6 +215,10 @@ PHP_FUNCTION(tui_history_get_all);
 PHP_FUNCTION(tui_history_clear);
 PHP_FUNCTION(tui_history_save);
 
+/* Input parsing functions (tui_terminal.c) */
+PHP_FUNCTION(tui_parse_mouse);
+PHP_FUNCTION(tui_parse_key);
+
 /* Text functions (tui_text.c) */
 PHP_FUNCTION(tui_string_width);
 PHP_FUNCTION(tui_wrap_text);

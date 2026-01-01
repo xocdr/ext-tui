@@ -13,6 +13,7 @@
 #include "src/terminal/capabilities.h"
 #include "src/terminal/notify.h"
 #include "src/render/output.h"
+#include "src/event/input.h"
 
 /* Maximum title length to prevent excessive memory allocation */
 #define TUI_MAX_TITLE_LENGTH 4064
@@ -664,5 +665,99 @@ PHP_FUNCTION(tui_notify)
     );
 
     RETURN_BOOL(result == 0);
+}
+/* }}} */
+
+/* ------------------------------------------------------------------
+ * Input Parsing Functions
+ * ------------------------------------------------------------------ */
+
+/* {{{ tui_parse_mouse(string $input): ?array */
+PHP_FUNCTION(tui_parse_mouse)
+{
+    zend_string *input;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(input)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (ZSTR_LEN(input) == 0) {
+        RETURN_NULL();
+    }
+
+    tui_mouse_event event;
+    int consumed = tui_input_parse_mouse(ZSTR_VAL(input), (int)ZSTR_LEN(input), &event);
+
+    if (consumed == 0) {
+        RETURN_NULL();
+    }
+
+    array_init(return_value);
+    add_assoc_long(return_value, "x", event.x);
+    add_assoc_long(return_value, "y", event.y);
+    add_assoc_long(return_value, "button", event.button);
+    add_assoc_long(return_value, "action", event.action);
+    add_assoc_bool(return_value, "ctrl", event.ctrl);
+    add_assoc_bool(return_value, "meta", event.meta);
+    add_assoc_bool(return_value, "shift", event.shift);
+    add_assoc_long(return_value, "consumed", consumed);
+}
+/* }}} */
+
+/* {{{ tui_parse_key(string $input): ?array */
+PHP_FUNCTION(tui_parse_key)
+{
+    zend_string *input;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(input)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (ZSTR_LEN(input) == 0) {
+        RETURN_NULL();
+    }
+
+    tui_key_event event;
+    int result = tui_input_parse(ZSTR_VAL(input), (int)ZSTR_LEN(input), &event);
+
+    if (result < 0) {
+        RETURN_NULL();
+    }
+
+    array_init(return_value);
+
+    /* Key character/name */
+    if (event.key[0] != '\0') {
+        add_assoc_string(return_value, "key", event.key);
+    } else {
+        add_assoc_null(return_value, "key");
+    }
+
+    /* Modifiers */
+    add_assoc_bool(return_value, "ctrl", event.ctrl);
+    add_assoc_bool(return_value, "meta", event.meta);
+    add_assoc_bool(return_value, "shift", event.shift);
+
+    /* Special keys */
+    add_assoc_bool(return_value, "upArrow", event.upArrow);
+    add_assoc_bool(return_value, "downArrow", event.downArrow);
+    add_assoc_bool(return_value, "leftArrow", event.leftArrow);
+    add_assoc_bool(return_value, "rightArrow", event.rightArrow);
+    add_assoc_bool(return_value, "enter", event.enter);
+    add_assoc_bool(return_value, "escape", event.escape);
+    add_assoc_bool(return_value, "backspace", event.backspace);
+    add_assoc_bool(return_value, "delete", event.delete);
+    add_assoc_bool(return_value, "tab", event.tab);
+    add_assoc_bool(return_value, "home", event.home);
+    add_assoc_bool(return_value, "end", event.end);
+    add_assoc_bool(return_value, "pageUp", event.pageUp);
+    add_assoc_bool(return_value, "pageDown", event.pageDown);
+
+    /* Function key */
+    if (event.functionKey > 0) {
+        add_assoc_long(return_value, "functionKey", event.functionKey);
+    } else {
+        add_assoc_null(return_value, "functionKey");
+    }
 }
 /* }}} */

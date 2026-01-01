@@ -3442,6 +3442,15 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_history_get_temp, 0, 1, IS_S
     ZEND_ARG_INFO(0, history)
 ZEND_END_ARG_INFO()
 
+/* Input parsing functions */
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_parse_mouse, 0, 1, IS_ARRAY, 1)
+    ZEND_ARG_TYPE_INFO(0, input, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_parse_key, 0, 1, IS_ARRAY, 1)
+    ZEND_ARG_TYPE_INFO(0, input, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tui_string_width, 0, 1, IS_LONG, 0)
     ZEND_ARG_TYPE_INFO(0, text, IS_STRING, 0)
 ZEND_END_ARG_INFO()
@@ -4291,6 +4300,10 @@ static const zend_function_entry tui_functions[] = {
     PHP_FE(tui_history_reset, arginfo_tui_history_reset)
     PHP_FE(tui_history_save_temp, arginfo_tui_history_save_temp)
     PHP_FE(tui_history_get_temp, arginfo_tui_history_get_temp)
+
+    /* Input parsing */
+    PHP_FE(tui_parse_mouse, arginfo_tui_parse_mouse)
+    PHP_FE(tui_parse_key, arginfo_tui_parse_key)
 
     /* Text utilities */
     PHP_FE(tui_string_width, arginfo_tui_string_width)
