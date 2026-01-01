@@ -42,6 +42,7 @@ if test "$PHP_TUI" != "no"; then
   dnl Define C sources (our extension code)
   dnl Split into logical modules for maintainability
   TUI_SOURCES="tui.c \
+     tui_classes.c \
      tui_terminal.c \
      tui_text.c \
      tui_buffer.c \

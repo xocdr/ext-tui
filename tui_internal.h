@@ -138,15 +138,34 @@ static inline tui_focus_manager_object *tui_focus_manager_from_obj(zend_object *
 #define Z_TUI_FOCUS_MANAGER_P(zv) tui_focus_manager_from_obj(Z_OBJ_P(zv))
 
 /* ----------------------------------------------------------------
- * CSS Color lookup
+ * Named Color lookup (used by Color enum and php_to_tui_node)
  * ---------------------------------------------------------------- */
 typedef struct {
     const char *name;
     uint8_t r, g, b;
-} css_color;
+} named_color;
 
-extern const css_color css_colors[];
-extern const size_t css_colors_count;
+extern const named_color named_colors[];
+
+/* Convert CSS color name to PascalCase for enum lookup */
+void named_color_to_camel(const char *name, char *out, size_t out_size);
+
+/* Lookup color by name in named_colors table */
+int lookup_named_color(const char *name, tui_color *color);
+
+/* ----------------------------------------------------------------
+ * Class method tables (defined in tui_classes.c)
+ * ---------------------------------------------------------------- */
+extern const zend_function_entry tui_color_methods[];
+extern const zend_function_entry tui_node_interface_methods[];
+extern const zend_function_entry tui_box_methods[];
+extern const zend_function_entry tui_text_methods[];
+extern const zend_function_entry tui_instance_methods[];
+extern const zend_function_entry tui_focus_methods[];
+extern const zend_function_entry tui_focus_manager_methods[];
+extern const zend_function_entry tui_stdin_context_methods[];
+extern const zend_function_entry tui_stdout_context_methods[];
+extern const zend_function_entry tui_stderr_context_methods[];
 
 /* ----------------------------------------------------------------
  * Object handlers (defined in tui.c)
