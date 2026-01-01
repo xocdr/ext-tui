@@ -2316,14 +2316,30 @@ PHP_METHOD(TuiText, __construct)
     zend_update_property_bool(tui_text_ce, Z_OBJ_P(ZEND_THIS), "strikethrough", sizeof("strikethrough")-1, 0);
     zend_update_property_null(tui_text_ce, Z_OBJ_P(ZEND_THIS), "wrap", sizeof("wrap")-1);
 
-    /* Apply passed properties */
+    /* Apply passed properties with validation */
     if (props) {
         HashTable *ht = Z_ARRVAL_P(props);
-        zend_string *key;
+        zend_string *prop_key;
         zval *val;
-        ZEND_HASH_FOREACH_STR_KEY_VAL(ht, key, val) {
-            if (key) {
-                zend_update_property(tui_text_ce, Z_OBJ_P(ZEND_THIS), ZSTR_VAL(key), ZSTR_LEN(key), val);
+        ZEND_HASH_FOREACH_STR_KEY_VAL(ht, prop_key, val) {
+            if (prop_key) {
+                /* Validate key length */
+                if (zend_string_equals_literal(prop_key, "key") && Z_TYPE_P(val) == IS_STRING) {
+                    if (Z_STRLEN_P(val) > TUI_MAX_KEY_LENGTH) {
+                        zend_throw_exception_ex(tui_validation_exception_ce, 0,
+                            "Node key exceeds maximum length (%d bytes)", TUI_MAX_KEY_LENGTH);
+                        RETURN_THROWS();
+                    }
+                }
+                /* Validate id length */
+                if (zend_string_equals_literal(prop_key, "id") && Z_TYPE_P(val) == IS_STRING) {
+                    if (Z_STRLEN_P(val) > TUI_MAX_ID_LENGTH) {
+                        zend_throw_exception_ex(tui_validation_exception_ce, 0,
+                            "Node id exceeds maximum length (%d bytes)", TUI_MAX_ID_LENGTH);
+                        RETURN_THROWS();
+                    }
+                }
+                zend_update_property(tui_text_ce, Z_OBJ_P(ZEND_THIS), ZSTR_VAL(prop_key), ZSTR_LEN(prop_key), val);
             }
         } ZEND_HASH_FOREACH_END();
     }

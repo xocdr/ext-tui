@@ -28,7 +28,10 @@ static void render_node_to_buffer(tui_app *app, tui_node *node, int offset_x, in
 tui_app* tui_app_create(void)
 {
     tui_app *app = calloc(1, sizeof(tui_app));
-    if (!app) return NULL;
+    if (!app) {
+        php_error_docref(NULL, E_WARNING, "Failed to allocate TUI application");
+        return NULL;
+    }
 
     app->fullscreen = 1;
     app->exit_on_ctrl_c = 1;
@@ -48,53 +51,62 @@ tui_app* tui_app_create(void)
     /* Allocate initial state array */
     app->states = calloc(INITIAL_STATE_CAPACITY, sizeof(tui_state_slot));
     if (!app->states) {
-        free(app);
-        return NULL;
+        php_error_docref(NULL, E_WARNING, "Failed to allocate TUI state array");
+        goto error_app;
     }
     app->state_capacity = INITIAL_STATE_CAPACITY;
 
     /* Allocate initial timer array */
     app->timer_callbacks = calloc(INITIAL_TIMER_CAPACITY, sizeof(struct tui_timer_callback));
     if (!app->timer_callbacks) {
-        free(app->states);
-        free(app);
-        return NULL;
+        php_error_docref(NULL, E_WARNING, "Failed to allocate TUI timer array");
+        goto error_states;
     }
     app->timer_capacity = INITIAL_TIMER_CAPACITY;
 
-    /* Get terminal size */
-    tui_terminal_get_size(&app->width, &app->height);
-
-    /* Create output system with proper cleanup on failure */
-    app->output = tui_output_create(app->width, app->height);
-    if (!app->output) {
-        free(app->timer_callbacks);
-        free(app->states);
-        free(app);
-        return NULL;
+    /* Get terminal size (uses defaults 80x24 on failure) */
+    if (tui_terminal_get_size(&app->width, &app->height) != 0) {
+        /* Non-fatal: proceed with default size but log for debugging */
+        php_error_docref(NULL, E_NOTICE,
+            "Could not determine terminal size, using default %dx%d",
+            app->width, app->height);
     }
 
+    /* Create output system */
+    app->output = tui_output_create(app->width, app->height);
+    if (!app->output) {
+        php_error_docref(NULL, E_WARNING, "Failed to create TUI output system");
+        goto error_timers;
+    }
+
+    /* Create character buffer */
     app->buffer = tui_buffer_create(app->width, app->height);
     if (!app->buffer) {
-        tui_output_destroy(app->output);
-        free(app->timer_callbacks);
-        free(app->states);
-        free(app);
-        return NULL;
+        php_error_docref(NULL, E_WARNING, "Failed to create TUI render buffer");
+        goto error_output;
     }
 
     /* Create event loop */
     app->loop = tui_loop_create();
     if (!app->loop) {
-        tui_buffer_destroy(app->buffer);
-        tui_output_destroy(app->output);
-        free(app->timer_callbacks);
-        free(app->states);
-        free(app);
-        return NULL;
+        php_error_docref(NULL, E_WARNING, "Failed to create TUI event loop");
+        goto error_buffer;
     }
 
     return app;
+
+    /* Cleanup labels - reverse order of allocation */
+error_buffer:
+    tui_buffer_destroy(app->buffer);
+error_output:
+    tui_output_destroy(app->output);
+error_timers:
+    free(app->timer_callbacks);
+error_states:
+    free(app->states);
+error_app:
+    free(app);
+    return NULL;
 }
 
 void tui_app_destroy(tui_app *app)
