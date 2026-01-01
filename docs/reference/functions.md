@@ -104,22 +104,6 @@ tui_get_focused_node(Xocdr\Tui\Ext\Instance $instance): ?array
 
 Returns info about focused node or null.
 
-### tui_focus_next_in_group
-
-```php
-tui_focus_next_in_group(Xocdr\Tui\Ext\Instance $instance, string $group): void
-```
-
-Moves focus to next element within specified focus group.
-
-### tui_focus_by_id
-
-```php
-tui_focus_by_id(Xocdr\Tui\Ext\Instance $instance, string $id): void
-```
-
-Focuses element by ID.
-
 ---
 
 ## Mouse
@@ -127,42 +111,20 @@ Focuses element by ID.
 ### tui_mouse_enable
 
 ```php
-tui_mouse_enable(Xocdr\Tui\Ext\Instance $instance, int $mode): void
+tui_mouse_enable(int $mode = TUI_MOUSE_MODE_BUTTON): bool
 ```
 
-Enables mouse tracking. Modes: `TUI_MOUSE_MODE_CLICK`, `TUI_MOUSE_MODE_BUTTON`, `TUI_MOUSE_MODE_ALL`.
+Enables mouse tracking. Returns `true` on success.
+
+Modes: `TUI_MOUSE_MODE_CLICK`, `TUI_MOUSE_MODE_BUTTON` (default), `TUI_MOUSE_MODE_ALL`.
 
 ### tui_mouse_disable
 
 ```php
-tui_mouse_disable(Xocdr\Tui\Ext\Instance $instance): void
+tui_mouse_disable(): bool
 ```
 
-Disables mouse tracking.
-
-### tui_set_mouse_handler
-
-```php
-tui_set_mouse_handler(Xocdr\Tui\Ext\Instance $instance, callable $handler): void
-```
-
-Handler receives: `function(Xocdr\Tui\Ext\MouseEvent $event): void`
-
-### tui_hit_test
-
-```php
-tui_hit_test(Xocdr\Tui\Ext\Instance $instance, int $x, int $y): ?array
-```
-
-Returns deepest node at coordinates, or null.
-
-### tui_hit_test_all
-
-```php
-tui_hit_test_all(Xocdr\Tui\Ext\Instance $instance, int $x, int $y): array
-```
-
-Returns all nodes at coordinates (root to leaf order).
+Disables mouse tracking. Returns `true` on success.
 
 ---
 
@@ -171,34 +133,28 @@ Returns all nodes at coordinates (root to leaf order).
 ### tui_clipboard_copy
 
 ```php
-tui_clipboard_copy(string $text, int $target = TUI_CLIPBOARD_CLIPBOARD): void
+tui_clipboard_copy(string $text, string $target = "clipboard"): bool
 ```
 
-Copies text to clipboard.
+Copies text to clipboard. Returns `true` on success.
+
+**Targets:** `"clipboard"` (default), `"primary"`, `"secondary"`
 
 ### tui_clipboard_request
 
 ```php
-tui_clipboard_request(int $target = TUI_CLIPBOARD_CLIPBOARD): void
+tui_clipboard_request(string $target = "clipboard"): void
 ```
 
-Requests clipboard contents (async).
+Requests clipboard contents (async). Response arrives via input handler.
 
 ### tui_clipboard_clear
 
 ```php
-tui_clipboard_clear(int $target = TUI_CLIPBOARD_CLIPBOARD): void
+tui_clipboard_clear(string $target = "clipboard"): void
 ```
 
 Clears clipboard.
-
-### tui_set_clipboard_handler
-
-```php
-tui_set_clipboard_handler(Xocdr\Tui\Ext\Instance $instance, callable $handler): void
-```
-
-Handler receives: `function(string $content): void`
 
 ---
 
@@ -275,26 +231,18 @@ Resets navigation position.
 ### tui_bracketed_paste_enable
 
 ```php
-tui_bracketed_paste_enable(Xocdr\Tui\Ext\Instance $instance): void
+tui_bracketed_paste_enable(): bool
 ```
 
-Enables bracketed paste mode.
+Enables bracketed paste mode. Returns `true` on success.
 
 ### tui_bracketed_paste_disable
 
 ```php
-tui_bracketed_paste_disable(Xocdr\Tui\Ext\Instance $instance): void
+tui_bracketed_paste_disable(): bool
 ```
 
-Disables bracketed paste mode.
-
-### tui_set_paste_handler
-
-```php
-tui_set_paste_handler(Xocdr\Tui\Ext\Instance $instance, callable $handler): void
-```
-
-Handler receives: `function(string $text): void`
+Disables bracketed paste mode. Returns `true` on success.
 
 ---
 
@@ -567,10 +515,10 @@ tui_fill_triangle(resource $buffer, int $x1, int $y1, int $x2, int $y2, int $x3,
 ### tui_canvas_create
 
 ```php
-tui_canvas_create(int $width, int $height, int $mode = TUI_CANVAS_BRAILLE): resource
+tui_canvas_create(int $width, int $height, string $mode = "braille"): resource
 ```
 
-Modes: `TUI_CANVAS_BRAILLE`, `TUI_CANVAS_BLOCK`, `TUI_CANVAS_ASCII`
+Modes: `"braille"` (2×4 per cell), `"block"` (2×2 per cell), `"ascii"` (1×1 per cell)
 
 ### tui_canvas_set / unset / toggle / get
 
@@ -636,10 +584,12 @@ Returns array of strings.
 ### tui_ease
 
 ```php
-tui_ease(float $t, int $easing = TUI_EASE_LINEAR): float
+tui_ease(float $t, string $easing = "linear"): float
 ```
 
 Apply easing to `t` (0.0-1.0).
+
+**Easing types:** `"linear"`, `"in_quad"`, `"out_quad"`, `"in_out_quad"`, `"in_cubic"`, `"out_cubic"`, `"in_out_cubic"`, `"in_quart"`, `"out_quart"`, `"in_out_quart"`, `"in_sine"`, `"out_sine"`, `"in_out_sine"`, `"out_bounce"`, `"out_elastic"`, `"out_back"`
 
 ### tui_lerp
 
@@ -692,10 +642,10 @@ tui_table_add_row(resource $table, array $cells): void
 ### tui_table_set_align
 
 ```php
-tui_table_set_align(resource $table, int $column, int $align): void
+tui_table_set_align(resource $table, int $column, bool $right_align): void
 ```
 
-Align: `TUI_ALIGN_LEFT`, `TUI_ALIGN_CENTER`, `TUI_ALIGN_RIGHT`
+Sets column alignment. Pass `true` for right-align, `false` for left-align (default).
 
 ### tui_table_render_to_buffer
 
@@ -718,28 +668,36 @@ tui_render_progress_bar(float $progress, int $width, array $style = []): string
 ### tui_render_busy_bar
 
 ```php
-tui_render_busy_bar(int $frame, int $width, array $options = []): string
+tui_render_busy_bar(resource $buffer, int $x, int $y, int $width, int $frame, string $style_name = "pulse", ?array $style = null): void
 ```
+
+Renders an animated busy/indeterminate bar to a buffer.
 
 ### tui_spinner_frame
 
 ```php
-tui_spinner_frame(int $frame, int $type = TUI_SPINNER_DOTS): string
+tui_spinner_frame(string $type, int $frame): string
 ```
 
-Types: `TUI_SPINNER_DOTS`, `TUI_SPINNER_LINE`, `TUI_SPINNER_BOUNCE`, `TUI_SPINNER_CIRCLE`
+Returns the character(s) for a spinner animation frame.
+
+**Types:** `"dots"`, `"line"`, `"bounce"`, `"circle"`
 
 ### tui_spinner_frame_count
 
 ```php
-tui_spinner_frame_count(int $type): int
+tui_spinner_frame_count(string $type): int
 ```
+
+Returns the number of frames in a spinner animation.
 
 ### tui_render_spinner
 
 ```php
-tui_render_spinner(int $frame, string $label, int $type, array $style = []): string
+tui_render_spinner(resource $buffer, int $x, int $y, string $type, int $frame, ?array $style = null): void
 ```
+
+Renders a spinner animation frame to a buffer.
 
 ---
 

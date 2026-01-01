@@ -163,53 +163,13 @@ Enable mouse tracking to receive click, scroll, and drag events.
 
 ```php
 // Enable mouse with different tracking modes
-tui_mouse_enable($instance, TUI_MOUSE_MODE_CLICK);   // Basic clicks
-tui_mouse_enable($instance, TUI_MOUSE_MODE_BUTTON);  // Press/release events
-tui_mouse_enable($instance, TUI_MOUSE_MODE_ALL);     // All events including hover
+tui_mouse_enable(TUI_MOUSE_MODE_CLICK);   // Basic clicks
+tui_mouse_enable(TUI_MOUSE_MODE_BUTTON);  // Press/release events (default)
+tui_mouse_enable(TUI_MOUSE_MODE_ALL);     // All events including hover
 
 // Disable mouse tracking
-tui_mouse_disable($instance);
+tui_mouse_disable();
 ```
-
-### Mouse Handler
-
-```php
-use Xocdr\Tui\Ext\MouseEvent;
-
-tui_set_mouse_handler($instance, function (MouseEvent $event) use ($instance) {
-    // Click detection
-    if ($event->action === 'press' && $event->button === 'left') {
-        echo "Clicked at ({$event->x}, {$event->y})\n";
-    }
-
-    // Scroll handling
-    if ($event->button === 'scroll_up') {
-        scrollUp();
-        tui_rerender($instance);
-    }
-    if ($event->button === 'scroll_down') {
-        scrollDown();
-        tui_rerender($instance);
-    }
-
-    // Drag detection
-    if ($event->action === 'drag') {
-        handleDrag($event->x, $event->y);
-    }
-});
-```
-
-### The MouseEvent Object
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `x` | int | Column (0-based) |
-| `y` | int | Row (0-based) |
-| `button` | string | `'left'`, `'middle'`, `'right'`, `'scroll_up'`, `'scroll_down'`, `'scroll_left'`, `'scroll_right'`, `'none'` |
-| `action` | string | `'press'`, `'release'`, `'move'`, `'drag'` |
-| `ctrl` | bool | Ctrl modifier held |
-| `meta` | bool | Meta/Alt modifier held |
-| `shift` | bool | Shift modifier held |
 
 ### Mouse Tracking Modes
 
@@ -220,27 +180,33 @@ tui_set_mouse_handler($instance, function (MouseEvent $event) use ($instance) {
 | `TUI_MOUSE_MODE_BUTTON` | Button press/release events (mode 1002) |
 | `TUI_MOUSE_MODE_ALL` | All motion including hover (mode 1003) |
 
-### Hit Testing
+### Handling Mouse Events
 
-Find which node was clicked:
+Mouse events are delivered through the input handler. Use `tui_parse_mouse()` to parse raw mouse input:
 
 ```php
-tui_set_mouse_handler($instance, function (MouseEvent $event) use ($instance) {
-    if ($event->action === 'press') {
-        // Get the deepest node at click position
-        $node = tui_hit_test($instance, $event->x, $event->y);
-        if ($node && $node['id'] === 'submit-button') {
-            handleSubmit();
-        }
-
-        // Or get all nodes at position (for event bubbling)
-        $nodes = tui_hit_test_all($instance, $event->x, $event->y);
-        foreach ($nodes as $node) {
-            if (handleClick($node)) break;  // Stop if handled
-        }
+// Mouse events come through the input handler as raw escape sequences
+// Use tui_parse_mouse() to parse them into structured data
+$mouseData = tui_parse_mouse($rawInput);
+if ($mouseData !== null) {
+    // Handle mouse event
+    if ($mouseData['action'] === 'press' && $mouseData['button'] === 'left') {
+        echo "Clicked at ({$mouseData['x']}, {$mouseData['y']})\n";
     }
-});
+}
 ```
+
+### The MouseEvent Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `x` | int | Column (0-based) |
+| `y` | int | Row (0-based) |
+| `button` | string | `'left'`, `'middle'`, `'right'`, `'scroll_up'`, `'scroll_down'`, `'scroll_left'`, `'scroll_right'`, `'none'` |
+| `action` | string | `'press'`, `'release'`, `'move'`, `'drag'` |
+| `ctrl` | bool | Ctrl modifier held |
+| `meta` | bool | Meta/Alt modifier held |
+| `shift` | bool | Shift modifier held |
 
 ---
 
@@ -539,38 +505,33 @@ Read from and write to the system clipboard using OSC 52 escape sequences. This 
 tui_clipboard_copy('Hello, clipboard!');
 
 // Copy to specific target (X11)
-tui_clipboard_copy('Selected text', TUI_CLIPBOARD_PRIMARY);    // Primary selection
-tui_clipboard_copy('Copied text', TUI_CLIPBOARD_CLIPBOARD);    // System clipboard (default)
-tui_clipboard_copy('Secondary', TUI_CLIPBOARD_SECONDARY);      // Secondary selection
+tui_clipboard_copy('Selected text', 'primary');     // Primary selection
+tui_clipboard_copy('Copied text', 'clipboard');     // System clipboard (default)
+tui_clipboard_copy('Secondary', 'secondary');       // Secondary selection
 ```
 
 ### Reading from Clipboard
 
 ```php
-// Request clipboard contents (async - response comes via handler)
+// Request clipboard contents (async - response arrives via input)
 tui_clipboard_request();
-
-tui_set_clipboard_handler($instance, function (string $content) {
-    // Handle received clipboard content
-    $buffer .= $content;
-    tui_rerender($instance);
-});
+tui_clipboard_request('primary');  // Request primary selection
 ```
 
 ### Clearing Clipboard
 
 ```php
 tui_clipboard_clear();
-tui_clipboard_clear(TUI_CLIPBOARD_PRIMARY);
+tui_clipboard_clear('primary');
 ```
 
 ### Clipboard Targets
 
-| Constant | Description |
-|----------|-------------|
-| `TUI_CLIPBOARD_CLIPBOARD` | System clipboard (default, 'c') |
-| `TUI_CLIPBOARD_PRIMARY` | Primary selection (X11, 'p') |
-| `TUI_CLIPBOARD_SECONDARY` | Secondary selection (X11, 's') |
+| Value | Description |
+|-------|-------------|
+| `"clipboard"` | System clipboard (default) |
+| `"primary"` | Primary selection (X11) |
+| `"secondary"` | Secondary selection (X11) |
 
 **Note:** OSC 52 support varies by terminal. Most modern terminals support it, but some may require explicit enabling in settings.
 
