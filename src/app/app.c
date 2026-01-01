@@ -776,6 +776,9 @@ void tui_app_stop(tui_app *app)
         tui_output_exit_alternate(app->output);
     }
 
+    /* Output a newline so shell prompt appears on a fresh line */
+    write(STDOUT_FILENO, "\n", 1);
+
     /* Flush any pending input to prevent stale keystrokes */
     tcflush(STDIN_FILENO, TCIFLUSH);
 
