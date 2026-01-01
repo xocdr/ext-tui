@@ -174,7 +174,7 @@ if ($m['avg_ops_per_diff'] > 50) {
 Monitor node count over time:
 
 ```php
-$timer = tui_add_timer($instance, function() {
+$timer = tui_add_timer($instance, 1000, function() {  // Check every second
     static $prev = 0;
     $m = tui_get_node_metrics();
     $delta = $m['node_count'] - $prev;
@@ -183,7 +183,7 @@ $timer = tui_add_timer($instance, function() {
     if ($delta > 10) {
         echo "Node leak? +{$delta} nodes\n";
     }
-}, 1000);  // Check every second
+});
 ```
 
 ## Performance Best Practices

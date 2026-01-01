@@ -208,7 +208,7 @@ tui_get_focused_node(TuiInstance $instance): ?array
 ### Timers
 
 ```php
-tui_add_timer(TuiInstance $instance, callable $callback, int $intervalMs): int
+tui_add_timer(TuiInstance $instance, int $intervalMs, callable $callback): int
 tui_remove_timer(TuiInstance $instance, int $timerId): void
 ```
 

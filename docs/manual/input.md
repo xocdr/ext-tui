@@ -472,10 +472,10 @@ Execute callbacks at intervals:
 
 ```php
 // Add a timer (100ms interval)
-$timerId = tui_add_timer($instance, function () use ($instance, &$frame) {
+$timerId = tui_add_timer($instance, 100, function () use ($instance, &$frame) {
     $frame++;
     tui_rerender($instance);
-}, 100);
+});
 
 // Remove timer when done
 tui_remove_timer($instance, $timerId);

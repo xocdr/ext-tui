@@ -319,13 +319,13 @@ $app = function () use ($items, $scroll) {
 
 $instance = tui_render($app);
 
-// Animation timer
-$timerId = tui_add_timer($instance, function () use ($instance, $scroll) {
+// Animation timer (~60 FPS)
+$timerId = tui_add_timer($instance, 16, function () use ($instance, $scroll) {
     if (tui_scroll_is_animating($scroll)) {
         tui_scroll_update($scroll, 1.0 / 60.0);
         tui_rerender($instance);
     }
-}, 16);  // ~60 FPS
+});
 
 tui_set_input_handler($instance, function (Key $key) use ($instance, $scroll, $items, &$targetY) {
     if ($key->escape) {
@@ -405,13 +405,13 @@ $app = function () use ($items, &$vlist, $scroll) {
 
 $instance = tui_render($app);
 
-// Animation loop
-$timerId = tui_add_timer($instance, function () use ($instance, $scroll) {
+// Animation loop (~60 FPS)
+$timerId = tui_add_timer($instance, 16, function () use ($instance, $scroll) {
     if (tui_scroll_is_animating($scroll)) {
         tui_scroll_update($scroll, 1.0 / 60.0);
         tui_rerender($instance);
     }
-}, 16);
+});
 
 tui_set_input_handler($instance, function (Key $key) use ($instance, $scroll, $items, &$vlist) {
     if ($key->escape) {
