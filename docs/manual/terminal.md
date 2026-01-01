@@ -298,8 +298,8 @@ tui_set_resize_handler($instance, function (int $width, int $height) use ($insta
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Key;
 
 // Check capabilities
@@ -319,13 +319,13 @@ $app = function () use ($caps) {
     $features = [];
     foreach ($caps['capabilities'] as $name => $supported) {
         $status = $supported ? '✓' : '✗';
-        $features[] = new Text([
+        $features[] = new ContentNode([
             'content' => "$status $name",
             'color' => $supported ? [100, 255, 100] : [255, 100, 100],
         ]);
     }
 
-    return new Box([
+    return new ContainerNode([
         'flexDirection' => 'column',
         'padding' => 1,
         'children' => $features,

@@ -9,16 +9,16 @@ Colors, text attributes, and visual styling in ext-tui.
 Specify colors as `[red, green, blue]` with values 0-255:
 
 ```php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
-new Text([
+new ContentNode([
     'content' => 'Colored text',
     'color' => [255, 100, 100],           // Foreground
     'backgroundColor' => [50, 0, 0],       // Background
 ]);
 
-new Box([
+new ContainerNode([
     'borderStyle' => 'single',
     'borderColor' => [100, 150, 255],
 ]);
@@ -29,9 +29,9 @@ new Box([
 Use standard hex color notation:
 
 ```php
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContentNode;
 
-new Text([
+new ContentNode([
     'content' => 'Hex color',
     'color' => '#ff6600',
 ]);
@@ -58,9 +58,9 @@ $gradient = tui_gradient([255, 0, 0], [0, 0, 255], 10);
 ### Bold
 
 ```php
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContentNode;
 
-new Text([
+new ContentNode([
     'content' => 'Important',
     'bold' => true,
 ]);
@@ -71,7 +71,7 @@ new Text([
 Reduced intensity text:
 
 ```php
-new Text([
+new ContentNode([
     'content' => 'Less important',
     'dim' => true,
 ]);
@@ -80,7 +80,7 @@ new Text([
 ### Italic
 
 ```php
-new Text([
+new ContentNode([
     'content' => 'Emphasized',
     'italic' => true,
 ]);
@@ -89,7 +89,7 @@ new Text([
 ### Underline
 
 ```php
-new Text([
+new ContentNode([
     'content' => 'Linked text',
     'underline' => true,
 ]);
@@ -100,7 +100,7 @@ new Text([
 Swap foreground and background:
 
 ```php
-new Text([
+new ContentNode([
     'content' => 'Selected',
     'inverse' => true,
 ]);
@@ -109,7 +109,7 @@ new Text([
 ### Strikethrough
 
 ```php
-new Text([
+new ContentNode([
     'content' => 'Deleted',
     'strikethrough' => true,
 ]);
@@ -118,7 +118,7 @@ new Text([
 ### Combining Styles
 
 ```php
-new Text([
+new ContentNode([
     'content' => 'Error!',
     'color' => [255, 100, 100],
     'bold' => true,
@@ -138,9 +138,9 @@ Available border styles for Box:
 | `bold` | `━┃┏┓┗┛` | Box with thick lines |
 
 ```php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
-new Box([
+new ContainerNode([
     'borderStyle' => 'round',
     'borderColor' => [100, 200, 255],
     'children' => [...],
@@ -183,8 +183,8 @@ $function = [97, 175, 239];   // Blue
 Change appearance based on state:
 
 ```php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 function renderButton(string $label, bool $focused, bool $disabled): Box
 {
@@ -196,13 +196,13 @@ function renderButton(string $label, bool $focused, bool $disabled): Box
         ? null
         : ($focused ? [100, 200, 255] : null);
 
-    return new Box([
+    return new ContainerNode([
         'padding' => 1,
         'borderStyle' => 'single',
         'borderColor' => $focused ? [100, 200, 255] : [100, 100, 100],
         'focusable' => !$disabled,
         'children' => [
-            new Text([
+            new ContentNode([
                 'content' => $label,
                 'color' => $textColor,
                 'backgroundColor' => $bgColor,
@@ -218,10 +218,10 @@ function renderButton(string $label, bool $focused, bool $disabled): Box
 Make text clickable with terminal hyperlinks:
 
 ```php
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContentNode;
 
 // Simple hyperlink
-new Text([
+new ContentNode([
     'content' => 'Visit our website',
     'hyperlink' => 'https://example.com',
     'underline' => true,
@@ -229,7 +229,7 @@ new Text([
 ]);
 
 // With ID for grouping (same ID = same link)
-new Text([
+new ContentNode([
     'content' => 'Click here',
     'hyperlink' => [
         'url' => 'https://example.com/docs',

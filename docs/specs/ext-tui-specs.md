@@ -19,7 +19,7 @@
 ```
 ┌────────────────────────────────────────────────────────┐
 │                    PHP Layer                           │
-│ Xocdr\Tui\Ext\{Box,Text,Instance,Key,FocusEvent,...}  │
+│ Xocdr\Tui\Ext\{ContainerNode,ContentNode,Instance,...}│
 └────┬───────────────────────────────────────────────────┘
      │
 ┌────▼────────────────────────────────────────────────────┐
@@ -147,7 +147,7 @@
 
 #### Timers
 
-**`tui_add_timer(Xocdr\Tui\Ext\Instance $instance, int $intervalMs, callable $handler): int`**
+**`tui_add_timer(Xocdr\Tui\Ext\Instance $instance, callable $handler, int $intervalMs): int`**
 - Creates repeating timer
 - Signature: `function(): void`
 - Returns timer ID
@@ -383,17 +383,17 @@
 
 All classes are in the `Xocdr\Tui\Ext` namespace.
 
-### Box (Xocdr\Tui\Ext\Box)
+### ContainerNode (Xocdr\Tui\Ext\ContainerNode)
 
 Container component with flexbox layout.
 
 **Constructor:**
 ```php
-new Xocdr\Tui\Ext\Box(array $props = [])
+new Xocdr\Tui\Ext\ContainerNode(array $props = [])
 ```
 
 **Methods:**
-- `addChild(Box|Text $child): self` - Fluent API
+- `addChild(ContainerNode|ContentNode $child): self` - Fluent API
 
 **Properties:**
 
@@ -439,15 +439,15 @@ new Xocdr\Tui\Ext\Box(array $props = [])
 | `borderColor` | string\|array\|null | null | '#rrggbb' or [r, g, b] |
 | `focusable` | bool | false | Can receive focus |
 | `focused` | bool | false | Currently focused |
-| `children` | array | [] | Child Box/Text elements |
+| `children` | array | [] | Child ContainerNode/ContentNode elements |
 
-### Text (Xocdr\Tui\Ext\Text)
+### ContentNode (Xocdr\Tui\Ext\ContentNode)
 
 Text display component with styling.
 
 **Constructor:**
 ```php
-new Xocdr\Tui\Ext\Text(string $content = '', array $props = [])
+new Xocdr\Tui\Ext\ContentNode(array $props = [])
 ```
 
 **Properties:**
@@ -521,7 +521,7 @@ Focus change event object.
 - `focused` (bool)
 - `x`, `y` (int) - Position
 - `width`, `height` (int) - Size
-- `type` (string) - 'box' or 'text'
+- `type` (string) - 'container' or 'content'
 - `content` (string) - Text content (for text nodes)
 
 ---
@@ -915,7 +915,7 @@ Vendored Facebook Yoga library for flexbox.
 
 2. **Call Component**
    - Invokes `$component()`
-   - Returns PHP object tree (Box/Text)
+   - Returns PHP object tree (ContainerNode/ContentNode)
 
 3. **Convert to Nodes**
    - `php_to_tui_node()` recursively converts
@@ -1172,21 +1172,20 @@ This means:
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Key;
 
 $counter = 0;
 
 $instance = tui_render(function() use (&$counter) {
-    return new Box([
+    $box = new ContainerNode([
         'flexDirection' => 'column',
         'padding' => 1,
-        'children' => [
-            new Text("Counter: $counter", ['bold' => true]),
-            new Text("Press q to quit, +/- to change", ['dim' => true]),
-        ],
     ]);
+    $box->addChild(new ContentNode(['content' => "Counter: $counter", 'bold' => true]));
+    $box->addChild(new ContentNode(['content' => 'Press q to quit, +/- to change', 'dim' => true]));
+    return $box;
 });
 
 tui_set_input_handler($instance, function(Key $key) use ($instance, &$counter) {
@@ -1208,24 +1207,22 @@ tui_wait_until_exit($instance);
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 $frame = 0;
 
 $instance = tui_render(function() use (&$frame) {
     $spinner = tui_spinner_frame('dots', $frame);
-    return new Box([
-        'children' => [
-            new Text("$spinner Loading...", ['color' => '#00ff00']),
-        ],
-    ]);
+    $box = new ContainerNode([]);
+    $box->addChild(new ContentNode(['content' => "$spinner Loading...", 'color' => '#00ff00']));
+    return $box;
 });
 
-$timerId = tui_add_timer($instance, 100, function() use ($instance, &$frame) {
+$timerId = tui_add_timer($instance, function() use ($instance, &$frame) {
     $frame++;
     tui_rerender($instance);
-});
+}, 100);
 
 tui_wait_until_exit($instance);
 ```
@@ -1234,26 +1231,27 @@ tui_wait_until_exit($instance);
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Key;
 use Xocdr\Tui\Ext\FocusEvent;
 
 $instance = tui_render(function() {
-    return new Box([
-        'flexDirection' => 'column',
-        'children' => [
-            new Box(['focusable' => true, 'borderStyle' => 'single', 'children' => [
-                new Text('Option 1'),
-            ]]),
-            new Box(['focusable' => true, 'borderStyle' => 'single', 'children' => [
-                new Text('Option 2'),
-            ]]),
-            new Box(['focusable' => true, 'borderStyle' => 'single', 'children' => [
-                new Text('Option 3'),
-            ]]),
-        ],
-    ]);
+    $box = new ContainerNode(['flexDirection' => 'column']);
+
+    $opt1 = new ContainerNode(['focusable' => true, 'borderStyle' => 'single']);
+    $opt1->addChild(new ContentNode(['content' => 'Option 1']));
+    $box->addChild($opt1);
+
+    $opt2 = new ContainerNode(['focusable' => true, 'borderStyle' => 'single']);
+    $opt2->addChild(new ContentNode(['content' => 'Option 2']));
+    $box->addChild($opt2);
+
+    $opt3 = new ContainerNode(['focusable' => true, 'borderStyle' => 'single']);
+    $opt3->addChild(new ContentNode(['content' => 'Option 3']));
+    $box->addChild($opt3);
+
+    return $box;
 });
 
 tui_set_input_handler($instance, function(Key $key) use ($instance) {

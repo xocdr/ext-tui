@@ -280,24 +280,24 @@ tui_history_destroy($history);
 Make elements focusable and navigate between them:
 
 ```php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Key;
 
 $app = function () {
-    return new Box([
+    return new ContainerNode([
         'flexDirection' => 'column',
         'gap' => 1,
         'children' => [
-            new Box([
+            new ContainerNode([
                 'focusable' => true,
                 'borderStyle' => 'single',
-                'children' => [new Text(['content' => 'Option 1'])],
+                'children' => [new ContentNode(['content' => 'Option 1'])],
             ]),
-            new Box([
+            new ContainerNode([
                 'focusable' => true,
                 'borderStyle' => 'single',
-                'children' => [new Text(['content' => 'Option 2'])],
+                'children' => [new ContentNode(['content' => 'Option 2'])],
             ]),
         ],
     ]);
@@ -346,27 +346,27 @@ if ($focused) {
 Group focusable elements for scoped navigation:
 
 ```php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 $app = function () {
-    return new Box([
+    return new ContainerNode([
         'flexDirection' => 'column',
         'children' => [
             // Toolbar group
-            new Box([
+            new ContainerNode([
                 'flexDirection' => 'row',
                 'children' => [
-                    new Box(['focusable' => true, 'focusGroup' => 'toolbar', 'tabIndex' => 1]),
-                    new Box(['focusable' => true, 'focusGroup' => 'toolbar', 'tabIndex' => 2]),
+                    new ContainerNode(['focusable' => true, 'focusGroup' => 'toolbar', 'tabIndex' => 1]),
+                    new ContainerNode(['focusable' => true, 'focusGroup' => 'toolbar', 'tabIndex' => 2]),
                 ],
             ]),
             // Content group
-            new Box([
+            new ContainerNode([
                 'flexDirection' => 'row',
                 'children' => [
-                    new Box(['focusable' => true, 'focusGroup' => 'content', 'tabIndex' => 1]),
-                    new Box(['focusable' => true, 'focusGroup' => 'content', 'tabIndex' => 2]),
+                    new ContainerNode(['focusable' => true, 'focusGroup' => 'content', 'tabIndex' => 1]),
+                    new ContainerNode(['focusable' => true, 'focusGroup' => 'content', 'tabIndex' => 2]),
                 ],
             ]),
         ],
@@ -382,12 +382,12 @@ tui_focus_next_in_group($instance, 'toolbar');
 Control focus order with `tabIndex`:
 
 ```php
-new Box([
+new ContainerNode([
     'focusable' => true,
     'tabIndex' => 1,     // Focus order (lower = first)
 ])
 
-new Box([
+new ContainerNode([
     'focusable' => true,
     'tabIndex' => -1,    // Skip in tab order (only focusable programmatically)
 ])
@@ -398,7 +398,7 @@ new Box([
 Automatically focus an element on mount:
 
 ```php
-new Box([
+new ContainerNode([
     'focusable' => true,
     'autoFocus' => true,  // Receives focus when rendered
     'id' => 'main-input',
@@ -410,15 +410,15 @@ new Box([
 Trap focus within a container (useful for modals/dialogs):
 
 ```php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
 // Modal with focus trap
-$modal = new Box([
+$modal = new ContainerNode([
     'focusTrap' => true,  // Tab/Shift+Tab cycles only within this container
     'borderStyle' => 'double',
     'children' => [
-        new Box(['focusable' => true, 'children' => [new Text(['content' => 'OK'])]]),
-        new Box(['focusable' => true, 'children' => [new Text(['content' => 'Cancel'])]]),
+        new ContainerNode(['focusable' => true, 'children' => [new ContentNode(['content' => 'OK'])]]),
+        new ContainerNode(['focusable' => true, 'children' => [new ContentNode(['content' => 'Cancel'])]]),
     ],
 ]);
 ```
@@ -434,7 +434,7 @@ Focus a specific element programmatically:
 
 ```php
 // Element with ID
-new Box([
+new ContainerNode([
     'focusable' => true,
     'id' => 'username-input',
 ])

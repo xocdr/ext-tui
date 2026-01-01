@@ -27,14 +27,14 @@ tui_test_destroy($renderer);
 ### Basic Rendering Test
 
 ```php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 $renderer = tui_test_create(80, 24);
 
 // Create and render a component
-$box = new Box(['width' => 80, 'height' => 24]);
-$box->children = [new Text("Hello World")];
+$box = new ContainerNode(['width' => 80, 'height' => 24]);
+$box->addChild(new ContentNode(['content' => 'Hello World']));
 tui_test_render($renderer, $box);
 
 // Get the output as a string
@@ -73,8 +73,8 @@ Each line is a string with trailing spaces trimmed.
 Use IDs to locate specific components:
 
 ```php
-$box = new Box(['id' => 'submit-button', 'focusable' => true]);
-$box->children = [new Text("Submit")];
+$box = new ContainerNode(['id' => 'submit-button', 'focusable' => true]);
+$box->addChild(new ContentNode(['content' => 'Submit']));
 tui_test_render($renderer, $box);
 
 $node = tui_test_get_by_id($renderer, 'submit-button');
@@ -92,11 +92,9 @@ if ($node) {
 Search for nodes containing specific text:
 
 ```php
-$box = new Box();
-$box->children = [
-    new Text("Welcome to our app"),
-    new Text("Click here to continue"),
-];
+$box = new ContainerNode([]);
+$box->addChild(new ContentNode(['content' => 'Welcome to our app']));
+$box->addChild(new ContentNode(['content' => 'Click here to continue']));
 tui_test_render($renderer, $box);
 
 // Find all nodes containing "Click"
@@ -188,15 +186,15 @@ assert($output1 !== $output2);
 ## Complete Example: Testing a Counter
 
 ```php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 function testCounter() {
     $renderer = tui_test_create(40, 10);
 
     // Initial render with count 0
-    $counter = new Box(['id' => 'counter']);
-    $counter->children = [new Text("Count: 0")];
+    $counter = new ContainerNode(['id' => 'counter']);
+    $counter->addChild(new ContentNode(['content' => 'Count: 0']));
     tui_test_render($renderer, $counter);
 
     // Verify initial state
@@ -213,7 +211,8 @@ function testCounter() {
     assert(count($textNodes) === 1, "Should find one text node with 'Count:'");
 
     // Simulate increment (re-render with new state)
-    $counter->children = [new Text("Count: 1")];
+    $counter = new ContainerNode(['id' => 'counter']);
+    $counter->addChild(new ContentNode(['content' => 'Count: 1']));
     tui_test_render($renderer, $counter);
 
     $output = tui_test_to_string($renderer);
@@ -233,15 +232,15 @@ function testFocusNavigation() {
     $renderer = tui_test_create(40, 10);
 
     // Create a form with focusable elements
-    $form = new Box(['flexDirection' => 'column']);
+    $form = new ContainerNode(['flexDirection' => 'column']);
     $form->children = [
-        $input1 = new Box(['id' => 'username', 'focusable' => true]),
-        $input2 = new Box(['id' => 'password', 'focusable' => true]),
-        $submit = new Box(['id' => 'submit', 'focusable' => true]),
+        $input1 = new ContainerNode(['id' => 'username', 'focusable' => true]),
+        $input2 = new ContainerNode(['id' => 'password', 'focusable' => true]),
+        $submit = new ContainerNode(['id' => 'submit', 'focusable' => true]),
     ];
-    $input1->children = [new Text("[Username]")];
-    $input2->children = [new Text("[Password]")];
-    $submit->children = [new Text("[Submit]")];
+    $input1->addChild(new ContentNode(['content' => '[Username]']));
+    $input2->addChild(new ContentNode(['content' => '[Password]']));
+    $submit->addChild(new ContentNode(['content' => '[Submit]']));
 
     tui_test_render($renderer, $form);
 
@@ -275,7 +274,7 @@ testFocusNavigation();
 Give meaningful IDs to components you need to query:
 
 ```php
-$box = new Box(['id' => 'user-profile-card']);
+$box = new ContainerNode(['id' => 'user-profile-card']);
 ```
 
 ### 2. Clean Up Resources

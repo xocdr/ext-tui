@@ -53,20 +53,20 @@ Complete API documentation:
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 if (!tui_is_interactive()) {
     die("Requires interactive terminal\n");
 }
 
 $app = function () {
-    return new Box([
+    return new ContainerNode([
         'flexDirection' => 'column',
         'padding' => 1,
         'borderStyle' => 'round',
         'children' => [
-            new Text([
+            new ContentNode([
                 'content' => 'Hello, ext-tui!',
                 'color' => [100, 200, 255],
                 'bold' => true,

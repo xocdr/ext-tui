@@ -57,11 +57,11 @@ tui_test_render(resource $renderer, object $component): void
 
 **Example:**
 ```php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
-$box = new Box(['width' => 80, 'height' => 24]);
-$box->children = [new Text("Hello World")];
+$box = new ContainerNode(['width' => 80, 'height' => 24]);
+$box->addChild(new ContentNode(['content' => 'Hello World']));
 tui_test_render($renderer, $box);
 ```
 
@@ -225,7 +225,7 @@ tui_test_get_by_id(resource $renderer, string $id): ?array
 
 **Example:**
 ```php
-$box = new Box(['id' => 'my-button', 'focusable' => true]);
+$box = new ContainerNode(['id' => 'my-button', 'focusable' => true]);
 tui_test_render($renderer, $box);
 
 $node = tui_test_get_by_id($renderer, 'my-button');
@@ -254,12 +254,10 @@ tui_test_get_by_text(resource $renderer, string $text): array
 
 **Example:**
 ```php
-$box = new Box();
-$box->children = [
-    new Text("Hello"),
-    new Text("Hello World"),
-    new Text("Goodbye"),
-];
+$box = new ContainerNode([]);
+$box->addChild(new ContentNode(['content' => 'Hello']));
+$box->addChild(new ContentNode(['content' => 'Hello World']));
+$box->addChild(new ContentNode(['content' => 'Goodbye']));
 tui_test_render($renderer, $box);
 
 $nodes = tui_test_get_by_text($renderer, "Hello");

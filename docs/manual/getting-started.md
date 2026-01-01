@@ -51,30 +51,29 @@ Create a simple TUI application:
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 if (!tui_is_interactive()) {
     die("Requires an interactive terminal\n");
 }
 
 $app = function () {
-    return new Box([
+    $box = new ContainerNode([
         'flexDirection' => 'column',
         'padding' => 1,
         'borderStyle' => 'round',
-        'children' => [
-            new Text([
-                'content' => 'Hello, ext-tui!',
-                'color' => [100, 200, 255],
-                'bold' => true,
-            ]),
-            new Text([
-                'content' => 'Press Ctrl+C to exit.',
-                'dim' => true,
-            ]),
-        ],
     ]);
+    $box->addChild(new ContentNode([
+        'content' => 'Hello, ext-tui!',
+        'color' => [100, 200, 255],
+        'bold' => true,
+    ]));
+    $box->addChild(new ContentNode([
+        'content' => 'Press Ctrl+C to exit.',
+        'dim' => true,
+    ]));
+    return $box;
 };
 
 $instance = tui_render($app);
@@ -93,8 +92,8 @@ Add keyboard input handling:
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Key;
 
 if (!tui_is_interactive()) {
@@ -104,22 +103,21 @@ if (!tui_is_interactive()) {
 $counter = 0;
 
 $app = function () use (&$counter) {
-    return new Box([
+    $box = new ContainerNode([
         'flexDirection' => 'column',
         'padding' => 1,
         'borderStyle' => 'single',
-        'children' => [
-            new Text([
-                'content' => "Count: $counter",
-                'color' => [100, 255, 100],
-                'bold' => true,
-            ]),
-            new Text([
-                'content' => 'UP/DOWN to change, ESC to exit',
-                'dim' => true,
-            ]),
-        ],
     ]);
+    $box->addChild(new ContentNode([
+        'content' => "Count: $counter",
+        'color' => [100, 255, 100],
+        'bold' => true,
+    ]));
+    $box->addChild(new ContentNode([
+        'content' => 'UP/DOWN to change, ESC to exit',
+        'dim' => true,
+    ]));
+    return $box;
 };
 
 $instance = tui_render($app);
@@ -149,23 +147,23 @@ echo "Final count: $counter\n";
 
 All UIs are built with two component types:
 
-- **Xocdr\Tui\Ext\Box** - Container with flexbox layout
-- **Xocdr\Tui\Ext\Text** - Styled text content
+- **Xocdr\Tui\Ext\ContainerNode** - Container with flexbox layout
+- **Xocdr\Tui\Ext\ContentNode** - Styled text content
 
 Components are created with a properties array:
 
 ```php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
-$box = new Box([
+$box = new ContainerNode([
     'width' => 40,
     'height' => 10,
     'padding' => 1,
     'borderStyle' => 'single',
 ]);
 
-$text = new Text([
+$text = new ContentNode([
     'content' => 'Hello',
     'bold' => true,
     'color' => [255, 200, 0],

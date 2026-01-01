@@ -107,8 +107,8 @@ tui_virtual_destroy($vlist);
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Key;
 
 // Generate large dataset
@@ -141,7 +141,7 @@ $app = function () use ($items, &$selectedIndex, &$vlist) {
     $children = [];
     for ($i = $range['start']; $i < $range['end']; $i++) {
         $isSelected = ($i === $selectedIndex);
-        $children[] = new Text([
+        $children[] = new ContentNode([
             'content' => ($isSelected ? '> ' : '  ') . $items[$i],
             'color' => $isSelected ? [100, 255, 100] : [200, 200, 200],
             'bold' => $isSelected,
@@ -150,12 +150,12 @@ $app = function () use ($items, &$selectedIndex, &$vlist) {
 
     // Progress indicator
     $pct = round($range['progress'] * 100);
-    $children[] = new Text([
+    $children[] = new ContentNode([
         'content' => "--- {$pct}% ({$selectedIndex}/" . count($items) . ") ---",
         'dim' => true,
     ]);
 
-    return new Box([
+    return new ContainerNode([
         'flexDirection' => 'column',
         'children' => $children,
     ]);
@@ -283,8 +283,8 @@ tui_scroll_destroy($scroll);
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Key;
 
 // Items and state
@@ -305,13 +305,13 @@ $app = function () use ($items, $scroll) {
     for ($i = 0; $i < $height - 1; $i++) {
         $itemIndex = $i + $scrollOffset;
         if ($itemIndex >= 0 && $itemIndex < count($items)) {
-            $children[] = new Text([
+            $children[] = new ContentNode([
                 'content' => "Line {$items[$itemIndex]}",
             ]);
         }
     }
 
-    return new Box([
+    return new ContainerNode([
         'flexDirection' => 'column',
         'children' => $children,
     ]);
@@ -365,8 +365,8 @@ For the best experience with large lists, combine both systems:
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Key;
 
 $items = range(1, 50000);
@@ -392,12 +392,12 @@ $app = function () use ($items, &$vlist, $scroll) {
 
     $children = [];
     for ($i = $range['start']; $i < $range['end']; $i++) {
-        $children[] = new Text([
+        $children[] = new ContentNode([
             'content' => "Item $i: " . str_repeat("─", 40),
         ]);
     }
 
-    return new Box([
+    return new ContainerNode([
         'flexDirection' => 'column',
         'children' => $children,
     ]);

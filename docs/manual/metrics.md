@@ -6,16 +6,16 @@ ext-tui includes a built-in telemetry system for measuring performance and debug
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 // Enable metrics
 tui_metrics_enable();
 tui_metrics_reset();
 
 $instance = tui_render(function() {
-    $box = new Box(['width' => '100%', 'height' => '100%']);
-    $box->addChild(new Text("Performance Demo"));
+    $box = new ContainerNode(['width' => '100%', 'height' => '100%']);
+    $box->addChild(new ContentNode(['content' => 'Performance Demo']));
     return $box;
 });
 

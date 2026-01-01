@@ -238,16 +238,16 @@ When enabled, overhead is minimal:
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 // Enable metrics before starting
 tui_metrics_enable();
 tui_metrics_reset();
 
 $instance = tui_render(function() {
-    $box = new Box(['padding' => 1]);
-    $box->addChild(new Text("Hello!"));
+    $box = new ContainerNode(['padding' => 1]);
+    $box->addChild(new ContentNode(['content' => 'Hello!']));
     return $box;
 });
 

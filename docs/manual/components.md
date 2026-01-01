@@ -4,36 +4,27 @@ ext-tui uses a component-based architecture with flexbox layout powered by Faceb
 
 All classes are in the `Xocdr\Tui\Ext` namespace.
 
-## Box
+## ContainerNode
 
 Container component for layout and structure.
 
-### Creating Boxes
+### Creating Containers
 
 ```php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
-// Empty box with properties
-$box = new Box([
+// Empty container with properties
+$box = new ContainerNode([
     'width' => 40,
     'height' => 10,
     'padding' => 1,
 ]);
 
-// Box with children
-$box = new Box([
-    'flexDirection' => 'column',
-    'children' => [
-        new Text(['content' => 'Item 1']),
-        new Text(['content' => 'Item 2']),
-    ],
-]);
-
 // Adding children dynamically
-$box = new Box(['flexDirection' => 'row']);
-$box->addChild(new Text(['content' => 'Left']));
-$box->addChild(new Text(['content' => 'Right']));
+$box = new ContainerNode(['flexDirection' => 'row']);
+$box->addChild(new ContentNode(['content' => 'Left']));
+$box->addChild(new ContentNode(['content' => 'Right']));
 ```
 
 ### Flex Direction
@@ -42,16 +33,10 @@ Control the main axis for child layout:
 
 ```php
 // Vertical stack (default)
-new Box([
-    'flexDirection' => 'column',
-    'children' => [...],
-]);
+new ContainerNode(['flexDirection' => 'column']);
 
 // Horizontal row
-new Box([
-    'flexDirection' => 'row',
-    'children' => [...],
-]);
+new ContainerNode(['flexDirection' => 'row']);
 
 // Reversed directions
 'flexDirection' => 'column-reverse'  // Bottom to top
@@ -62,19 +47,19 @@ new Box([
 
 ```php
 // Fixed size
-new Box([
+new ContainerNode([
     'width' => 40,
     'height' => 10,
 ]);
 
 // Percentage of parent
-new Box([
+new ContainerNode([
     'width' => '50%',
     'height' => '100%',
 ]);
 
 // Flexible growth
-new Box([
+new ContainerNode([
     'flexGrow' => 1,    // Take available space
     'flexShrink' => 0,  // Don't shrink
 ]);
@@ -84,10 +69,10 @@ new Box([
 
 ```php
 // All sides
-new Box(['padding' => 2, 'margin' => 1]);
+new ContainerNode(['padding' => 2, 'margin' => 1]);
 
 // Individual sides
-new Box([
+new ContainerNode([
     'paddingTop' => 1,
     'paddingBottom' => 1,
     'paddingLeft' => 2,
@@ -95,7 +80,7 @@ new Box([
 ]);
 
 // Shorthand (X = horizontal, Y = vertical)
-new Box([
+new ContainerNode([
     'paddingX' => 2,
     'paddingY' => 1,
 ]);
@@ -107,7 +92,7 @@ Control how children are positioned:
 
 ```php
 // Main axis (along flexDirection)
-new Box([
+new ContainerNode([
     'justifyContent' => 'flex-start',   // Pack at start (default)
     // 'justifyContent' => 'center',    // Center items
     // 'justifyContent' => 'flex-end',  // Pack at end
@@ -117,7 +102,7 @@ new Box([
 ]);
 
 // Cross axis (perpendicular to flexDirection)
-new Box([
+new ContainerNode([
     'alignItems' => 'stretch',      // Fill available space (default)
     // 'alignItems' => 'flex-start',  // Align at start
     // 'alignItems' => 'center',      // Center items
@@ -130,21 +115,19 @@ new Box([
 Space between children:
 
 ```php
-new Box([
+$box = new ContainerNode([
     'flexDirection' => 'column',
     'gap' => 1,  // 1 row gap between children
-    'children' => [
-        new Text(['content' => 'Item 1']),
-        new Text(['content' => 'Item 2']),
-        new Text(['content' => 'Item 3']),
-    ],
 ]);
+$box->addChild(new ContentNode(['content' => 'Item 1']));
+$box->addChild(new ContentNode(['content' => 'Item 2']));
+$box->addChild(new ContentNode(['content' => 'Item 3']));
 ```
 
 ### Borders
 
 ```php
-new Box([
+new ContainerNode([
     'borderStyle' => 'single',  // ┌─┐│└─┘
     // 'borderStyle' => 'double',  // ╔═╗║╚═╝
     // 'borderStyle' => 'round',   // ╭─╮│╰─╯
@@ -153,7 +136,7 @@ new Box([
 ]);
 ```
 
-## Text
+## ContentNode
 
 Display styled text content.
 
@@ -161,10 +144,10 @@ Display styled text content.
 
 ```php
 // Simple text
-new Text(['content' => 'Hello, World!']);
+new ContentNode(['content' => 'Hello, World!']);
 
 // Styled text
-new Text([
+new ContentNode([
     'content' => 'Important!',
     'bold' => true,
     'color' => [255, 100, 100],
@@ -174,7 +157,7 @@ new Text([
 ### Text Styles
 
 ```php
-new Text([
+new ContentNode([
     'content' => 'Styled',
     'bold' => true,
     'italic' => true,
@@ -189,14 +172,14 @@ new Text([
 
 ```php
 // RGB array
-new Text([
+new ContentNode([
     'content' => 'Red text',
     'color' => [255, 0, 0],
     'backgroundColor' => [50, 0, 0],
 ]);
 
 // Hex string
-new Text([
+new ContentNode([
     'content' => 'Blue text',
     'color' => '#0066ff',
 ]);
@@ -207,78 +190,64 @@ new Text([
 ### Header-Body-Footer
 
 ```php
-new Box([
+$app = new ContainerNode([
     'width' => '100%',
     'height' => '100%',
     'flexDirection' => 'column',
-    'children' => [
-        // Header
-        new Box([
-            'height' => 3,
-            'borderStyle' => 'single',
-            'justifyContent' => 'center',
-            'alignItems' => 'center',
-            'children' => [
-                new Text(['content' => 'My App', 'bold' => true]),
-            ],
-        ]),
-        // Body
-        new Box([
-            'flexGrow' => 1,
-            'padding' => 1,
-        ]),
-        // Footer
-        new Box([
-            'height' => 1,
-            'children' => [
-                new Text(['content' => 'Press q to quit', 'dim' => true]),
-            ],
-        ]),
-    ],
 ]);
+
+// Header
+$header = new ContainerNode([
+    'height' => 3,
+    'borderStyle' => 'single',
+    'justifyContent' => 'center',
+    'alignItems' => 'center',
+]);
+$header->addChild(new ContentNode(['content' => 'My App', 'bold' => true]));
+$app->addChild($header);
+
+// Body
+$app->addChild(new ContainerNode(['flexGrow' => 1, 'padding' => 1]));
+
+// Footer
+$footer = new ContainerNode(['height' => 1]);
+$footer->addChild(new ContentNode(['content' => 'Press q to quit', 'dim' => true]));
+$app->addChild($footer);
 ```
 
 ### Sidebar Layout
 
 ```php
-new Box([
+$app = new ContainerNode([
     'width' => '100%',
     'height' => '100%',
     'flexDirection' => 'row',
-    'children' => [
-        // Sidebar
-        new Box([
-            'width' => 25,
-            'borderStyle' => 'single',
-            'flexShrink' => 0,
-        ]),
-        // Main content
-        new Box([
-            'flexGrow' => 1,
-            'padding' => 1,
-        ]),
-    ],
 ]);
+
+// Sidebar
+$app->addChild(new ContainerNode([
+    'width' => 25,
+    'borderStyle' => 'single',
+    'flexShrink' => 0,
+]));
+
+// Main content
+$app->addChild(new ContainerNode(['flexGrow' => 1, 'padding' => 1]));
 ```
 
 ### Centered Content
 
 ```php
-new Box([
+$outer = new ContainerNode([
     'width' => '100%',
     'height' => '100%',
     'justifyContent' => 'center',
     'alignItems' => 'center',
-    'children' => [
-        new Box([
-            'padding' => 2,
-            'borderStyle' => 'round',
-            'children' => [
-                new Text(['content' => 'Centered!']),
-            ],
-        ]),
-    ],
 ]);
+
+$inner = new ContainerNode(['padding' => 2, 'borderStyle' => 'round']);
+$inner->addChild(new ContentNode(['content' => 'Centered!']));
+$outer->addChild($inner);
 ```
 
 ### List with Selection
@@ -287,52 +256,43 @@ new Box([
 $items = ['Apple', 'Banana', 'Cherry'];
 $selected = 1;
 
-$children = [];
-foreach ($items as $i => $item) {
-    $isSelected = $i === $selected;
-    $children[] = new Text([
-        'content' => ($isSelected ? '> ' : '  ') . $item,
-        'color' => $isSelected ? [100, 255, 100] : [200, 200, 200],
-        'bold' => $isSelected,
-    ]);
-}
-
-new Box([
+$box = new ContainerNode([
     'flexDirection' => 'column',
     'padding' => 1,
     'borderStyle' => 'single',
-    'children' => $children,
 ]);
+
+foreach ($items as $i => $item) {
+    $isSelected = $i === $selected;
+    $box->addChild(new ContentNode([
+        'content' => ($isSelected ? '> ' : '  ') . $item,
+        'color' => $isSelected ? [100, 255, 100] : [200, 200, 200],
+        'bold' => $isSelected,
+    ]));
+}
 ```
 
 ## Focus Management
 
-Make boxes focusable for tab navigation:
+Make containers focusable for tab navigation:
 
 ```php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 use Xocdr\Tui\Ext\Key;
 
 $app = function () {
-    return new Box([
-        'flexDirection' => 'column',
-        'gap' => 1,
-        'children' => [
-            new Box([
-                'focusable' => true,
-                'padding' => 1,
-                'borderStyle' => 'single',
-                'children' => [new Text(['content' => 'Button 1'])],
-            ]),
-            new Box([
-                'focusable' => true,
-                'padding' => 1,
-                'borderStyle' => 'single',
-                'children' => [new Text(['content' => 'Button 2'])],
-            ]),
-        ],
-    ]);
+    $box = new ContainerNode(['flexDirection' => 'column', 'gap' => 1]);
+
+    $btn1 = new ContainerNode(['focusable' => true, 'padding' => 1, 'borderStyle' => 'single']);
+    $btn1->addChild(new ContentNode(['content' => 'Button 1']));
+    $box->addChild($btn1);
+
+    $btn2 = new ContainerNode(['focusable' => true, 'padding' => 1, 'borderStyle' => 'single']);
+    $btn2->addChild(new ContentNode(['content' => 'Button 2']));
+    $box->addChild($btn2);
+
+    return $box;
 };
 
 $instance = tui_render($app);

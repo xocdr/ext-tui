@@ -251,7 +251,7 @@ Disables bracketed paste mode. Returns `true` on success.
 ### tui_add_timer
 
 ```php
-tui_add_timer(Xocdr\Tui\Ext\Instance $instance, callable $callback, int $intervalMs): int
+tui_add_timer(Xocdr\Tui\Ext\Instance $instance, int $interval_ms, callable $callback): int
 ```
 
 Adds repeating timer. Returns timer ID.
