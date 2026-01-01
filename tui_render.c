@@ -59,24 +59,33 @@ static void render_component_callback(tui_app *app)
     php_output_start_default();
 
     /* Call the PHP component function with Instance parameter */
-    if (zend_call_function(&fci_copy, &app->component_fcc) == SUCCESS) {
-        /* Convert PHP object tree to C node tree */
-        if (Z_TYPE(retval) == IS_OBJECT) {
-            /* Free old tree AFTER building new tree to avoid dangling pointer.
-             * This ensures app->root_node is never pointing to freed memory. */
-            tui_node *old_tree = app->root_node;
+    int call_result = zend_call_function(&fci_copy, &app->component_fcc);
 
-            /* Build new tree */
-            app->root_node = php_to_tui_node(&retval, 0);
-
-            /* Now safe to free old tree */
-            if (old_tree) {
-                tui_node_destroy(old_tree);
-            }
-        }
-
-        zval_ptr_dtor(&retval);
+    /* Check for exceptions - clear render flag on error to allow recovery */
+    if (call_result != SUCCESS || EG(exception)) {
+        php_output_discard();
+        zval_ptr_dtor(&params[0]);
+        app->is_rendering = 0;
+        app->rerender_requested = 0;
+        return;
     }
+
+    /* Convert PHP object tree to C node tree */
+    if (Z_TYPE(retval) == IS_OBJECT) {
+        /* Free old tree AFTER building new tree to avoid dangling pointer.
+         * This ensures app->root_node is never pointing to freed memory. */
+        tui_node *old_tree = app->root_node;
+
+        /* Build new tree */
+        app->root_node = php_to_tui_node(&retval, 0);
+
+        /* Now safe to free old tree */
+        if (old_tree) {
+            tui_node_destroy(old_tree);
+        }
+    }
+
+    zval_ptr_dtor(&retval);
 
     /* Capture any output that occurred during render */
     {
