@@ -2818,6 +2818,31 @@ PHP_METHOD(TuiInstance, getCapturedOutput)
 }
 /* }}} */
 
+/* {{{ TuiInstance::captureFrame(): ?string
+ * Returns the current screen buffer as an ANSI-encoded string.
+ * Useful for screen recording - captures the complete terminal content
+ * including colors and styles as ANSI escape codes.
+ */
+PHP_METHOD(TuiInstance, captureFrame)
+{
+    ZEND_PARSE_PARAMETERS_NONE();
+
+    tui_instance_object *obj = Z_TUI_INSTANCE_P(ZEND_THIS);
+    if (!obj->app || !obj->app->buffer) {
+        RETURN_NULL();
+    }
+
+    char *frame = tui_buffer_to_string(obj->app->buffer);
+    if (!frame) {
+        RETURN_NULL();
+    }
+
+    zend_string *result = zend_string_init(frame, strlen(frame), 0);
+    free(frame);
+    RETURN_STR(result);
+}
+/* }}} */
+
 /* TuiInstance arginfo */
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_rerender, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
@@ -2909,6 +2934,9 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_getcapturedoutput, 0, 0, IS_STRING, 1)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuiinstance_captureframe, 0, 0, IS_STRING, 1)
+ZEND_END_ARG_INFO()
+
 static const zend_function_entry tui_instance_methods[] = {
     PHP_ME(TuiInstance, rerender, arginfo_tuiinstance_rerender, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, unmount, arginfo_tuiinstance_unmount, ZEND_ACC_PUBLIC)
@@ -2944,6 +2972,7 @@ static const zend_function_entry tui_instance_methods[] = {
     PHP_ME(TuiInstance, removeTimer, arginfo_tuiinstance_removetimer, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, clear, arginfo_tuiinstance_clear, ZEND_ACC_PUBLIC)
     PHP_ME(TuiInstance, getCapturedOutput, arginfo_tuiinstance_getcapturedoutput, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiInstance, captureFrame, arginfo_tuiinstance_captureframe, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
