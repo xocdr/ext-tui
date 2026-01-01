@@ -77,4 +77,81 @@ lint-errors:
 		-I$$PHP_INCLUDE/TSRM -I$$PHP_INCLUDE/Zend -I$$PHP_INCLUDE/ext \
 		-DHAVE_CONFIG_H 2>/dev/null || true
 
-.PHONY: coverage coverage-clean coverage-summary lint lint-errors
+# Memory leak detection with valgrind
+# Usage: make test-valgrind
+# Requires: valgrind (install with: brew install valgrind on macOS with rosetta,
+#           or apt-get install valgrind on Linux)
+#
+# Note: On macOS ARM64 (Apple Silicon), valgrind is not natively supported.
+# Consider using AddressSanitizer instead (see test-asan target).
+
+# Run tests under valgrind (Linux/x86)
+test-valgrind:
+	@command -v valgrind >/dev/null 2>&1 || { \
+		echo "Error: valgrind not installed."; \
+		echo "On Linux: apt-get install valgrind"; \
+		echo "On macOS ARM64: valgrind not supported, use 'make test-asan' instead"; \
+		exit 1; \
+	}
+	@echo "Running tests under valgrind (this may take a while)..."
+	USE_ZEND_ALLOC=0 valgrind --leak-check=full --show-leak-kinds=all \
+		--track-origins=yes --suppressions=/dev/null \
+		--error-exitcode=1 \
+		php -d extension=modules/tui.so \
+		-r 'echo "Extension loaded successfully\n";'
+	@echo ""
+	@echo "Running test suite under valgrind..."
+	@for test in tests/*.phpt; do \
+		echo "Testing: $$test"; \
+		USE_ZEND_ALLOC=0 valgrind --leak-check=full --error-exitcode=1 -q \
+			php -d extension=modules/tui.so \
+			$$(grep -A1000 '^--FILE--$$' $$test | grep -B1000 '^--EXPECT' | tail -n +2 | head -n -1) \
+			2>/dev/null || echo "  LEAK DETECTED in $$test"; \
+	done
+
+# Run a single test under valgrind with verbose output
+test-valgrind-single:
+	@if [ -z "$(TEST)" ]; then \
+		echo "Usage: make test-valgrind-single TEST=tests/001-terminal-size.phpt"; \
+		exit 1; \
+	fi
+	@command -v valgrind >/dev/null 2>&1 || { echo "Error: valgrind not installed"; exit 1; }
+	USE_ZEND_ALLOC=0 valgrind --leak-check=full --show-leak-kinds=all \
+		--track-origins=yes --error-exitcode=1 \
+		php -d extension=modules/tui.so $(TEST)
+
+# AddressSanitizer build and test (works on macOS ARM64)
+# Requires: rebuild with ASAN enabled
+test-asan:
+	@echo "Building with AddressSanitizer..."
+	@echo "Note: Requires clean rebuild with ASAN flags"
+	@echo ""
+	@echo "To use ASAN, rebuild with:"
+	@echo "  export CFLAGS='-fsanitize=address -g'"
+	@echo "  export LDFLAGS='-fsanitize=address'"
+	@echo "  make clean && make"
+	@echo "  make test"
+	@echo ""
+	@echo "Any memory errors will be reported during test execution."
+
+# Quick memory check with a simple script
+test-memory-quick:
+	@echo "Quick memory check..."
+	USE_ZEND_ALLOC=0 php -d extension=modules/tui.so -r ' \
+		use Xocdr\Tui\Ext\Box; \
+		use Xocdr\Tui\Ext\Text; \
+		for ($$i = 0; $$i < 100; $$i++) { \
+			$$r = tui_test_create(80, 24); \
+			$$tree = new Box(["children" => [ \
+				new Text("Test $$i"), \
+				new Box(["children" => [new Text("Nested")]]) \
+			]]); \
+			tui_test_render($$r, $$tree); \
+			tui_test_destroy($$r); \
+		} \
+		echo "100 render cycles completed\n"; \
+		echo "Peak memory: " . round(memory_get_peak_usage(true) / 1024 / 1024, 2) . " MB\n"; \
+	'
+
+.PHONY: coverage coverage-clean coverage-summary lint lint-errors \
+        test-valgrind test-valgrind-single test-asan test-memory-quick
