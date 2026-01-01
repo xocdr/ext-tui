@@ -536,12 +536,12 @@ Read from and write to the system clipboard using OSC 52 escape sequences. This 
 
 ```php
 // Copy text to clipboard
-tui_clipboard_write('Hello, clipboard!');
+tui_clipboard_copy('Hello, clipboard!');
 
 // Copy to specific target (X11)
-tui_clipboard_write('Selected text', TUI_CLIPBOARD_PRIMARY);    // Primary selection
-tui_clipboard_write('Copied text', TUI_CLIPBOARD_CLIPBOARD);    // System clipboard (default)
-tui_clipboard_write('Secondary', TUI_CLIPBOARD_SECONDARY);      // Secondary selection
+tui_clipboard_copy('Selected text', TUI_CLIPBOARD_PRIMARY);    // Primary selection
+tui_clipboard_copy('Copied text', TUI_CLIPBOARD_CLIPBOARD);    // System clipboard (default)
+tui_clipboard_copy('Secondary', TUI_CLIPBOARD_SECONDARY);      // Secondary selection
 ```
 
 ### Reading from Clipboard

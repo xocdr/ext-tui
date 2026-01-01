@@ -69,7 +69,7 @@ Used with `tui_mouse_enable()`.
 
 ## Clipboard Targets
 
-Used with `tui_clipboard_write()`, `tui_clipboard_request()`, `tui_clipboard_clear()`.
+Used with `tui_clipboard_copy()`, `tui_clipboard_request()`, `tui_clipboard_clear()`.
 
 | Constant | Target | Description |
 |----------|--------|-------------|

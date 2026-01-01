@@ -4,16 +4,16 @@ Complete reference for ext-tui classes.
 
 All classes are in the `Xocdr\Tui\Ext` namespace.
 
-## Xocdr\Tui\Ext\Box
+## Xocdr\Tui\Ext\ContainerNode
 
 Flexbox container component.
 
 ### Constructor
 
 ```php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
-new Box(array $props = [])
+new ContainerNode(array $props = [])
 ```
 
 ### Properties
@@ -57,27 +57,28 @@ new Box(array $props = [])
 | `key` | string\|null | null | Reconciliation key |
 | `id` | string\|null | null | Focus ID |
 | `children` | array | [] | Child components |
+| `showCursor` | bool | false | Show cursor when focused (for text input) |
 
 ### Methods
 
 ```php
-addChild(Box|Text $child): self
+addChild(ContainerNode|ContentNode $child): self
 ```
 
 Adds child component. Returns `$this` for chaining.
 
 ---
 
-## Xocdr\Tui\Ext\Text
+## Xocdr\Tui\Ext\ContentNode
 
 Text display component.
 
 ### Constructor
 
 ```php
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContentNode;
 
-new Text(array $props = [])
+new ContentNode(array $props = [])
 ```
 
 ### Properties
@@ -172,7 +173,7 @@ getSize(): ?array
 Returns `['width' => int, 'height' => int, 'columns' => int, 'rows' => int]` or `null` if not running.
 
 ```php
-measureElement(Box|Text $element): ?array
+measureElement(ContainerNode|ContentNode $element): ?array
 ```
 Returns layout info for element.
 
@@ -387,7 +388,7 @@ Write directly to stderr.
 
 ## Xocdr\Tui\Ext\Newline
 
-Newline component (extends Box).
+Newline component (extends ContainerNode).
 
 ### Properties
 
@@ -399,13 +400,13 @@ Newline component (extends Box).
 
 ## Xocdr\Tui\Ext\Spacer
 
-Spacer component (extends Box). Automatically sets `flexGrow: 1`.
+Spacer component (extends ContainerNode). Automatically sets `flexGrow: 1`.
 
 ---
 
 ## Xocdr\Tui\Ext\Transform
 
-Transform component (extends Box).
+Transform component (extends ContainerNode).
 
 ### Properties
 
@@ -417,7 +418,7 @@ Transform component (extends Box).
 
 ## Xocdr\Tui\Ext\StaticOutput
 
-Static output component (extends Box). Content rendered above dynamic UI.
+Static output component (extends ContainerNode). Content rendered above dynamic UI.
 
 ### Properties
 

@@ -11,8 +11,8 @@ echo "extension=tui.so" >> /path/to/php.ini
 
 ## Core Concepts
 
-- **Xocdr\Tui\Ext\Box**: Container with flexbox layout (like `<div>`)
-- **Xocdr\Tui\Ext\Text**: Text with styling (like `<span>`)
+- **Xocdr\Tui\Ext\ContainerNode**: Container with flexbox layout (like `<div>`)
+- **Xocdr\Tui\Ext\ContentNode**: Text with styling (like `<span>`)
 - **tui_render()**: Starts TUI, returns Instance
 - **Xocdr\Tui\Ext\Instance**: Controls running TUI (rerender, exit)
 - **Xocdr\Tui\Ext\Key**: Keyboard event with key info
@@ -21,18 +21,18 @@ echo "extension=tui.so" >> /path/to/php.ini
 
 ```php
 <?php
-use Xocdr\Tui\Ext\Box;
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
 
 $instance = tui_render(function() {
-    $box = new Box(['padding' => 1]);
-    $box->addChild(new Text("Hello!", ['bold' => true]));
+    $box = new ContainerNode(['padding' => 1]);
+    $box->addChild(new ContentNode(['content' => "Hello!", 'bold' => true]));
     return $box;
 });
 $instance->waitUntilExit();
 ```
 
-## Box Properties
+## ContainerNode Properties
 
 | Property | Values | Description |
 |----------|--------|-------------|
@@ -48,8 +48,9 @@ $instance->waitUntilExit();
 | `margin` | int | All-side margin |
 | `marginX/Y` | int | Horizontal/vertical margin |
 | `gap` | int | Child spacing |
+| `showCursor` | bool | Show cursor when focused |
 
-## Text Properties
+## ContentNode Properties
 
 | Property | Values | Description |
 |----------|--------|-------------|
@@ -110,9 +111,9 @@ $key->shift        // bool
 ### Centered Layout
 
 ```php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
-new Box([
+new ContainerNode([
     'width' => '100%',
     'height' => '100%',
     'alignItems' => 'center',
@@ -123,30 +124,31 @@ new Box([
 ### Header + Content + Footer
 
 ```php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
-$app = new Box(['height' => '100%']);
-$app->addChild(new Box(['height' => 3]));      // header
-$app->addChild(new Box(['flexGrow' => 1]));    // content
-$app->addChild(new Box(['height' => 1]));      // footer
+$app = new ContainerNode(['height' => '100%']);
+$app->addChild(new ContainerNode(['height' => 3]));      // header
+$app->addChild(new ContainerNode(['flexGrow' => 1]));    // content
+$app->addChild(new ContainerNode(['height' => 1]));      // footer
 ```
 
 ### Sidebar Layout
 
 ```php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
-$row = new Box(['flexDirection' => 'row', 'height' => '100%']);
-$row->addChild(new Box(['width' => 20]));      // sidebar
-$row->addChild(new Box(['flexGrow' => 1]));    // main
+$row = new ContainerNode(['flexDirection' => 'row', 'height' => '100%']);
+$row->addChild(new ContainerNode(['width' => 20]));      // sidebar
+$row->addChild(new ContainerNode(['flexGrow' => 1]));    // main
 ```
 
 ### Styled Text
 
 ```php
-use Xocdr\Tui\Ext\Text;
+use Xocdr\Tui\Ext\ContentNode;
 
-new Text("Error!", [
+new ContentNode([
+    'content' => "Error!",
     'color' => '#ff0000',
     'bold' => true
 ])
@@ -168,12 +170,12 @@ Color::fromName("coral")  // Color::Coral
 ### Equal Columns
 
 ```php
-use Xocdr\Tui\Ext\Box;
+use Xocdr\Tui\Ext\ContainerNode;
 
-$row = new Box(['flexDirection' => 'row', 'gap' => 1]);
-$row->addChild(new Box(['flexGrow' => 1]));
-$row->addChild(new Box(['flexGrow' => 1]));
-$row->addChild(new Box(['flexGrow' => 1]));
+$row = new ContainerNode(['flexDirection' => 'row', 'gap' => 1]);
+$row->addChild(new ContainerNode(['flexGrow' => 1]));
+$row->addChild(new ContainerNode(['flexGrow' => 1]));
+$row->addChild(new ContainerNode(['flexGrow' => 1]));
 ```
 
 ## Options for tui_render()
@@ -187,7 +189,7 @@ $row->addChild(new Box(['flexGrow' => 1]));
 
 ## Notes
 
-- Returns Box or Text from component callback
+- Returns ContainerNode or ContentNode from component callback
 - Use `addChild()` to build tree
 - Call `rerender()` after state changes
 - `waitUntilExit()` blocks until Ctrl+C or `exit()`

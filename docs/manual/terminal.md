@@ -215,7 +215,7 @@ if (tui_has_capability('sync_output')) {
 **Clipboard access:**
 ```php
 if (tui_has_capability('clipboard_osc52')) {
-    tui_clipboard_write($text);
+    tui_clipboard_copy($text);
 } else {
     // Clipboard not available via terminal
     // Could use pbcopy on macOS, xclip on Linux, etc.

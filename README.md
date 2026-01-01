@@ -9,7 +9,7 @@ A PHP C extension for building terminal user interfaces with component-based arc
 ## Features
 
 - **Flexbox Layout**: Facebook's Yoga layout engine for CSS-like flexbox positioning
-- **Component-Based**: Build UIs with `TuiBox` and `TuiText` components
+- **Component-Based**: Build UIs with `ContainerNode` and `ContentNode` components
 - **Full UTF-8 Support**: Proper handling of Unicode text including CJK wide characters
 - **Rich Text Styling**: Bold, italic, underline, colors (RGB), and more
 - **Keyboard Input**: Full keyboard event handling with modifiers (Ctrl, Alt, Shift)
@@ -75,9 +75,12 @@ php -r "var_dump(tui_get_terminal_size());"
 
 ```php
 <?php
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
+
 $instance = tui_render(function() {
-    $box = new TuiBox(['padding' => 1, 'borderStyle' => 'round']);
-    $box->addChild(new TuiText(['content' => 'Hello, World!', 'bold' => true, 'color' => [100, 255, 100]]));
+    $box = new ContainerNode(['padding' => 1, 'borderStyle' => 'round']);
+    $box->addChild(new ContentNode(['content' => 'Hello, World!', 'bold' => true, 'color' => [100, 255, 100]]));
     return $box;
 });
 
@@ -88,17 +91,20 @@ $instance->waitUntilExit();
 
 ```php
 <?php
+use Xocdr\Tui\Ext\ContainerNode;
+use Xocdr\Tui\Ext\ContentNode;
+
 $count = 0;
 
 $instance = tui_render(function() use (&$count) {
-    $box = new TuiBox([
+    $box = new ContainerNode([
         'flexDirection' => 'column',
         'padding' => 2,
         'gap' => 1
     ]);
 
-    $box->addChild(new TuiText(['content' => "Counter: $count", 'bold' => true]));
-    $box->addChild(new TuiText(['content' => "Press UP/DOWN to change, Ctrl+C to exit", 'dim' => true]));
+    $box->addChild(new ContentNode(['content' => "Counter: $count", 'bold' => true]));
+    $box->addChild(new ContentNode(['content' => "Press UP/DOWN to change, Ctrl+C to exit", 'dim' => true]));
 
     return $box;
 }, [
@@ -152,7 +158,7 @@ Full documentation is available in the [`docs/`](docs/) folder:
 ### Manual (Tutorials & Guides)
 
 - [Getting Started](docs/manual/getting-started.md) - Installation and first app
-- [Components & Layout](docs/manual/components.md) - TuiBox, TuiText, flexbox layouts
+- [Components & Layout](docs/manual/components.md) - ContainerNode, ContentNode, flexbox layouts
 - [Styling](docs/manual/styling.md) - Colors, text attributes, borders
 - [Input Handling](docs/manual/input.md) - Keyboard events, focus, resize
 - [Drawing](docs/manual/drawing.md) - Buffers, canvas, primitives, sprites, tables
@@ -161,7 +167,7 @@ Full documentation is available in the [`docs/`](docs/) folder:
 ### Reference
 
 - [Functions](docs/reference/functions.md) - Complete function reference
-- [Classes](docs/reference/classes.md) - TuiBox, TuiText, TuiKey, TuiInstance
+- [Classes](docs/reference/classes.md) - ContainerNode, ContentNode, Key, Instance
 - [Constants](docs/reference/constants.md) - TUI_EASE_*, TUI_CANVAS_*, etc.
 
 ### Specifications
@@ -308,12 +314,16 @@ tui_sprite_collides(resource $sprite1, resource $sprite2): bool
 
 ## Classes
 
-### TuiBox
+All classes are in the `Xocdr\Tui\Ext` namespace.
+
+### ContainerNode
 
 Flexbox container component.
 
 ```php
-$box = new TuiBox([
+use Xocdr\Tui\Ext\ContainerNode;
+
+$box = new ContainerNode([
     'flexDirection' => 'column',     // 'row', 'column', 'row-reverse', 'column-reverse'
     'alignItems' => 'center',        // 'flex-start', 'center', 'flex-end', 'stretch'
     'justifyContent' => 'center',    // 'flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly'
@@ -328,12 +338,14 @@ $box = new TuiBox([
 $box->addChild($child);
 ```
 
-### TuiText
+### ContentNode
 
 Text display component.
 
 ```php
-$text = new TuiText([
+use Xocdr\Tui\Ext\ContentNode;
+
+$text = new ContentNode([
     'content' => 'Hello!',
     'color' => '#00ff00',            // or [0, 255, 0]
     'backgroundColor' => [50, 50, 50],
@@ -346,7 +358,7 @@ $text = new TuiText([
 ]);
 ```
 
-### TuiInstance
+### Instance
 
 Running TUI application handle.
 
@@ -357,7 +369,7 @@ $instance->waitUntilExit();   // Block until exit
 $instance->exit(0);           // Request exit with code
 ```
 
-### TuiKey
+### Key
 
 Keyboard event object (passed to input handlers).
 

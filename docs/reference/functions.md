@@ -168,13 +168,13 @@ Returns all nodes at coordinates (root to leaf order).
 
 ## Clipboard (OSC 52)
 
-### tui_clipboard_write
+### tui_clipboard_copy
 
 ```php
-tui_clipboard_write(string $text, int $target = TUI_CLIPBOARD_CLIPBOARD): void
+tui_clipboard_copy(string $text, int $target = TUI_CLIPBOARD_CLIPBOARD): void
 ```
 
-Writes text to clipboard.
+Copies text to clipboard.
 
 ### tui_clipboard_request
 
