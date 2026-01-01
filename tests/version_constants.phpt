@@ -30,5 +30,5 @@ bool(true)
 bool(true)
 bool(true)
 bool(true)
-TUI_VERSION: 0.2.14
-TUI_VERSION_ID: 214
+TUI_VERSION: 0.3.0
+TUI_VERSION_ID: 300
