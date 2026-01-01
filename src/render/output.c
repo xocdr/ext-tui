@@ -7,6 +7,7 @@
 #include "output.h"
 #include "../terminal/ansi.h"
 #include "../text/measure.h"
+#include "../debug.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,6 +15,17 @@
 #include <errno.h>
 
 #define OUTPUT_BUFFER_SIZE 65536
+
+/* Wrapper macro that logs failed writes in debug builds.
+ * Terminal write failures are rare and non-recoverable (terminal is gone),
+ * so we just log them for debugging purposes. */
+#define WRITE_ALL_CHECKED(fd, buf, len) \
+    do { \
+        if (write_all((fd), (buf), (len)) < 0) { \
+            TUI_DEBUG_PRINT("write_all failed: fd=%d, len=%zu, errno=%d\n", \
+                           (fd), (size_t)(len), errno); \
+        } \
+    } while (0)
 
 /* Maximum supported terminal dimensions for buffer size validation.
  * Larger terminals will still work but may use more chunks. */
