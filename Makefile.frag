@@ -86,6 +86,7 @@ lint-errors:
 # Consider using AddressSanitizer instead (see test-asan target).
 
 # Run tests under valgrind (Linux/x86)
+# Uses PHP's built-in test runner with valgrind support
 test-valgrind:
 	@command -v valgrind >/dev/null 2>&1 || { \
 		echo "Error: valgrind not installed."; \
@@ -93,21 +94,18 @@ test-valgrind:
 		echo "On macOS ARM64: valgrind not supported, use 'make test-asan' instead"; \
 		exit 1; \
 	}
-	@echo "Running tests under valgrind (this may take a while)..."
-	USE_ZEND_ALLOC=0 valgrind --leak-check=full --show-leak-kinds=all \
-		--track-origins=yes --suppressions=/dev/null \
-		--error-exitcode=1 \
+	@echo "Running extension load test under valgrind..."
+	@USE_ZEND_ALLOC=0 valgrind --leak-check=full --show-leak-kinds=all \
+		--track-origins=yes --error-exitcode=1 -q \
 		php -d extension=modules/tui.so \
-		-r 'echo "Extension loaded successfully\n";'
+		-r 'echo "Extension loaded successfully\n";' || { \
+			echo ""; \
+			echo "Memory issues detected during extension load."; \
+			exit 1; \
+		}
 	@echo ""
-	@echo "Running test suite under valgrind..."
-	@for test in tests/*.phpt; do \
-		echo "Testing: $$test"; \
-		USE_ZEND_ALLOC=0 valgrind --leak-check=full --error-exitcode=1 -q \
-			php -d extension=modules/tui.so \
-			$$(grep -A1000 '^--FILE--$$' $$test | grep -B1000 '^--EXPECT' | tail -n +2 | head -n -1) \
-			2>/dev/null || echo "  LEAK DETECTED in $$test"; \
-	done
+	@echo "Running test suite under valgrind (this may take a while)..."
+	@TEST_PHP_ARGS="-m" $(MAKE) test
 
 # Run a single test under valgrind with verbose output
 test-valgrind-single:
@@ -138,13 +136,13 @@ test-asan:
 test-memory-quick:
 	@echo "Quick memory check..."
 	USE_ZEND_ALLOC=0 php -d extension=modules/tui.so -r ' \
-		use Xocdr\Tui\Ext\Box; \
-		use Xocdr\Tui\Ext\Text; \
+		use Xocdr\Tui\Ext\ContainerNode; \
+		use Xocdr\Tui\Ext\ContentNode; \
 		for ($$i = 0; $$i < 100; $$i++) { \
 			$$r = tui_test_create(80, 24); \
-			$$tree = new Box(["children" => [ \
-				new Text("Test $$i"), \
-				new Box(["children" => [new Text("Nested")]]) \
+			$$tree = new ContainerNode(["children" => [ \
+				new ContentNode("Test $$i"), \
+				new ContainerNode(["children" => [new ContentNode("Nested")]]) \
 			]]); \
 			tui_test_render($$r, $$tree); \
 			tui_test_destroy($$r); \
