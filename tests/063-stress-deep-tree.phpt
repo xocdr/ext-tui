@@ -26,10 +26,11 @@ function buildDeepTree(int $depth, int $childrenPerLevel = 2): ContainerNode {
 }
 
 // Test 1: Build and render moderately deep tree (10 levels, 2 children each = 2047 nodes)
+// Suppress pool notices - stress tests are expected to exceed pool capacity
 echo "Test 1: Moderate tree depth (10 levels)\n";
 $tree = buildDeepTree(10, 2);
 $renderer = tui_test_create(80, 24);
-tui_test_render($renderer, $tree);
+@tui_test_render($renderer, $tree);  // @ suppresses expected pool notices
 echo "Rendered successfully\n";
 
 // Get metrics
@@ -45,7 +46,7 @@ for ($i = 0; $i < 1000; $i++) {
 $wideTree = new ContainerNode(['children' => $children]);
 
 $renderer2 = tui_test_create(200, 100);
-tui_test_render($renderer2, $wideTree);
+@tui_test_render($renderer2, $wideTree);  // @ suppresses expected pool notices
 echo "Wide tree rendered successfully\n";
 
 // Check pool metrics after stress

@@ -38,7 +38,8 @@ for ($cycle = 0; $cycle < 10; $cycle++) {
         $root->addChild($child);
     }
 
-    tui_test_render($renderer, $root);
+    // @ suppresses expected pool notices - stress tests exceed pool capacity
+    @tui_test_render($renderer, $root);
 
     // Let PHP GC clean up
     unset($root);
@@ -76,7 +77,7 @@ foreach ($depths as $depth) {
 
     try {
         $deepRoot->addChild(createDeepTree($depth));
-        tui_test_render($renderer, $deepRoot);
+        @tui_test_render($renderer, $deepRoot);  // @ suppresses expected pool notices
         echo "Depth $depth: OK\n";
     } catch (Exception $e) {
         echo "Depth $depth: " . $e->getMessage() . "\n";
@@ -102,7 +103,7 @@ foreach ($widths as $width) {
     }
 
     $startMem = memory_get_usage();
-    tui_test_render($renderer, $wideRoot);
+    @tui_test_render($renderer, $wideRoot);  // @ suppresses expected pool notices
     $endMem = memory_get_usage();
 
     $memDiff = $endMem - $startMem;

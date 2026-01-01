@@ -4504,9 +4504,11 @@ static PHP_GINIT_FUNCTION(tui)
     memset(&tui_globals->metrics, 0, sizeof(tui_metrics));
     tui_globals->pools = NULL;
 
-    /* Pool miss tracking - thread-safe initialization */
+    /* Pool miss tracking - thread-safe initialization
+     * Threshold of 1000 balances early detection of pool exhaustion issues
+     * while avoiding log spam in stress tests. Doubles on each log (exponential backoff). */
     tui_globals->pool_miss_count = 0;
-    tui_globals->pool_miss_log_threshold = 10000;
+    tui_globals->pool_miss_log_threshold = 1000;
 }
 /* }}} */
 

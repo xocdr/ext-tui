@@ -22,11 +22,13 @@ function buildNestedTree(int $depth): ContainerNode {
     return new ContainerNode(['children' => [buildNestedTree($depth - 1)]]);
 }
 
+// All tests use @ to suppress expected pool notices - stress tests exceed pool capacity
+
 // Test 1: Tree at safe depth (100 levels)
 echo "Test 1: Safe nesting depth (100 levels)\n";
 $tree100 = buildNestedTree(100);
 $renderer = tui_test_create(80, 24);
-tui_test_render($renderer, $tree100);
+@tui_test_render($renderer, $tree100);
 echo "100-level tree rendered successfully\n";
 tui_test_destroy($renderer);
 
@@ -34,7 +36,7 @@ tui_test_destroy($renderer);
 echo "\nTest 2: Near-limit nesting depth (200 levels)\n";
 $tree200 = buildNestedTree(200);
 $renderer = tui_test_create(80, 24);
-tui_test_render($renderer, $tree200);
+@tui_test_render($renderer, $tree200);
 echo "200-level tree rendered successfully\n";
 tui_test_destroy($renderer);
 
@@ -44,7 +46,7 @@ $tree256 = buildNestedTree(256);
 $renderer = tui_test_create(80, 24);
 $rendered = false;
 try {
-    tui_test_render($renderer, $tree256);
+    @tui_test_render($renderer, $tree256);
     $rendered = true;
 } catch (Exception $e) {
     echo "Exception at 256 levels: " . $e->getMessage() . "\n";
@@ -61,7 +63,7 @@ $tree300 = buildNestedTree(300);
 $renderer = tui_test_create(80, 24);
 $handledGracefully = false;
 try {
-    tui_test_render($renderer, $tree300);
+    @tui_test_render($renderer, $tree300);
     $handledGracefully = true;
     echo "300-level tree handled without crash\n";
 } catch (Exception $e) {
@@ -79,7 +81,7 @@ echo "\nTest 5: Recursive tree destruction\n";
 for ($i = 0; $i < 10; $i++) {
     $tree = buildNestedTree(50);
     $renderer = tui_test_create(80, 24);
-    tui_test_render($renderer, $tree);
+    @tui_test_render($renderer, $tree);
     tui_test_destroy($renderer);
 }
 echo "10 cycles of deep tree creation/destruction completed\n";
