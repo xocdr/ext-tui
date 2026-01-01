@@ -1060,15 +1060,42 @@ PHP_METHOD(Color, fromName)
                 break;  /* Encoding error - return NULL */
             }
 
-            /* Get enum case by value */
+            /* Get enum case by value - use version-specific API */
             zend_string *hex_str = zend_string_init(hex, 7, 0);
             zend_object *case_obj = NULL;
-            zend_result result = zend_enum_get_case_by_value(&case_obj, tui_color_ce, 0, hex_str, true);
-            zend_string_release(hex_str);
 
+#if PHP_VERSION_ID >= 80200
+            /* PHP 8.2+: use zend_enum_get_case_by_value */
+            zend_result result = zend_enum_get_case_by_value(&case_obj, tui_color_ce, 0, hex_str, true);
             if (result == SUCCESS && case_obj) {
+                zend_string_release(hex_str);
                 RETURN_OBJ_COPY(case_obj);
             }
+#else
+            /* PHP 8.1: manually search enum cases */
+            HashTable *constants = &tui_color_ce->constants_table;
+            zend_class_constant *c;
+            ZEND_HASH_MAP_FOREACH_PTR(constants, c) {
+                if (Z_TYPE(c->value) == IS_OBJECT) {
+                    zend_object *obj = Z_OBJ(c->value);
+                    if (obj->ce == tui_color_ce) {
+                        /* Get the enum's backing value */
+                        zval *value = zend_enum_fetch_case_value(obj);
+                        if (value && Z_TYPE_P(value) == IS_STRING &&
+                            zend_string_equals(Z_STR_P(value), hex_str)) {
+                            case_obj = obj;
+                            break;
+                        }
+                    }
+                }
+            } ZEND_HASH_FOREACH_END();
+
+            if (case_obj) {
+                zend_string_release(hex_str);
+                RETURN_OBJ_COPY(case_obj);
+            }
+#endif
+            zend_string_release(hex_str);
             break;
         }
     }
