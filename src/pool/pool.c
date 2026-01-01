@@ -58,6 +58,12 @@ void tui_pools_shutdown(tui_pools *pools)
     for (int i = 0; i < pools->children.count_32; i++) {
         free(pools->children.arrays_32[i]);
     }
+    for (int i = 0; i < pools->children.count_64; i++) {
+        free(pools->children.arrays_64[i]);
+    }
+    for (int i = 0; i < pools->children.count_128; i++) {
+        free(pools->children.arrays_128[i]);
+    }
 
     /* Free key map */
     free(pools->key_map.entries);
@@ -128,8 +134,26 @@ struct tui_node** tui_children_pool_alloc(tui_pools *pools, int capacity, int *a
             return array;
         }
         *actual_capacity = 32;
+    } else if (capacity <= 64) {
+        if (pools->children.count_64 > 0) {
+            array = pools->children.arrays_64[--pools->children.count_64];
+            *actual_capacity = 64;
+            pools->children_hits++;
+            memset(array, 0, 64 * sizeof(struct tui_node*));
+            return array;
+        }
+        *actual_capacity = 64;
+    } else if (capacity <= 128) {
+        if (pools->children.count_128 > 0) {
+            array = pools->children.arrays_128[--pools->children.count_128];
+            *actual_capacity = 128;
+            pools->children_hits++;
+            memset(array, 0, 128 * sizeof(struct tui_node*));
+            return array;
+        }
+        *actual_capacity = 128;
     } else {
-        /* Too large for pool */
+        /* Too large for pool (>128 children) */
         TUI_DEBUG_PRINT("Pool: children array too large (%d), using malloc\n", capacity);
         *actual_capacity = capacity;
         pools->children_misses++;
@@ -183,6 +207,14 @@ void tui_children_pool_free(tui_pools *pools, struct tui_node **array, int capac
         return;
     } else if (capacity == 32 && pools->children.count_32 < CHILDREN_POOL_SIZE_32) {
         pools->children.arrays_32[pools->children.count_32++] = array;
+        pools->children_returns++;
+        return;
+    } else if (capacity == 64 && pools->children.count_64 < CHILDREN_POOL_SIZE_64) {
+        pools->children.arrays_64[pools->children.count_64++] = array;
+        pools->children_returns++;
+        return;
+    } else if (capacity == 128 && pools->children.count_128 < CHILDREN_POOL_SIZE_128) {
+        pools->children.arrays_128[pools->children.count_128++] = array;
         pools->children_returns++;
         return;
     }

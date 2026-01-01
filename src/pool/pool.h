@@ -33,22 +33,29 @@ struct tui_node;
 
 /*
  * Children Array Pool
- * Pools arrays of common sizes (4, 8, 16, 32) for node children.
+ * Pools arrays of common sizes (4, 8, 16, 32, 64, 128) for node children.
+ * Larger arrays (64, 128) have smaller pool sizes as they're less common.
  */
-#define CHILDREN_POOL_SIZE_4   16
-#define CHILDREN_POOL_SIZE_8   16
-#define CHILDREN_POOL_SIZE_16  8
-#define CHILDREN_POOL_SIZE_32  4
+#define CHILDREN_POOL_SIZE_4    16
+#define CHILDREN_POOL_SIZE_8    16
+#define CHILDREN_POOL_SIZE_16   8
+#define CHILDREN_POOL_SIZE_32   4
+#define CHILDREN_POOL_SIZE_64   2
+#define CHILDREN_POOL_SIZE_128  2
 
 typedef struct {
     struct tui_node **arrays_4[CHILDREN_POOL_SIZE_4];
     struct tui_node **arrays_8[CHILDREN_POOL_SIZE_8];
     struct tui_node **arrays_16[CHILDREN_POOL_SIZE_16];
     struct tui_node **arrays_32[CHILDREN_POOL_SIZE_32];
+    struct tui_node **arrays_64[CHILDREN_POOL_SIZE_64];
+    struct tui_node **arrays_128[CHILDREN_POOL_SIZE_128];
     int count_4;
     int count_8;
     int count_16;
     int count_32;
+    int count_64;
+    int count_128;
 } tui_children_pool;
 
 /*
