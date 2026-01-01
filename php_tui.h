@@ -189,6 +189,10 @@ extern zend_class_entry *tui_instance_ce;
 extern zend_class_entry *tui_key_ce;
 extern zend_class_entry *tui_color_ce;
 
+/* Exception class entries */
+extern zend_class_entry *tui_exception_ce;                    /* Base: Xocdr\Tui\TuiException */
+extern zend_class_entry *tui_instance_destroyed_exception_ce; /* Xocdr\Tui\InstanceDestroyedException */
+
 /* Function declarations */
 PHP_FUNCTION(tui_render);
 PHP_FUNCTION(tui_rerender);
