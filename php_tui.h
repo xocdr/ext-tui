@@ -32,8 +32,8 @@
 extern zend_module_entry tui_module_entry;
 #define phpext_tui_ptr &tui_module_entry
 
-#define PHP_TUI_VERSION "0.4.1"
-#define PHP_TUI_VERSION_ID 401  /* major * 10000 + minor * 100 + patch */
+#define PHP_TUI_VERSION "0.4.2"
+#define PHP_TUI_VERSION_ID 402  /* major * 10000 + minor * 100 + patch */
 
 /* Security limits for string properties */
 #define TUI_MAX_KEY_LENGTH 256      /* Maximum key string length */

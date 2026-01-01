@@ -1933,10 +1933,20 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_tuinode_getid, 0, 0, IS_STRING, 1)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_tuinode_setkey, 0, 1, static, 0)
+    ZEND_ARG_TYPE_INFO(0, key, IS_STRING, 1)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_tuinode_setid, 0, 1, static, 0)
+    ZEND_ARG_TYPE_INFO(0, id, IS_STRING, 1)
+ZEND_END_ARG_INFO()
+
 /* TuiNode interface methods - abstract, implementations in Box/Text */
 static const zend_function_entry tui_node_interface_methods[] = {
     PHP_ABSTRACT_ME(TuiNode, getKey, arginfo_tuinode_getkey)
     PHP_ABSTRACT_ME(TuiNode, getId, arginfo_tuinode_getid)
+    PHP_ABSTRACT_ME(TuiNode, setKey, arginfo_tuinode_setkey)
+    PHP_ABSTRACT_ME(TuiNode, setId, arginfo_tuinode_setid)
     PHP_FE_END
 };
 
@@ -1987,6 +1997,46 @@ PHP_METHOD(TuiBox, getId)
         RETURN_STR(zend_string_copy(Z_STR_P(id)));
     }
     RETURN_NULL();
+}
+/* }}} */
+
+/* {{{ TuiBox::setKey(?string $key): static
+ * Sets the reconciliation key for this node. Returns $this for fluent chaining. */
+PHP_METHOD(TuiBox, setKey)
+{
+    zend_string *key = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR_OR_NULL(key)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (key) {
+        zend_update_property_str(tui_box_ce, Z_OBJ_P(ZEND_THIS), "key", sizeof("key")-1, key);
+    } else {
+        zend_update_property_null(tui_box_ce, Z_OBJ_P(ZEND_THIS), "key", sizeof("key")-1);
+    }
+
+    RETURN_ZVAL(ZEND_THIS, 1, 0);
+}
+/* }}} */
+
+/* {{{ TuiBox::setId(?string $id): static
+ * Sets the id for this node. Returns $this for fluent chaining. */
+PHP_METHOD(TuiBox, setId)
+{
+    zend_string *id = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR_OR_NULL(id)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (id) {
+        zend_update_property_str(tui_box_ce, Z_OBJ_P(ZEND_THIS), "id", sizeof("id")-1, id);
+    } else {
+        zend_update_property_null(tui_box_ce, Z_OBJ_P(ZEND_THIS), "id", sizeof("id")-1);
+    }
+
+    RETURN_ZVAL(ZEND_THIS, 1, 0);
 }
 /* }}} */
 
@@ -2099,6 +2149,8 @@ static const zend_function_entry tui_box_methods[] = {
     PHP_ME(TuiBox, addChild, arginfo_tuibox_addchild, ZEND_ACC_PUBLIC)
     PHP_ME(TuiBox, getKey, arginfo_tuinode_getkey, ZEND_ACC_PUBLIC)
     PHP_ME(TuiBox, getId, arginfo_tuinode_getid, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiBox, setKey, arginfo_tuinode_setkey, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiBox, setId, arginfo_tuinode_setid, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
@@ -2150,6 +2202,46 @@ PHP_METHOD(TuiText, getId)
 }
 /* }}} */
 
+/* {{{ TuiText::setKey(?string $key): static
+ * Sets the reconciliation key for this node. Returns $this for fluent chaining. */
+PHP_METHOD(TuiText, setKey)
+{
+    zend_string *key = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR_OR_NULL(key)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (key) {
+        zend_update_property_str(tui_text_ce, Z_OBJ_P(ZEND_THIS), "key", sizeof("key")-1, key);
+    } else {
+        zend_update_property_null(tui_text_ce, Z_OBJ_P(ZEND_THIS), "key", sizeof("key")-1);
+    }
+
+    RETURN_ZVAL(ZEND_THIS, 1, 0);
+}
+/* }}} */
+
+/* {{{ TuiText::setId(?string $id): static
+ * Sets the id for this node. Returns $this for fluent chaining. */
+PHP_METHOD(TuiText, setId)
+{
+    zend_string *id = NULL;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR_OR_NULL(id)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (id) {
+        zend_update_property_str(tui_text_ce, Z_OBJ_P(ZEND_THIS), "id", sizeof("id")-1, id);
+    } else {
+        zend_update_property_null(tui_text_ce, Z_OBJ_P(ZEND_THIS), "id", sizeof("id")-1);
+    }
+
+    RETURN_ZVAL(ZEND_THIS, 1, 0);
+}
+/* }}} */
+
 /* {{{ TuiText::__construct(string $content = '', array $props = []) */
 PHP_METHOD(TuiText, __construct)
 {
@@ -2198,6 +2290,8 @@ static const zend_function_entry tui_text_methods[] = {
     PHP_ME(TuiText, __construct, arginfo_tuitext_construct, ZEND_ACC_PUBLIC)
     PHP_ME(TuiText, getKey, arginfo_tuinode_getkey, ZEND_ACC_PUBLIC)
     PHP_ME(TuiText, getId, arginfo_tuinode_getid, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiText, setKey, arginfo_tuinode_setkey, ZEND_ACC_PUBLIC)
+    PHP_ME(TuiText, setId, arginfo_tuinode_setid, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
 
