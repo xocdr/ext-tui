@@ -13,6 +13,14 @@ PHP_ARG_ENABLE([tui-gcov],
   [no])
 
 if test "$PHP_TUI" != "no"; then
+  dnl Require PHP 8.4.0 or later
+  AC_MSG_CHECKING([PHP version])
+  PHP_VERSION_ID=`$PHP_CONFIG --vernum`
+  if test "$PHP_VERSION_ID" -lt "80400"; then
+    AC_MSG_ERROR([ext-tui requires PHP 8.4.0 or later (found PHP_VERSION_ID=$PHP_VERSION_ID)])
+  fi
+  AC_MSG_RESULT([ok (PHP_VERSION_ID=$PHP_VERSION_ID)])
+
   dnl Require C++ for Yoga layout engine
   PHP_REQUIRE_CXX()
 

@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        php-version: ['8.1', '8.2', '8.3', '8.4']
+        php-version: ['8.4', '8.5']
 
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +47,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: none
           tools: phpize
 
@@ -89,7 +89,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: none
           tools: phpize
 
@@ -121,7 +121,7 @@ jobs:
       - name: Setup PHP with debug
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: none
           tools: phpize
           # Debug build for better valgrind output
@@ -161,7 +161,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: none
           tools: phpize
 
