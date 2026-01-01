@@ -306,10 +306,12 @@ int tui_node_set_hyperlink(tui_node *node, const char *url, const char *id)
     return 0;
 }
 
-void tui_node_destroy(tui_node *node)
+/*
+ * Free a single node's resources (not its children).
+ * Helper for iterative destruction.
+ */
+static void free_node_resources(tui_node *node)
 {
-    if (!node) return;
-
     /* Track metrics - decrement based on type */
     TUI_METRIC_DEC(node_count);
     switch (node->type) {
@@ -319,17 +321,11 @@ void tui_node_destroy(tui_node *node)
         default: break;
     }
 
-    /* Destroy children recursively (child_count is 0 if children is NULL) */
-    if (node->children) {
-        for (int i = 0; i < node->child_count; i++) {
-            tui_node_destroy(node->children[i]);
-        }
-    }
-
-    /* Free resources */
+    /* Free Yoga node */
     if (node->yoga_node) {
         YGNodeFree(node->yoga_node);
     }
+
     /* Return children array to pool or free based on origin */
     if (node->children) {
         if (node->children_from_pool && TUI_G(pools)) {
@@ -338,6 +334,8 @@ void tui_node_destroy(tui_node *node)
             free(node->children);
         }
     }
+
+    /* Free string properties */
     free(node->text);
     free(node->key);
     free(node->id);
@@ -345,6 +343,71 @@ void tui_node_destroy(tui_node *node)
     free(node->hyperlink_id);
     free(node->focus_group);
     free(node);
+}
+
+/*
+ * Destroy a node tree iteratively to prevent stack overflow.
+ * Uses an explicit stack to traverse the tree depth-first.
+ * This is safe for arbitrarily deep trees (limited only by memory).
+ */
+void tui_node_destroy(tui_node *node)
+{
+    if (!node) return;
+
+    /* Use explicit stack for iterative traversal.
+     * Start with small stack, grow as needed. */
+    int stack_capacity = 64;
+    int stack_size = 0;
+    tui_node **stack = malloc((size_t)stack_capacity * sizeof(tui_node*));
+    if (!stack) {
+        /* Fallback to simple free if malloc fails - leak children but don't crash */
+        php_error_docref(NULL, E_WARNING,
+            "Failed to allocate stack for node destruction, may leak memory");
+        free_node_resources(node);
+        return;
+    }
+
+    /* Push root node */
+    stack[stack_size++] = node;
+
+    while (stack_size > 0) {
+        /* Pop node from stack */
+        tui_node *current = stack[--stack_size];
+
+        /* Push all children onto stack (they'll be processed first) */
+        if (current->children) {
+            for (int i = 0; i < current->child_count; i++) {
+                tui_node *child = current->children[i];
+                if (!child) continue;
+
+                /* Grow stack if needed */
+                if (stack_size >= stack_capacity) {
+                    int new_capacity = stack_capacity * 2;
+                    if (new_capacity > 1000000) {
+                        /* Safety limit - 1M nodes should be more than enough */
+                        php_error_docref(NULL, E_WARNING,
+                            "Node tree exceeds maximum depth during destruction");
+                        break;
+                    }
+                    tui_node **new_stack = realloc(stack,
+                        (size_t)new_capacity * sizeof(tui_node*));
+                    if (!new_stack) {
+                        php_error_docref(NULL, E_WARNING,
+                            "Failed to grow stack during node destruction");
+                        break;
+                    }
+                    stack = new_stack;
+                    stack_capacity = new_capacity;
+                }
+                stack[stack_size++] = child;
+            }
+        }
+
+        /* Free this node's resources */
+        free_node_resources(current);
+    }
+
+    free(stack);
 }
 
 int tui_node_append_child(tui_node *parent, tui_node *child)

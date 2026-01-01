@@ -9,8 +9,17 @@
 #include "../node/node.h"
 #include "../debug.h"
 #include "pool.h"
+#include "php.h"
+#include "php_tui.h"
 #include <stdlib.h>
 #include <string.h>
+
+/* Track consecutive pool misses to avoid spamming logs.
+ * Only log once per threshold reached.
+ * Start at 10000 to avoid noise during normal stress tests.
+ * This means we only log when the pool is significantly overloaded. */
+static int pool_miss_log_threshold = 10000;
+static int pool_miss_count = 0;
 
 /*
  * Pool initialization
@@ -115,12 +124,29 @@ struct tui_node** tui_children_pool_alloc(tui_pools *pools, int capacity, int *a
         TUI_DEBUG_PRINT("Pool: children array too large (%d), using malloc\n", capacity);
         *actual_capacity = capacity;
         pools->children_misses++;
+        pool_miss_count++;
+        /* Log periodically to avoid spam, but alert when pool is exhausted */
+        if (pool_miss_count == pool_miss_log_threshold) {
+            php_error_docref(NULL, E_NOTICE,
+                "Object pool exceeded: %d allocations fell back to malloc "
+                "(consider increasing pool size or reducing tree complexity)",
+                pool_miss_count);
+            pool_miss_log_threshold *= 2;  /* Exponential backoff */
+        }
         return calloc(capacity, sizeof(struct tui_node*));
     }
 
     /* Need to allocate new array - no slot available */
     TUI_DEBUG_PRINT("Pool: no slot available for size %d, using malloc\n", *actual_capacity);
     pools->children_misses++;
+    pool_miss_count++;
+    if (pool_miss_count == pool_miss_log_threshold) {
+        php_error_docref(NULL, E_NOTICE,
+            "Object pool exceeded: %d allocations fell back to malloc "
+            "(consider increasing pool size or reducing tree complexity)",
+            pool_miss_count);
+        pool_miss_log_threshold *= 2;
+    }
     return calloc(*actual_capacity, sizeof(struct tui_node*));
 }
 
